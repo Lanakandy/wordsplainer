@@ -21,7 +21,7 @@ async function callOpenRouter(systemPrompt, userPrompt) {
         body: JSON.stringify({
             // Let's use a modern, capable model.
             // You can experiment with others like 'mistralai/mistral-7b-instruct'
-            "model": "google/gemma-3-12b-it:free",
+            "model": "mistralai/mistral-small-3.2-24b-instruct:free",
             "response_format": { "type": "json_object" }, // CRITICAL: This forces the AI to output valid JSON.
             "messages": [
                 { "role": "system", "content": systemPrompt },
