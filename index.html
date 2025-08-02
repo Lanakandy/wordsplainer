@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordsplainer - ELTcation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-wrapper">
+        <header>
+            <div class="title-container">
+                <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
+                <h1>Word Wide Web</h1>
+            </div>
+        </header>
+
+        <main id="graph-panel">
+            <div id="graph-container">
+                <svg id="wordsplainer-graph-svg"></svg>
+                <div id="zoom-controls">
+                    <button id="zoom-in-btn" class="control-btn" title="Zoom In">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                    </button>
+                    <button id="zoom-out-btn" class="control-btn" title="Zoom Out">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path d="M19 13H5v-2h14v2z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="input-overlay" class="input-overlay">
+                    <input type="text" id="overlay-input" class="overlay-input-field" />
+                </div>
+                <div id="graph-tooltip" class="graph-tooltip"></div>
+            </div>
+        </main>
+
+        <footer id="controls-dock">
+            <div class="category-buttons">
+                <!-- ... your category buttons ... -->
+                 <button class="category-btn active" data-type="meaning">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--meaning-color);"></div></div>
+                    <span>Meaning</span>
+                </button>
+                <button class="category-btn" data-type="context">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--context-color);"></div></div>
+                    <span>Context</span>
+                </button>
+                <button class="category-btn" data-type="derivatives">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--derivative-color);"></div></div>
+                    <span>Derivatives</span>
+                </button>
+                <button class="category-btn" data-type="collocations">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--collocation-color);"></div></div>
+                    <span>Collocations</span>
+                </button>
+                <button class="category-btn" data-type="idioms">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--idiom-color);"></div></div>
+                    <span>Idioms</span>                            
+                </button>
+                <button class="category-btn" data-type="synonyms">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--synonym-color);"></div></div>
+                    <span>Synonyms</span>
+                </button>
+                <button class="category-btn" data-type="opposites">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--opposite-color);"></div></div>
+                    <span>Opposites</span>
+                </button>
+                <button class="category-btn" data-type="translation">
+                    <div class="color-dot-container"><div class="color-dot" style="background-color: var(--translation-color);"></div></div>
+                    <span>Translation</span>
+                </button>
+            </div>
+                         
+            <div class="utility-buttons">
+                 <!-- ... your utility buttons ... -->
+                <button class="utility-btn" id="clear-btn" title="Clear Canvas">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    <span>Clear</span>
+                </button>
+                <button class="utility-btn" id="save-btn" title="Save as PNG">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                    <span>Save</span>
+                </button>
+                <button class="utility-btn" id="fullscreen-btn" title="Toggle Full Screen">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                    <span>Full Screen</span>
+                </button>
+                <button class="utility-btn" id="theme-toggle-btn" title="Toggle Theme">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.64 5.64c-.39-.39-1.02-.39-1.41 0-.39.39-.39 1.02 0 1.41l1.06 1.06c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41L5.64 5.64zm12.72 12.72c-.39-.39-1.02-.39-1.41 0-.39.39-.39 1.02 0 1.41l1.06 1.06c.39.39 1.02.39 1.41 0 .39-.39.39-1.02 0-1.41l-1.06-1.06zM5.64 18.36l-1.06-1.06c-.39-.39-.39-1.02 0-1.41s1.02-.39 1.41 0l1.06 1.06c.39.39.39 1.02 0 1.41s-1.02.39-1.41 0zm12.72-12.72l-1.06-1.06c-.39-.39-.39-1.02 0-1.41s1.02-.39 1.41 0l1.06 1.06c.39.39.39 1.02 0 1.41-.39.39-1.03.39-1.41 0z"/>
+                    </svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12.3 4.8c.1-.5-.4-.9-.9-.8C7.1 4.7 4 8.2 4 12.5 4 17.2 7.8 21 12.5 21c4.3 0 7.8-3.1 8.5-7.2.1-.5-.4-.9-.9-.8-.4.1-1.4.3-1.4.3-3.1.8-6-1.5-6-4.5 0-2.3 1.1-4.3 2.9-5.6.2-.2.3-.3.7-.5z"/>
+                    </svg>
+                    <span>Theme</span>
+                </button>
+            </div>
+        </footer>
+
+        <!-- ======================================================= -->
+        <!-- ==  FIX: Move the language modal inside the wrapper  == -->
+        <!-- ======================================================= -->
+        <div id="language-modal" class="modal-overlay">
+            <div class="modal-content">
+                <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
+                <h2>Choose a Language</h2>
+                <ul id="language-list" class="language-list">
+                    <li data-lang="es">Spanish</li>
+                    <li data-lang="fr">French</li>
+                    <li data-lang="de">German</li>
+                    <li data-lang="ja">Japanese</li>
+                    <li data-lang="it">Italian</li>
+                    <li data-lang="ru">Russian</li>                
+                </ul>
+            </div>
+        </div>
+
+    </div> <!-- THIS IS THE CORRECT PLACE FOR THE CLOSING TAG -->
+      
+    <script src="api.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

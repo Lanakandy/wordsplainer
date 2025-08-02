@@ -1,0 +1,1050 @@
+/* --- Root Variables - ELTcation Color Palette --- */
+:root {
+    /* Primary colors from logo */
+    --primary-coral: #FF6B47; /* Main coral from logo */
+    --primary-navy: #2C3E50; /* Deep navy from logo frame */
+    --primary-dark: #1A252F; /* Darker navy for depth */
+    --accent-white: #FFFFFF;
+    --accent-light: #F8F9FA;
+    
+    /* Canvas and backgrounds */
+    --canvas-bg: #FFFFFF;
+    --node-text-stroke: none;
+    --app-bg: linear-gradient(135deg, #2C3E50 0%, #34495E 100%);
+    --dock-bg: rgba(255, 255, 255, 0.95);
+    --dock-shadow: rgba(44, 62, 80, 0.3);
+    
+    /* Interactive elements */
+    --btn-bg: rgba(255, 107, 71, 0.1);
+    --btn-hover: rgba(255, 107, 71, 0.2);
+    --btn-active: #FF6B47;
+    --btn-border: rgba(255, 107, 71, 0.3);
+    
+    /* Node colors - harmonized with logo */
+    --meaning-color: #E8A87C; /* Warm beige */
+    --context-color: #1ABC9C; /* A nice turquoise/teal */
+    --derivative-color: #F39C12; /* Golden orange */
+    --idiom-color: #3498DB; /* Bright blue */
+    --collocation-color: #2ECC71; /* Fresh green */
+    --synonym-color: #9B51E0; /* Purple */
+    --opposite-color: #E74C3C; /* Red */
+    --translation-color: #8E44AD;
+    
+    /* Text colors */
+    --text-light: #FFFFFF;
+    --dock-text-color: #2C3E50; 
+    --canvas-text-color: #2C3E50;
+    --text-muted: #7F8C8D;
+}
+
+/* --- Canvas Theme Control --- */
+
+/* By default, canvas is LIGHT */
+:root {
+    /* ... (all your existing variables are here, representing the LIGHT canvas theme by default) ... */
+    --canvas-bg: #FFFFFF;
+    --text-dark: #2C3E50; /* Text color for nodes on light canvas */
+}
+
+/* When dark theme is active, ONLY override canvas-related variables */
+html[data-theme='dark'] {
+    --canvas-bg: var(--primary-dark);
+    --canvas-text-color: var(--accent-light);
+}
+
+/* --- Input Field Theming --- */
+/* The input field appears on the canvas, so it must also be themed. */
+.svg-input-field { 
+    /* Light theme styles are the default */
+    background-color: var(--canvas-bg); 
+    color: var(--text-dark);
+    border: 2px solid var(--primary-coral); 
+}
+html[data-theme='dark'] .svg-input-field {
+    /* Dark theme overrides */
+    background-color: #2C3E50;
+    color: var(--text-light);
+    border-color: var(--primary-coral);
+}
+html[data-theme='dark'] .svg-input-field:focus {
+     box-shadow: 0 0 0 4px rgba(255, 107, 71, 0.4);
+}
+
+/* --- Input Overlay Styles --- */
+.input-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* Allows clicks to pass through to the SVG */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.input-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto; /* Makes the overlay and its children clickable */
+}
+
+.overlay-input-field {
+    width: 80%;
+    max-width: 500px;
+    box-sizing: border-box;
+    padding: 15px 25px;
+    border: 2px solid var(--primary-coral);
+    border-radius: 12px;
+    background-color: var(--canvas-bg);
+    color: var(--canvas-text-color);
+    font-family: inherit;
+    font-size: 1.3rem;
+    text-align: center;
+    outline: none;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    transform: scale(0.95);
+    transition: all 0.3s ease;
+}
+
+.input-overlay.visible .overlay-input-field {
+    transform: scale(1);
+}
+
+/* Make sure the dark theme styles apply here too */
+html[data-theme='dark'] .overlay-input-field {
+    background-color: #2C3E50;
+    color: var(--text-light);
+    border-color: var(--primary-coral);
+}
+
+
+/* --- Icon Visibility Control --- */
+/* In light mode (default), show sun, hide moon */
+.sun-icon { display: block; }
+.moon-icon { display: none; }
+
+/* In dark mode, show moon, hide sun */
+html[data-theme='dark'] .sun-icon { display: none; }
+html[data-theme='dark'] .moon-icon { display: block; }
+
+/* --- Global Styles --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+    background: var(--app-bg);
+    color: var(--text-light);
+    overflow: hidden;
+    height: 100vh;
+    position: relative;
+}
+
+/* Animated background pattern */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(circle at 20% 80%, rgba(255, 107, 71, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255, 107, 71, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+#app-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 20px;
+}
+
+/* --- Enhanced Header --- */
+header {
+    flex-shrink: 0;
+    text-align: center;
+    position: relative;
+}
+
+.title-container {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 15px 30px;
+    border-radius: 20px;
+    color: white;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.title-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.header-logo {
+    height: 45px;
+    margin-right: 20px;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+}
+
+header h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #FFFFFF 0%, #FF6B47 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* --- Enhanced Canvas --- */
+main#graph-panel {
+    flex-grow: 1;
+    min-height: 0;
+    position: relative;
+}
+
+#graph-container {
+    width: 100%;
+    height: 100%;
+    background: var(--canvas-bg);
+    border-radius: 25px;
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255, 107, 71, 0.2);
+}
+
+#zoom-controls {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    display: flex;
+    flex-direction: column; 
+    gap: 8px; 
+    z-index: 10; 
+    pointer-events: none;
+}
+
+#zoom-controls .control-btn {
+    pointer-events: auto; 
+    background-color: var(--dock-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    
+}
+
+#zoom-controls .control-btn svg {
+    fill: currentColor;
+    width: 20px;
+    height: 20px;
+}
+
+#wordsplainer-graph-svg {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+#wordsplainer-graph-svg:active { 
+    cursor: grabbing; 
+}
+
+/* --- Enhanced Controls Dock --- */
+#controls-dock {
+    flex-shrink: 0;
+    background: var(--dock-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 107, 71, 0.2);
+    border-radius: 25px;
+    padding: 20px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 
+        0 10px 40px var(--dock-shadow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+#controls-dock::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 71, 0.5), transparent);
+}
+
+.category-buttons, .utility-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+/* --- Enhanced Category Buttons --- */
+.category-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    color: var(--dock-text-color);
+    border-radius: 16px;
+    padding: 12px 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 100px;
+    position: relative;
+    overflow: hidden;
+}
+
+.category-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.category-btn:hover::before {
+    left: 100%;
+}
+
+.category-btn:hover {
+    background: var(--btn-hover);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.3);
+    border-color: var(--primary-coral);
+}
+
+.category-btn.active {
+    background: var(--btn-active);
+    color: var(--text-light);
+    font-weight: 600;
+    transform: translateY(-2px);
+    box-shadow: 
+        0 8px 30px rgba(255, 107, 71, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.color-dot-container {
+    width: 45px;
+    height: 45px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.category-btn:hover .color-dot-container {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.1);
+}
+
+.color-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.category-btn:hover .color-dot {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.category-btn span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.control-btn svg {
+    width: 20px;
+    height: 20px;
+    /* This is a key trick: it makes the icon color match the button's text color */
+    fill: currentColor; 
+    /* Prevents the icon from being clickable and interfering with the button's event */
+    pointer-events: none; 
+}
+
+#controls-dock .separator {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color);
+    margin: 0 8px;
+}
+
+.utility-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 80px;
+    height: 80px;
+    color: var(--dock-text-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.utility-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.utility-btn:hover::before {
+    left: 100%;
+}
+
+.utility-btn:hover {
+    background: var(--btn-hover);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.3);
+    border-color: var(--primary-coral);
+}
+
+.utility-btn:active {
+    transform: translateY(-1px) scale(1.02);
+}
+
+.utility-btn svg {
+    width: 28px;
+    height: 28px;
+    fill: currentColor;
+    transition: all 0.3s ease;
+}
+
+.utility-btn:hover svg {
+    transform: scale(1.1);
+}
+
+.utility-btn span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* --- Enhanced D3 Styles --- */
+.status-text { 
+    fill: var(--primary-coral); 
+    text-anchor: middle; 
+    font-size: 1.3rem; 
+    font-weight: 500;
+}
+
+.prompt-plus { 
+    fill: var(--primary-coral); 
+    font-size: 4rem; 
+    text-anchor: middle; 
+    font-weight: 300;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+g[style*="cursor: pointer"]:hover .prompt-plus {
+    opacity: 1;
+}
+
+.error-text { 
+    fill: var(--opposite-color); 
+    font-weight: 500;
+}
+
+.link { 
+    stroke: #BDC3C7; 
+    stroke-opacity: 0.6; 
+    stroke-width: 2px; 
+    transition: all 0.3s ease;
+}
+
+.node { 
+    cursor: pointer; 
+    transition: all 0.3s ease;
+}
+
+.node:hover {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.node text { 
+    font-size: 13px; 
+    font-weight: 600; 
+    text-anchor: middle; 
+    dominant-baseline: central; 
+    pointer-events: none; 
+    fill: var(--canvas-text-color); 
+}
+
+.node.central-node circle { 
+    fill: var(--primary-coral);
+    stroke: var(--primary-coral);
+    stroke-width: 3px;
+}
+
+.node.central-node.active-central > circle {
+    filter: drop-shadow(0 0 12px var(--primary-coral));
+    stroke: var(--primary-coral) !important; /* Force highlight */
+    stroke-width: 4px !important;
+}
+
+.node.node-meaning circle { fill: var(--meaning-color); }
+.node.node-context circle { fill: var(--context-color); }
+.node.node-derivatives circle { fill: var(--derivative-color); }
+.node.node-idioms circle { fill: var(--idiom-color); }
+.node.node-collocations circle { fill: var(--collocation-color); }
+.node.node-synonyms circle { fill: var(--synonym-color); }
+.node.node-opposites circle { fill: var(--opposite-color); }
+.node.node-translation circle { fill: var(--translation-color); }
+
+.faded { 
+    opacity: 0.15; 
+    transition: opacity 0.3s ease;
+}
+
+.node.highlighted circle { 
+    stroke: var(--primary-coral); 
+    stroke-width: 4px;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+}
+
+.node.hover-highlight circle {
+    stroke: var(--primary-coral);
+    stroke-width: 4px;
+}
+
+.link.highlighted { 
+    stroke: var(--primary-coral); 
+    stroke-opacity: 1; 
+    stroke-width: 4px;
+}
+
+/* At the end of the D3 styles section */
+.node.central-node.loadable {
+    cursor: pointer;
+}
+
+.node.central-node.loadable:hover circle {
+    stroke: var(--collocation-color); /* A nice green to indicate 'go' or 'add' */
+    filter: drop-shadow(0 0 8px var(--collocation-color));
+}
+
+/* CORRECTED SECTION */
+.node:not(.central-node) circle {
+    stroke: none;
+}
+
+/* --- Example Node Styles --- */
+.node.node-example text {
+    font-size: 11px;
+    font-weight: 400;
+    font-style: italic;
+    fill: #555;
+    text-anchor: start; /* Align text to the start of the node */
+}
+
+/* Use a different shape for examples */
+.node.node-example circle {
+    display: none; /* Hide the circle */
+}
+.node.node-example rect {
+    fill: #F4F6F8; /* A light grey/off-white */
+    rx: 5; /* Rounded corners */
+}
+html[data-theme='dark'] .node.node-example rect {
+    fill: #34495E; /* A darker grey for dark mode */
+    
+}
+html[data-theme='dark'] .node.node-example text {
+    fill: var(--accent-light);
+}
+
+.link.link-example {
+    stroke: #D5DBDB;
+    stroke-dasharray: 2 2; /* Make it a dashed line */
+}
+html[data-theme='dark'] .link.link-example {
+    stroke: #7F8C8D;
+}
+
+/* --- Central Node "Load More" Styles --- */
+.node.central-node.loadable {
+    cursor: pointer;
+}
+
+.node.central-node.loadable:hover circle {
+    stroke: var(--primary-coral);
+    filter: drop-shadow(0 0 10px var(--primary-coral));
+}
+
+.node.central-node.no-more circle,
+.node.central-node.non-paginated circle {
+    cursor: default;
+}
+
+/* Make the main word bigger and bolder */
+.node.central-node .node-text {
+    font-size: 18px; 
+    font-weight: 600; 
+    text-anchor: middle; 
+    dominant-baseline: central;
+    fill: var(--canvas-text-color);
+    stroke: var(--node-text-stroke); 
+    stroke-width: 0.5px; 
+    paint-order: stroke;
+}
+
+/* Style the sub-text to look like an icon */
+.node.central-node .sub-text {
+    font-size: 24px;  /* Make the "+" symbol large */
+    font-weight: 300; /* Lighter weight for a modern look */
+    text-anchor: middle;
+    fill: var(--canvas-text-color);
+    stroke: var(--node-text-stroke);
+    stroke-width: 0.4px;
+    paint-order: stroke;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.node.central-node.loadable:hover .sub-text {
+    opacity: 1;
+}
+
+/* When there are no more nodes, use a checkmark */
+.node.central-node.no-more .sub-text {
+    font-size: 18px; /* Checkmark can be a bit smaller */
+    font-weight: 600;
+}
+
+.svg-input-field { 
+    width: 100%; 
+    height: 100%; 
+    /* --- FIXES --- */
+    box-sizing: border-box; /* Ensures padding is inside the width */
+    padding: 15px 25px;    /* Adds more horizontal padding */
+    /* --- END FIXES --- */
+    border: 2px solid var(--primary-coral); 
+    border-radius: 12px; 
+    background-color: var(--canvas-bg); 
+    color: var(--canvas-text-color); 
+    font-family: inherit; 
+    font-size: 1.3rem; 
+    text-align: center; 
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.svg-input-field:focus { 
+    outline: 2px solid var(--primary-coral);
+    outline-offset: 2px; /* Adds a small gap between the border and the outline */
+    transform: scale(1.02);
+}
+
+/* --- Definition Panel Styles --- */
+.definition-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    max-width: 700px;
+    background: rgba(26, 37, 47, 0.7); /* --primary-dark with transparency */
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: var(--text-light);
+    z-index: 10;
+    text-align: center;
+    font-size: 0.95rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
+    transform: translateX(-50%) translateY(20px);
+}
+
+.definition-panel.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* --- Tooltip Styles --- */
+.graph-tooltip {
+    position: absolute;
+    background: rgba(44, 62, 80, 0.9); /* --primary-navy with transparency */
+    backdrop-filter: blur(5px);
+    color: var(--accent-white);
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.9rem;
+    font-weight: 500;
+    pointer-events: none; /* Important: allows clicks to pass through to the node */
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 10;
+    text-transform: capitalize;
+}
+
+.graph-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* --- Animations --- */
+@keyframes slideInFromBottom {
+    from {
+        transform: translateY(100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInScale {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+#controls-dock {
+    animation: slideInFromBottom 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.title-container {
+    animation: fadeInScale 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#graph-container {
+    animation: fadeInScale 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+    #app-wrapper {
+        padding: 10px;
+        gap: 15px;
+    }
+
+    .title-container {
+        padding: 12px 20px;
+    }
+
+    header h1 {
+        font-size: 1.8rem;
+    }
+
+    .header-logo {
+        height: 35px;
+        margin-right: 15px;
+    }
+
+    #controls-dock {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    .category-buttons {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .category-btn {
+        min-width: 80px;
+        padding: 10px 6px;
+    }
+
+    .utility-btn {
+        width: 70px;
+        height: 70px;
+    }
+}
+
+/* --- Loading Animation --- */
+.loading-spinner {
+    animation: spin 2s linear infinite;
+    transform-origin: center;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- Example Node Styles --- */
+.node.node-example text {
+    font-size: 11px;
+    font-weight: 400;
+    font-style: italic;
+    fill: #555;
+    text-anchor: start; /* Align text to the start of the node */
+}
+
+/* Use a different shape for examples */
+.node.node-example circle {
+    display: none; /* Hide the circle */
+}
+.node.node-example rect {
+    fill: #F4F6F8; /* A light grey/off-white */
+    stroke: #D5DBDB;
+    stroke-width: 1.5px;
+    rx: 5; /* Rounded corners */
+}
+html[data-theme='dark'] .node.node-example rect {
+    fill: #34495E; /* A darker grey for dark mode */
+    stroke: #7F8C8D;
+}
+html[data-theme='dark'] .node.node-example text {
+    fill: var(--accent-light);
+}
+
+.link.link-example {
+    stroke: #D5DBDB;
+    stroke-dasharray: 2 2; /* Make it a dashed line */
+}
+html[data-theme='dark'] .link.link-example {
+    stroke: #7F8C8D;
+}
+
+/* Make node labels look clickable */
+.node text {
+    cursor: pointer;
+}
+.node.node-example text {
+    cursor: default; /* Except for example sentences */
+}
+
+/* --- Translation Controls Styles --- */
+.translation-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.language-selector {
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    color: var(--dock-text-color);
+    border-radius: 12px;
+    padding: 10px 15px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.9);
+}
+
+/* Show the selector only when the translation button is active */
+.translation-controls .category-btn.active + .language-selector {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+}
+
+.language-selector:hover {
+    background: var(--btn-hover);
+    border-color: var(--primary-coral);
+}
+
+/* --- Language Modal Styles --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(44, 62, 80, 0.7); /* Use primary navy with transparency */
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: var(--dock-bg);
+    color: var(--dock-text-color);
+    padding: 30px 40px;
+    border-radius: 20px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    position: relative;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.visible .modal-content {
+    transform: scale(1);
+}
+
+.modal-content h2 {
+    margin-bottom: 25px;
+    font-size: 1.5rem;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 2.5rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    color: var(--primary-coral);
+    transform: rotate(90deg);
+}
+
+.language-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.language-list li {
+    padding: 15px 20px;
+    margin-bottom: 10px;
+    background: var(--btn-bg);
+    border-radius: 12px;
+    border: 1px solid var(--btn-border);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.language-list li:hover {
+    background: var(--primary-coral);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(255, 107, 71, 0.3);
+}
+
+.example-translation {
+    font-style: normal;
+    font-weight: 600;
+    fill: var(--primary-coral);
+}
+
+[data-theme="dark"] .node-example text {
+    text-shadow: none;
+    -webkit-text-stroke: 0;
+
+    fill: var(--text-primary);
+}
+
+[data-theme="dark"] .node-example .example-translation {
+      fill: var(--primary-coral);
+}
+
+/* ========================================================= */
+/* ==  FIX: Comprehensive Dark Mode Text Readability      == */
+/* ========================================================= */
+
+/*
+  This block targets ALL text elements within the graph when
+  dark mode is active to apply a baseline fix.
+*/
+[data-theme="dark"] #wordsplainer-graph-svg text,
+[data-theme="dark"] #wordsplainer-graph-svg tspan {
+    /* 1. Remove the outline that makes the text look hollow or fuzzy. */
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+}
+
+
+/* --- Specific Fixes for Each Text Type --- */
+
+/* 1. For Peripheral Node Labels (e.g., "el plan") */
+[data-theme="dark"] .node:not(.central-node):not(.node-example) text {
+    /* 2. Give the label a solid, readable color. */
+    fill: #FFFFFF;
+}
+
+/* 2. For the Main Central Node Text */
+[data-theme="dark"] .central-node .node-text {
+    /* 2. Use pure white for maximum contrast on the central node. */
+    fill: #FFFFFF;
+}
+
+/* 3. For Example Nodes (the rectangular ones) */
+[data-theme="dark"] .node-example text {
+    /* 2. Set the color for the primary (English) text line. */
+    fill: #FFFFFF;
+}
+
+/* 4. For the Translated Text Line within Example Nodes */
+[data-theme="dark"] .node-example .example-translation {
+    /* 2. Restore the distinct coral color for the translation. */
+    fill: var(--primary-coral);
+}
