@@ -15,7 +15,7 @@ async function callOpenRouter(systemPrompt, userPrompt) {
 
     // Define our primary and fallback models
     const primaryModel = "mistralai/mistral-small-3.2-24b-instruct:free";
-    const fallbackModel = "google/gemma-7b-it:free"; // A reliable alternative
+    const fallbackModel = "deepseek/deepseek-r1-0528:free"; // A reliable alternative
 
     let response;
     
