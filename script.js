@@ -420,71 +420,78 @@ document.addEventListener('DOMContentLoaded', () => {
         overlayInput.addEventListener('blur', handleBlur);
     }
     
-    async function validateAndAddNode(word) {
-        if (!currentActiveCentral) return;
-        const cluster = graphClusters.get(currentActiveCentral);
-        if (!cluster) return;
+    // ... inside script.js
 
-        const lowerWord = word.toLowerCase();
+async function validateAndAddNode(word) {
+    if (!currentActiveCentral) return;
+    const cluster = graphClusters.get(currentActiveCentral);
+    if (!cluster) return;
 
-        const pendingNode = {
-            id: `${currentActiveCentral}-user-${lowerWord}-pending`,
-            text: lowerWord,
-            type: 'pending',
-            isUserAdded: true,
-            clusterId: currentActiveCentral
-        };
-        cluster.nodes.push(pendingNode);
-        cluster.links.push({ source: `central-${currentActiveCentral}`, target: pendingNode.id });
-        updateGraph();
+    const lowerWord = word.toLowerCase();
 
-        try {
-            const response = await fetch('/.netlify/functions/validateWord', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    centralWord: currentActiveCentral,
-                    userWord: lowerWord,
-                    relationship: cluster.currentView
-                })
-            });
+    const pendingNode = {
+        id: `${currentActiveCentral}-user-${lowerWord}-pending`,
+        text: lowerWord,
+        type: 'pending',
+        isUserAdded: true,
+        clusterId: currentActiveCentral
+    };
+    cluster.nodes.push(pendingNode);
+    cluster.links.push({ source: `central-${currentActiveCentral}`, target: pendingNode.id });
+    updateGraph();
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Validation server error: ${response.status}`);
-            }
+    try {
+        // VVV THIS FETCH CALL IS THE ONLY PART THAT CHANGES VVV
+        const response = await fetch('/.netlify/functions/wordsplainer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'validate', // Tell the backend which logic to run
+                word: currentActiveCentral, // The central word for context
+                userWord: lowerWord, // The word we are validating
+                relationship: cluster.currentView
+            })
+        });
+        // ^^^ THIS FETCH CALL IS THE ONLY PART THAT CHANGES ^^^
 
-            const validation = await response.json();
-            const validatedNode = cluster.nodes.find(n => n.id === pendingNode.id);
-            if (!validatedNode) return;
-
-            if (validation.isValid) {
-                validatedNode.type = cluster.currentView;
-                const newId = `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`;
-                validatedNode.id = newId;
-                
-                const link = cluster.links.find(l => l.target === pendingNode.id || l.target.id === pendingNode.id);
-                if (link) link.target = newId;
-
-                updateGraph();
-            } else {
-                validatedNode.type = 'invalid';
-                validatedNode.reason = validation.reason;
-                updateGraph();
-
-                setTimeout(() => {
-                    handleWordSubmitted(lowerWord, true);
-                }, 2000);
-            }
-
-        } catch (error) {
-            console.error("Validation failed:", error);
-            cluster.nodes = cluster.nodes.filter(n => n.id !== pendingNode.id);
-            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== pendingNode.id);
-            updateGraph();
-            alert(`An error occurred during validation: ${error.message}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Validation server error: ${response.status}`);
         }
+
+        const validation = await response.json();
+        const validatedNode = cluster.nodes.find(n => n.id === pendingNode.id);
+        if (!validatedNode) return;
+
+        if (validation.isValid) {
+            validatedNode.type = cluster.currentView;
+            const newId = `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`;
+            validatedNode.id = newId;
+
+            const link = cluster.links.find(l => (l.target.id || l.target) === pendingNode.id);
+            if (link) link.target = newId;
+
+            updateGraph();
+        } else {
+            validatedNode.type = 'invalid';
+            validatedNode.reason = validation.reason;
+            updateGraph();
+
+            setTimeout(() => {
+                handleWordSubmitted(lowerWord, true);
+            }, 2000);
+        }
+
+    } catch (error) {
+        console.error("Validation failed:", error);
+        cluster.nodes = cluster.nodes.filter(n => n.id !== pendingNode.id);
+        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== pendingNode.id);
+        updateGraph();
+        alert(`An error occurred during validation: ${error.message}`);
     }
+}
+
+// ... rest of your script.js file
 
     function handleDockClick(event) {
         const button = event.target.closest('button');
