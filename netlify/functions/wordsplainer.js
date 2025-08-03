@@ -14,8 +14,8 @@ async function callOpenRouter(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     // Define our primary and fallback models
-    const primaryModel = "qwen/qwen3-14b:free"
-    const fallbackModel = "deepseek/deepseek-r1-0528:free"; // A reliable alternative
+    const primaryModel = "mistralai/mistral-7b-instruct:free"
+    const fallbackModel = "openai/gpt-4.1-nano"; // A reliable alternative
 
     let response;
     
