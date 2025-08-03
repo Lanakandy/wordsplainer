@@ -54,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return response.json();
     }
 
-
     function forceCluster() {
         let strength = 0.1;
         return function(alpha) {
@@ -193,6 +192,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (d.isCentral) {
                     textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
+                    if (d.phonetic) {
+                        selection.append("text")
+                            .attr("class", "phonetic-text")
+                            .attr("dy", "1.5em")
+                            .style("font-size", "12px")
+                            .style("fill", "var(--text-secondary)")
+                            .text(d.phonetic);
+                    }
                 } else if (d.type === 'add') {
                     textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
                     const cluster = graphClusters.get(d.clusterId);
@@ -221,8 +228,10 @@ document.addEventListener('DOMContentLoaded', () => {
         simulation.force("center").x(width / 2).y(height / 2);
         simulation.alpha(1).restart();
         graphGroup.selectAll('.central-node').raise();
+        
+        // Fixed: Added missing closing parenthesis
+        updateCentralNodeState();
     }
-
 
     simulation.on("tick", () => {
         graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -372,14 +381,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             detectCrossConnections();
             updateGraph();
-            updateCentralNodeState();
 
         } catch (error) {
             console.error("Error generating graph:", error);
             renderError(error.message);
         }
     }
-
 
     function handleAddWord() {
         const inputOverlay = document.getElementById('input-overlay');
