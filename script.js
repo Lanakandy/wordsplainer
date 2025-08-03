@@ -1,4 +1,3 @@
-// This function needs to be available globally for immediate execution
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -27,8 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let explorationHistory = [];
     let currentActiveCentral = null;
     let clusterColors = d3.scaleOrdinal(d3.schemeCategory10);
-    let allUserAddedNodes = new Map();
-
+    
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
 
@@ -87,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         centralNodes = [];
         graphClusters.clear();
         crossConnections = [];
-        allUserAddedNodes.clear();
         currentActiveCentral = null;
         graphGroup.selectAll("*").remove();
         
@@ -95,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const promptGroup = graphGroup.append("g")
             .attr("class", "node central-node")
             .style("cursor", "pointer")
-            .on("click", handleAddWord);
+            .on("click", promptForInitialWord);
         promptGroup.append("circle").attr("cx", width / 2).attr("cy", height / 2).attr("r", 40);
         promptGroup.append("text").attr("class", "sub-text").attr("x", width / 2).attr("y", height / 2).attr("dy", "0.1em").text("+");
         promptGroup.append("text").attr("class", "status-text").attr("x", width / 2).attr("y", height / 2 + 70).text("Add a word to explore");
@@ -155,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         .on("mouseout", handleMouseOut)
                         .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-                    nodeGroup.append(d => (d.type === 'example' && !d.isUserAdded) ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'))
+                    nodeGroup.append(d => (d.type === 'example') ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'))
                         .on("click", handleNodeClick);
 
                     nodeGroup.select("circle")
@@ -207,16 +204,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
                         selection.select('circle').style("fill", `var(--${singularView}-color)`);
                     }
-                } else if (d.type === 'example' && !d.isUserAdded) {
-                    textElement.attr("x", 10).attr("y", 15).selectAll("tspan").remove();
-                    const lines = d.text.split('\n');
-                    textElement.selectAll("tspan").data(lines).enter().append("tspan")
-                        .attr("x", 10).attr("dy", (l, i) => i === 0 ? 0 : "1.2em").text(t => t)
-                        .attr("class", (l, i) => i === 1 ? "example-translation" : null);
-
-                    const bbox = textElement.node().getBBox();
-                    selection.select("rect").attr("width", bbox.width + 20).attr("height", bbox.height + 10).attr("y", -2).transition().duration(200).style("opacity", 1);
-                } else {
+                } else if (d.type === 'example') {
+                     createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true)); 
+setTimeout(() => {
+        const bbox = textElement.node()?.getBBox();
+        if (bbox) {
+            selection.select("rect")
+                .attr("width", bbox.width + 20)
+                .attr("height", bbox.height + 10)
+                .attr("x", bbox.x - 10)
+                .attr("y", bbox.y - 5)
+                .transition().duration(200).style("opacity", 1);
+        }
+    }, 0);
+} else {
                     textElement.text(d.text || d.id).attr("dy", -22);
                 }
             });
@@ -229,7 +230,6 @@ document.addEventListener('DOMContentLoaded', () => {
         simulation.alpha(1).restart();
         graphGroup.selectAll('.central-node').raise();
         
-        // Fixed: Added missing closing parenthesis
         updateCentralNodeState();
     }
 
@@ -263,6 +263,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+async function toggleExampleForNode(nodeData) {
+    const cluster = graphClusters.get(nodeData.clusterId);
+    if (!cluster) return;
+
+    const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
+
+    if (existingExample) {
+        cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
+        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
+        updateGraph();
+    } else {
+        try {
+            const body = {
+                type: 'generateExample',
+                word: nodeData.text,
+                ...(nodeData.type === 'context' && {
+                    centralWord: nodeData.clusterId,
+                    context: nodeData.text
+                })
+            };
+
+            const response = await fetch('/.netlify/functions/wordsplainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Server returned an error.');
+            }
+
+            const data = await response.json();
+
+            if (data.example) {
+                const exId = `${nodeData.id}-ex`;
+                const exNode = {
+                    id: exId,
+                    text: data.example,
+                    type: 'example',
+                    sourceNodeId: nodeData.id,
+                    clusterId: nodeData.clusterId
+                };
+                cluster.nodes.push(exNode);
+                cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
+                updateGraph();
+            }
+        } catch (error) {
+            console.error("Error getting example:", error);
+            alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
+        }
+    }
+}   
+
     async function handleWordSubmitted(word, isNewCentral = true) {
         const lowerWord = word.toLowerCase();
         if (isNewCentral) {
@@ -273,7 +327,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const centralNodeData = { word: lowerWord, id: `central-${lowerWord}`, isCentral: true, type: 'central', clusterId: lowerWord };
             centralNodes.push(centralNodeData);
             graphClusters.set(lowerWord, { nodes: [centralNodeData], links: [], center: calculateClusterCenter(centralNodes.length - 1), currentView: 'meaning' });
-            if (!allUserAddedNodes.has(lowerWord)) allUserAddedNodes.set(lowerWord, []);
         }
         currentActiveCentral = lowerWord;
         currentView = 'meaning';
@@ -295,32 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function addUserNode(word) {
-        const lowerWord = word.toLowerCase();
-        const cluster = graphClusters.get(currentActiveCentral);
-        if (!cluster) return false;
-        
-        const userNodes = allUserAddedNodes.get(currentActiveCentral) || [];
-        if (cluster.nodes.some(n => n.text === lowerWord && n.type === cluster.currentView)) {
-            alert(`"${word}" is already on the graph for this view.`);
-            return false;
-        }
-
-        const newNode = { 
-            id: `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`,
-            text: lowerWord, type: cluster.currentView, isUserAdded: true,
-            clusterId: currentActiveCentral
-        };
-        userNodes.push(newNode);
-        allUserAddedNodes.set(currentActiveCentral, userNodes);
-        cluster.nodes.push(newNode);
-        cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-        detectCrossConnections();
-        updateGraph();
-        return true;
-    }
-
-    async function generateGraphForView(view, options = {}) {
+       async function generateGraphForView(view, options = {}) {
         if (!currentActiveCentral) return;
         const cluster = graphClusters.get(currentActiveCentral);
         if (!cluster) return;
@@ -338,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const languageForRequest = (view === 'translation' && options.language) ? options.language : null;
             const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, languageForRequest);
 
-            const keptNodeIds = new Set(cluster.nodes.filter(n => n.isCentral || n.isUserAdded || n.type === 'add').map(n => n.id));
+            const keptNodeIds = new Set(cluster.nodes.filter(n => n.isCentral || n.type === 'add').map(n => n.id));
             cluster.nodes = cluster.nodes.filter(n => keptNodeIds.has(n.id));
             cluster.links = cluster.links.filter(l => {
                 const sourceId = l.source.id || l.source;
@@ -388,164 +416,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function handleAddWord() {
-        const inputOverlay = document.getElementById('input-overlay');
-        const overlayInput = document.getElementById('overlay-input');
-        const isAddingToCluster = !!currentActiveCentral;
-        const placeholder = isAddingToCluster ? `Add a related '${graphClusters.get(currentActiveCentral).currentView}'...` : "Type a word and press Enter...";
-        overlayInput.placeholder = placeholder;
-        inputOverlay.classList.add('visible');
-        overlayInput.focus();
-        overlayInput.value = '';
-        const handleKeyDown = (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                const value = overlayInput.value.trim();
-                if (value) {
-                    if (isAddingToCluster) {
-                        validateAndAddNode(value);
-                    } else {
-                        handleWordSubmitted(value);
-                    }
-                }
-                inputOverlay.classList.remove('visible');
-                overlayInput.removeEventListener('keydown', handleKeyDown);
-                overlayInput.removeEventListener('blur', handleBlur);
+    function promptForInitialWord() {
+    const inputOverlay = document.getElementById('input-overlay');
+    const overlayInput = document.getElementById('overlay-input');
+
+    overlayInput.placeholder = "Type a word and press Enter...";
+    inputOverlay.classList.add('visible');
+    overlayInput.focus();
+    overlayInput.value = '';
+
+    const handleKeyDown = (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            const value = overlayInput.value.trim();
+            if (value) {
+                handleWordSubmitted(value, true);
             }
-        };
-        const handleBlur = () => {
+            // Cleanup listeners when done
             inputOverlay.classList.remove('visible');
             overlayInput.removeEventListener('keydown', handleKeyDown);
             overlayInput.removeEventListener('blur', handleBlur);
-        };
-        overlayInput.addEventListener('keydown', handleKeyDown);
-        overlayInput.addEventListener('blur', handleBlur);
-    }
-    
-    // --- CORRECTED `toggleExampleForNode` FUNCTION ---
-    async function toggleExampleForNode(nodeData) {
-        const cluster = graphClusters.get(nodeData.clusterId);
-        if (!cluster) return;
-
-        const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
-
-        if (existingExample) {
-            cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
-            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
-            updateGraph();
-        } else {
-            try {
-                // This is the object we send to the backend
-                const body = {
-                    type: 'generateExample',
-                    word: nodeData.text,
-                    // Conditionally add context-specific data using spread syntax
-                    ...(nodeData.type === 'context' && {
-                        centralWord: nodeData.clusterId,
-                        context: nodeData.text // FIX: This is the correct value
-                    })
-                };
-
-                const response = await fetch('/.netlify/functions/wordsplainer', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Server returned an error.');
-                }
-                
-                const data = await response.json();
-
-                if (data.example) {
-                    const exId = `${nodeData.id}-ex`;
-                    const exNode = {
-                        id: exId,
-                        text: data.example,
-                        type: 'example',
-                        sourceNodeId: nodeData.id,
-                        clusterId: nodeData.clusterId
-                    };
-                    cluster.nodes.push(exNode);
-                    cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
-                    updateGraph();
-                }
-            } catch (error) {
-                console.error("Error getting example:", error);
-                alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
-            }
         }
-    }
-    
-    async function validateAndAddNode(word) {
-        if (!currentActiveCentral) return;
-        const cluster = graphClusters.get(currentActiveCentral);
-        if (!cluster) return;
+    };
 
-        const lowerWord = word.toLowerCase();
+    const handleBlur = () => {
+        // Cleanup listeners when done
+        inputOverlay.classList.remove('visible');
+        overlayInput.removeEventListener('keydown', handleKeyDown);
+        overlayInput.removeEventListener('blur', handleBlur);
+    };
 
-        const pendingNode = {
-            id: `${currentActiveCentral}-user-${lowerWord}-pending`,
-            text: lowerWord,
-            type: 'pending',
-            isUserAdded: true,
-            clusterId: currentActiveCentral
-        };
-        cluster.nodes.push(pendingNode);
-        cluster.links.push({ source: `central-${currentActiveCentral}`, target: pendingNode.id });
-        updateGraph();
-
-        try {
-            const response = await fetch('/.netlify/functions/wordsplainer', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'validate',
-                    word: currentActiveCentral,
-                    userWord: lowerWord,
-                    relationship: cluster.currentView
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Validation server error: ${response.status}`);
-            }
-
-            const validation = await response.json();
-            const validatedNode = cluster.nodes.find(n => n.id === pendingNode.id);
-            if (!validatedNode) return;
-
-            if (validation.isValid) {
-                validatedNode.type = cluster.currentView;
-                const newId = `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`;
-                validatedNode.id = newId;
-
-                const link = cluster.links.find(l => (l.target.id || l.target) === pendingNode.id);
-                if (link) link.target = newId;
-
-                updateGraph();
-            } else {
-                validatedNode.type = 'invalid';
-                validatedNode.reason = validation.reason;
-                updateGraph();
-
-                setTimeout(() => {
-                    handleWordSubmitted(lowerWord, true);
-                }, 2000);
-            }
-
-        } catch (error) {
-            console.error("Validation failed:", error);
-            cluster.nodes = cluster.nodes.filter(n => n.id !== pendingNode.id);
-            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== pendingNode.id);
-            updateGraph();
-            alert(`An error occurred during validation: ${error.message}`);
-        }
-    }
-    
+    overlayInput.addEventListener('keydown', handleKeyDown);
+    overlayInput.addEventListener('blur', handleBlur);
+}
+          
     function handleDockClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
@@ -579,18 +483,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNodeClick(event, d) {
-        event.stopPropagation();
-        const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
-        if (exampleTypes.includes(d.type)) {
-            return toggleExampleForNode(d);
-        }
-        if (event.shiftKey && d.text && d.type !== 'add') return handleWordSubmitted(d.text, true);
-        if (d.clusterId && d.clusterId !== currentActiveCentral) focusOnCentralNode(d.clusterId);
-        if (d.isCentral) fetchMoreNodes();
-        else if (d.type === 'add') handleAddWord();
-        else if (d.type === 'translation') toggleTranslationExamples(d);
-        else if (d.type === 'meaning' && !d.isUserAdded) toggleMeaningExamples(d);
+    event.stopPropagation();
+    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
+
+    if (exampleTypes.includes(d.type)) {
+        return toggleExampleForNode(d);
     }
+    if (event.shiftKey && d.text && d.type !== 'add') {
+        return handleWordSubmitted(d.text, true);
+    }
+    if (d.isCentral) {
+        // Clicking a central node now ONLY focuses it. It does NOT fetch more nodes.
+        focusOnCentralNode(d.clusterId);
+    } else if (d.type === 'add') {
+        // The '+' node is now ONLY for fetching more nodes.
+        fetchMoreNodes();
+    } else if (d.type === 'translation') {
+        toggleTranslationExamples(d);
+    } else if (d.type === 'meaning') {
+        toggleMeaningExamples(d);
+    }
+}
+
+function createInteractiveText(d3TextElement, text, onWordClick) {
+    d3TextElement.selectAll("tspan").remove(); // Clear previous content
+
+    // Split text into lines first
+    const lines = text.split('\n');
+    lines.forEach((line, lineIndex) => {
+        // Split each line into words and punctuation
+        const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
+        
+        const lineTspan = d3TextElement.append('tspan')
+            .attr('x', 10)
+            .attr('dy', lineIndex === 0 ? 0 : '1.2em');
+
+        tokens.forEach(token => {
+            const cleanedToken = token.trim().toLowerCase();
+            // Make it clickable if it's a word (not just punctuation or space)
+            if (cleanedToken && /^[a-z']+$/.test(cleanedToken)) {
+                lineTspan.append('tspan')
+                    .attr('class', 'interactive-word')
+                    .text(token)
+                    .on('click', (event) => {
+                        event.stopPropagation();
+                        // Get the raw text, remove punctuation for the API call
+                        const wordToExplore = token.replace(/[.,!?;:"]+/g, '').trim();
+                        if(wordToExplore) {
+                           onWordClick(wordToExplore);
+                        }
+                    });
+            } else {
+                // Append non-clickable parts (spaces, punctuation)
+                lineTspan.append('tspan').text(token);
+            }
+        });
+    });
+}
 
     function handleLabelClick(event, d) {
         event.stopPropagation();
@@ -598,20 +547,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
  
     function handleMouseOver(event, d) {
-        let tooltipText = '';
-        if (d.isCentral) {
-            const cluster = graphClusters.get(d.clusterId);
-            if (cluster) {
-                const count = cluster.nodes.filter(n => n.type === cluster.currentView && !n.isUserAdded).length;
-                tooltipText = `${count} of ${viewState.total || count} ${cluster.currentView} shown`;
+    let tooltipText = '';
+    if (d.isCentral) {
+        const cluster = graphClusters.get(d.clusterId);
+        if (cluster) {
+            const isPaginated = cluster.currentView !== 'meaning';
+            if (isPaginated && viewState.hasMore) {
+                tooltipText = `Click '+' to load more ${cluster.currentView}`;
+            } else {
+                tooltipText = `Currently viewing ${cluster.currentView}`;
             }
-        } else if (d.reason) {
-            tooltipText = d.reason;
-        } else if (d.type === 'add') {
-            tooltipText = 'Add new word';
-        } else if (d.text) {
-            tooltipText = `Shift+click to explore "${d.text}"`;
         }
+    } else if (d.type === 'add') {
+        // The '+' node tooltip is now very specific
+        const cluster = graphClusters.get(d.clusterId);
+        if (cluster && viewState.hasMore) {
+            tooltipText = `Load more ${cluster.currentView} for "${d.clusterId}"`;
+        } else {
+            tooltipText = `No more ${cluster?.currentView || ''} to load`;
+        }
+    } else if (d.text) {
+        tooltipText = `Shift+click to explore "${d.text}" in a new cluster`;
+    }
         
         if (tooltipText) {
             tooltip.textContent = tooltipText;
