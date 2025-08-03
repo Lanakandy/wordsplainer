@@ -428,12 +428,14 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGraph();
         } else {
             try {
+                // This is the object we send to the backend
                 const body = {
                     type: 'generateExample',
                     word: nodeData.text,
+                    // Conditionally add context-specific data using spread syntax
                     ...(nodeData.type === 'context' && {
                         centralWord: nodeData.clusterId,
-                        context: nodeData.text
+                        context: nodeData.text // FIX: This is the correct value
                     })
                 };
 
@@ -444,7 +446,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (!response.ok) {
-                    // This is the fix: get the detailed error message from the server response
                     const errorData = await response.json();
                     throw new Error(errorData.error || 'Server returned an error.');
                 }
@@ -465,7 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateGraph();
                 }
             } catch (error) {
-                // Now this will log and alert a much more useful error message
                 console.error("Error getting example:", error);
                 alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
             }
