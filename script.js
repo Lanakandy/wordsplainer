@@ -427,9 +427,12 @@ graphGroup.selectAll(".link")
                 event.preventDefault();
                 const value = overlayInput.value.trim();
                 if (value) {
-                    if (isAddingToCluster) addUserNode(value);
-                    else handleWordSubmitted(value);
-                }
+    if (isAddingToCluster) {
+        validateAndAddNode(value); // <<< CALL OUR NEW LOGIC HANDLER
+    } else {
+        handleWordSubmitted(value);
+    }
+}
                 inputOverlay.classList.remove('visible');
                 overlayInput.removeEventListener('keydown', handleKeyDown);
                 overlayInput.removeEventListener('blur', handleBlur);
@@ -444,6 +447,58 @@ graphGroup.selectAll(".link")
         overlayInput.addEventListener('blur', handleBlur);
     }
     
+
+async function validateAndAddNode(word) {
+    if (!currentActiveCentral) return;
+    const cluster = graphClusters.get(currentActiveCentral);
+    if (!cluster) return;
+
+    // For UX: Show a temporary loading/validation message
+    tooltip.textContent = `Validating "${word}"...`;
+    tooltip.classList.add('visible');
+    // A bit of a hack to position the tooltip near the center
+    const { width, height } = graphContainer.getBoundingClientRect();
+    tooltip.style.left = `${width / 2 + 15}px`;
+    tooltip.style.top = `${height / 2 + 15}px`;
+
+
+    try {
+        const response = await fetch('/.netlify/functions/validateWord', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                centralWord: currentActiveCentral,
+                userWord: word,
+                relationship: cluster.currentView
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Validation server error: ${response.status}`);
+        }
+
+        const validation = await response.json();
+
+        // --- The "Validate and Branch" Logic ---
+        if (validation.isValid) {
+            // The LLM agrees! Add the node to the current graph.
+            addUserNode(word);
+            tooltip.textContent = `Added "${word}"!`;
+            setTimeout(() => tooltip.classList.remove('visible'), 2000);
+        } else {
+            // The LLM disagrees. Alert the user and start a new graph.
+            tooltip.classList.remove('visible'); // Hide loading tooltip first
+            alert(`Could not add word: ${validation.reason}\n\nCreating a new graph for "${word}" instead.`);
+            handleWordSubmitted(word, true); // The magic "branching" call
+        }
+
+    } catch (error) {
+        console.error("Validation failed:", error);
+        tooltip.classList.remove('visible');
+        alert(`An error occurred during validation: ${error.message}`);
+    }
+}
     function handleDockClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
