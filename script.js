@@ -32,20 +32,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
 
-    // --- MOVED AND CORRECTED: Central API fetching function ---
-    // This helper function now lives in the main scope and can be used by any other function.
+    // --- Central API fetching function ---
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
         const response = await fetch('/.netlify/functions/wordsplainer', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 word: word,
                 type: type,
                 offset: offset,
                 limit: limit,
-                language: language // Pass language if it exists
+                language: language
             }),
         });
 
@@ -130,116 +127,95 @@ document.addEventListener('DOMContentLoaded', () => {
         return { nodes, links: [...links, ...crossConnections] };
     }
 
+    // --- CORRECTED `updateGraph` FUNCTION ---
     function updateGraph() {
         const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
         const { width, height } = graphContainer.getBoundingClientRect();
         graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
-        
-        graphGroup.selectAll(".link").data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join(
-            enter => enter.append("line").attr("class", d => `link ${d.type === 'example' ? 'link-example' : ''}`).style("opacity", 0).transition().duration(600).delay(200).style("opacity", 1),
-            update => update,
-            exit => exit.transition().duration(300).style("opacity", 0).remove()
-        );
 
-    const nodeEnter = graphGroup.selectAll(".node").data(allNodes, d => d.id).join(
-    enter => {
-        const nodeGroup = enter.append("g")
-            .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : "node-" + d.type}`)
-            .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended))
-            .on("mouseover", handleMouseOver).on("mouseout", handleMouseOut)
-            .attr("transform", d => `translate(${d.x}, ${d.y})`);
+        graphGroup.selectAll(".link")
+            .data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+            .join(
+                enter => enter.append("line")
+                    .attr("class", d => `link ${d.type === 'example' ? 'link-example' : ''}`)
+                    .style("opacity", 0)
+                    .transition().duration(600).delay(200)
+                    .style("opacity", 1),
+                update => update,
+                exit => exit.transition().duration(300)
+                    .style("opacity", 0)
+                    .remove()
+            );
 
-        nodeGroup.each(function(d) {
-            const selection = d3.select(this);
-            if (d.type === 'example' && !d.isUserAdded) {
-                selection.append("rect").style("opacity", 0);
-            } else {
-                selection.append("circle")
-                    .attr("r", 0) 
-                    .on("click", handleNodeClick)
-                    .transition()
-                    .duration(400) 
-                    .ease(d3.easeElasticOut.amplitude(1).period(0.5)) 
-                    .attr("r", d.isCentral ? 40 : 15); 
-            }
-        });
+        graphGroup.selectAll(".node")
+            .data(allNodes, d => d.id)
+            .join(
+                enter => {
+                    const nodeGroup = enter.append("g")
+                        .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended))
+                        .on("mouseover", handleMouseOver)
+                        .on("mouseout", handleMouseOut)
+                        .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-        nodeGroup.each(function(d) {
-            const selection = d3.select(this);
-            let textElement;
-            
-            selection.style("opacity", 0)
-                   .transition()
-                   .duration(300)
-                   .delay(150) 
-                   .style("opacity", 1);
+                    // Append circles/rects
+                    nodeGroup.append(d => (d.type === 'example' && !d.isUserAdded) ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'))
+                        .on("click", handleNodeClick);
 
-            if (d.isCentral) {
-                textElement = selection.append("text")
-                    .attr("class", "node-text")
-                    .text(d.word || d.id)
-                    .attr("dy", "0.3em");
-            } else if (d.type === 'add') {
-                textElement = selection.append("text")
-                    .text('+')
-                    .style("font-size", "24px")
-                    .style("font-weight", "300")
-                    .style("fill", "white")
-                    .style("stroke", "none");
-                const cluster = graphClusters.get(d.clusterId);
-                if (cluster) {
-                    const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
-                    selection.select('circle').style("fill", `var(--${singularView}-color)`);
+                    nodeGroup.select("circle")
+                        .attr("r", 0)
+                        .transition()
+                        .duration(400)
+                        .ease(d3.easeElasticOut.amplitude(1).period(0.5))
+                        .attr("r", d => d.isCentral ? 40 : 15);
+                    
+                    nodeGroup.select("rect").style("opacity", 0);
+
+                    // Append text
+                    nodeGroup.append("text")
+                       .on("click", (e, d) => (d.type !== 'example' && d.type !== 'add') && handleLabelClick(e, d));
+
+                    nodeGroup.style("opacity", 0)
+                        .transition()
+                        .duration(300)
+                        .delay(150)
+                        .style("opacity", 1);
+                    
+                    return nodeGroup;
+                },
+                update => update,
+                exit => exit.transition()
+                    .duration(200)
+                    .ease(d3.easeCircleIn)
+                    .attr("transform", d => `translate(${d.x}, ${d.y}) scale(0)`)
+                    .remove()
+            )
+            .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
+            .each(function(d) { // This .each runs for both enter and update selections
+                const selection = d3.select(this);
+                const textElement = selection.select("text");
+                
+                if (d.isCentral) {
+                    textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
+                } else if (d.type === 'add') {
+                    textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
+                    const cluster = graphClusters.get(d.clusterId);
+                    if (cluster) {
+                        const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
+                        selection.select('circle').style("fill", `var(--${singularView}-color)`);
+                    }
+                } else if (d.type === 'example' && !d.isUserAdded) {
+                    textElement.attr("x", 10).attr("y", 15).selectAll("tspan").remove(); // Clear old text
+                    const lines = d.text.split('\n');
+                    textElement.selectAll("tspan").data(lines).enter().append("tspan")
+                        .attr("x", 10).attr("dy", (l, i) => i === 0 ? 0 : "1.2em").text(t => t)
+                        .attr("class", (l, i) => i === 1 ? "example-translation" : null);
+
+                    const bbox = textElement.node().getBBox();
+                    selection.select("rect").attr("width", bbox.width + 20).attr("height", bbox.height + 10).attr("y", -2).transition().duration(200).style("opacity", 1);
+                } else {
+                    textElement.text(d.text || d.id).attr("dy", -22);
                 }
-            } else if (d.type === 'example' && !d.isUserAdded) {
-                const textElementRef = selection.append("text")
-                    .attr("x", 10).attr("y", 15);
-
-                const lines = d.text.split('\n');
-                textElementRef.selectAll("tspan").data(lines).enter().append("tspan")
-                    .attr("x", 10).attr("dy", (l, i) => i === 0 ? 0 : "1.2em").text(t => t)
-                    .attr("class", (l, i) => i === 1 ? "example-translation" : null);
-
-                const bbox = textElementRef.node().getBBox();
-                selection.select("rect")
-                    .attr("width", bbox.width + 20).attr("height", bbox.height + 10).attr("y", -2)
-                    .transition().duration(200).style("opacity", 1); 
-            } else {
-                textElement = selection.append("text")
-                    .text(d.text || d.id)
-                    .attr("dy", -22);
-            }
-
-            if (textElement && d.type !== 'example' && d.type !== 'add') {
-                textElement.on("click", handleLabelClick);
-            }
-        });
-        return nodeGroup;
-    },
-    update => update.attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : "node-" + d.type}`),
-    exit => exit.transition()
-        .duration(200)
-        .ease(d3.easeCircleIn)
-        .attr("transform", d => `translate(${d.x}, ${d.y}) scale(0)`)
-        .remove()
-);
-
-graphGroup.selectAll(".link")
-    .data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
-    .join(
-        enter => enter.append("line")
-            .attr("class", d => `link ${d.type === 'example' ? 'link-example' : ''}`)
-            .style("opacity", 0) 
-            .transition()
-            .duration(400)
-            .delay(200)     
-            .style("opacity", 1),
-        update => update,
-        exit => exit.transition()
-            .duration(200)
-            .style("opacity", 0)
-            .remove()
-    );
+            });
 
         graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? '#ff6b6b' : '#999').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "5,5" : "none");
 
@@ -249,6 +225,7 @@ graphGroup.selectAll(".link")
         simulation.alpha(1).restart();
         graphGroup.selectAll('.central-node').raise();
     }
+
 
     simulation.on("tick", () => {
         graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -337,7 +314,7 @@ graphGroup.selectAll(".link")
         return true;
     }
 
-    // --- CORRECTED SECTION: `generateGraphForView` ---
+    // --- CORRECTED `generateGraphForView` FUNCTION ---
     async function generateGraphForView(view, options = {}) {
         if (!currentActiveCentral) return;
         const cluster = graphClusters.get(currentActiveCentral);
@@ -349,16 +326,13 @@ graphGroup.selectAll(".link")
         renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
 
         try {
-            // Find the central node to get its current position
             const centralNode = cluster.nodes.find(n => n.isCentral);
             const initialX = centralNode ? centralNode.x : (graphContainer.getBoundingClientRect().width / 2);
             const initialY = centralNode ? centralNode.y : (graphContainer.getBoundingClientRect().height / 2);
             
-            // CORRECT: Call the helper function and await the data
             const languageForRequest = (view === 'translation' && options.language) ? options.language : null;
             const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, languageForRequest);
 
-            // Clean up old nodes (except central, user-added, and add button)
             const keptNodeIds = new Set(cluster.nodes.filter(n => n.isCentral || n.isUserAdded || n.type === 'add').map(n => n.id));
             cluster.nodes = cluster.nodes.filter(n => keptNodeIds.has(n.id));
             cluster.links = cluster.links.filter(l => {
@@ -367,32 +341,31 @@ graphGroup.selectAll(".link")
                 return keptNodeIds.has(sourceId) && keptNodeIds.has(targetId);
             });
 
-            // Process new nodes from the API response
-    data.nodes.forEach(nodeData => {
-    // Check if a similar node (by text) already exists from the API for this view.
-    const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
-    if (cluster.nodes.some(n => n.id === nodeId)) return;
-    if (nodeData.text.toLowerCase().includes('no data')) return;
+            data.nodes.forEach(nodeData => {
+                // FIX: Add guard clause to prevent error on undefined text property
+                if (!nodeData || typeof nodeData.text !== 'string') return;
+                
+                const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
+                if (cluster.nodes.some(n => n.id === nodeId)) return;
+                if (nodeData.text.toLowerCase().includes('no data')) return;
 
-    // Create the new node. The backend now standardizes the structure for us.
-    const newNode = {
-        ...nodeData, // This will include 'text' and potentially 'examples'
-        id: nodeId,
-        type: view,
-        clusterId: currentActiveCentral,
-        x: initialX,
-        y: initialY
-    };
+                const newNode = {
+                    ...nodeData,
+                    id: nodeId,
+                    type: view,
+                    clusterId: currentActiveCentral,
+                    x: initialX,
+                    y: initialY
+                };
 
-    // For translations, attach the language code and the example translations object
-    if (view === 'translation') {
-        newNode.lang = options.language;
-        newNode.exampleTranslations = data.exampleTranslations;
-    }
+                if (view === 'translation') {
+                    newNode.lang = options.language;
+                    newNode.exampleTranslations = data.exampleTranslations;
+                }
 
-    cluster.nodes.push(newNode);
-    cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-});
+                cluster.nodes.push(newNode);
+                cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
+            });
 
             const addNodeId = `add-${currentActiveCentral}`;
             if (!cluster.nodes.some(n => n.id === addNodeId)) {
@@ -408,7 +381,7 @@ graphGroup.selectAll(".link")
 
         } catch (error) {
             console.error("Error generating graph:", error);
-            renderError(error.message); // Display the error message on the graph
+            renderError(error.message);
         }
     }
 
@@ -427,12 +400,12 @@ graphGroup.selectAll(".link")
                 event.preventDefault();
                 const value = overlayInput.value.trim();
                 if (value) {
-    if (isAddingToCluster) {
-        validateAndAddNode(value); // <<< CALL OUR NEW LOGIC HANDLER
-    } else {
-        handleWordSubmitted(value);
-    }
-}
+                    if (isAddingToCluster) {
+                        validateAndAddNode(value);
+                    } else {
+                        handleWordSubmitted(value);
+                    }
+                }
                 inputOverlay.classList.remove('visible');
                 overlayInput.removeEventListener('keydown', handleKeyDown);
                 overlayInput.removeEventListener('blur', handleBlur);
@@ -447,58 +420,72 @@ graphGroup.selectAll(".link")
         overlayInput.addEventListener('blur', handleBlur);
     }
     
+    async function validateAndAddNode(word) {
+        if (!currentActiveCentral) return;
+        const cluster = graphClusters.get(currentActiveCentral);
+        if (!cluster) return;
 
-async function validateAndAddNode(word) {
-    if (!currentActiveCentral) return;
-    const cluster = graphClusters.get(currentActiveCentral);
-    if (!cluster) return;
+        const lowerWord = word.toLowerCase();
 
-    // For UX: Show a temporary loading/validation message
-    tooltip.textContent = `Validating "${word}"...`;
-    tooltip.classList.add('visible');
-    // A bit of a hack to position the tooltip near the center
-    const { width, height } = graphContainer.getBoundingClientRect();
-    tooltip.style.left = `${width / 2 + 15}px`;
-    tooltip.style.top = `${height / 2 + 15}px`;
+        const pendingNode = {
+            id: `${currentActiveCentral}-user-${lowerWord}-pending`,
+            text: lowerWord,
+            type: 'pending',
+            isUserAdded: true,
+            clusterId: currentActiveCentral
+        };
+        cluster.nodes.push(pendingNode);
+        cluster.links.push({ source: `central-${currentActiveCentral}`, target: pendingNode.id });
+        updateGraph();
 
+        try {
+            const response = await fetch('/.netlify/functions/validateWord', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    centralWord: currentActiveCentral,
+                    userWord: lowerWord,
+                    relationship: cluster.currentView
+                })
+            });
 
-    try {
-        const response = await fetch('/.netlify/functions/validateWord', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                centralWord: currentActiveCentral,
-                userWord: word,
-                relationship: cluster.currentView
-            })
-        });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Validation server error: ${response.status}`);
+            }
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Validation server error: ${response.status}`);
+            const validation = await response.json();
+            const validatedNode = cluster.nodes.find(n => n.id === pendingNode.id);
+            if (!validatedNode) return;
+
+            if (validation.isValid) {
+                validatedNode.type = cluster.currentView;
+                const newId = `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`;
+                validatedNode.id = newId;
+                
+                const link = cluster.links.find(l => l.target === pendingNode.id || l.target.id === pendingNode.id);
+                if (link) link.target = newId;
+
+                updateGraph();
+            } else {
+                validatedNode.type = 'invalid';
+                validatedNode.reason = validation.reason;
+                updateGraph();
+
+                setTimeout(() => {
+                    handleWordSubmitted(lowerWord, true);
+                }, 2000);
+            }
+
+        } catch (error) {
+            console.error("Validation failed:", error);
+            cluster.nodes = cluster.nodes.filter(n => n.id !== pendingNode.id);
+            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== pendingNode.id);
+            updateGraph();
+            alert(`An error occurred during validation: ${error.message}`);
         }
-
-        const validation = await response.json();
-
-        // --- The "Validate and Branch" Logic ---
-        if (validation.isValid) {
-            // The LLM agrees! Add the node to the current graph.
-            addUserNode(word);
-            tooltip.textContent = `Added "${word}"!`;
-            setTimeout(() => tooltip.classList.remove('visible'), 2000);
-        } else {
-            // The LLM disagrees. Alert the user and start a new graph.
-            tooltip.classList.remove('visible'); // Hide loading tooltip first
-            alert(`Could not add word: ${validation.reason}\n\nCreating a new graph for "${word}" instead.`);
-            handleWordSubmitted(word, true); // The magic "branching" call
-        }
-
-    } catch (error) {
-        console.error("Validation failed:", error);
-        tooltip.classList.remove('visible');
-        alert(`An error occurred during validation: ${error.message}`);
     }
-}
+
     function handleDockClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
@@ -517,7 +504,7 @@ async function validateAndAddNode(word) {
         }
     }
 
-      function handleZoomControlsClick(event) {
+    function handleZoomControlsClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
 
@@ -546,6 +533,7 @@ async function validateAndAddNode(word) {
         if (d.text) handleWordSubmitted(d.text, true);
     }
  
+    // --- CORRECTED `handleMouseOver` FUNCTION ---
     function handleMouseOver(event, d) {
         let tooltipText = '';
         if (d.isCentral) {
@@ -554,8 +542,14 @@ async function validateAndAddNode(word) {
                 const count = cluster.nodes.filter(n => n.type === cluster.currentView && !n.isUserAdded).length;
                 tooltipText = `${count} of ${viewState.total || count} ${cluster.currentView} shown`;
             }
-        } else if (d.type === 'add') tooltipText = 'Add new word';
-        else if (d.text) tooltipText = `Shift+click to explore "${d.text}"`;
+        } else if (d.reason) {
+            tooltipText = d.reason;
+        } else if (d.type === 'add') {
+            tooltipText = 'Add new word';
+        } else if (d.text) {
+            tooltipText = `Shift+click to explore "${d.text}"`;
+        }
+        
         if (tooltipText) {
             tooltip.textContent = tooltipText;
             tooltip.classList.add('visible');
@@ -628,7 +622,6 @@ async function validateAndAddNode(word) {
         updateGraph();
     }
 
-    // --- CORRECTED SECTION: `fetchMoreNodes` ---
     async function fetchMoreNodes() {
         const cluster = graphClusters.get(currentActiveCentral);
         if (!currentActiveCentral || !cluster || !viewState.hasMore) return;
@@ -637,11 +630,13 @@ async function validateAndAddNode(word) {
         centralNodeElement.classed('loading', true);
         
         try {
-            // CORRECT: Call the helper function instead of the old window.api method
             const data = await fetchData(currentActiveCentral, cluster.currentView, viewState.offset, 3);
 
             if (data.nodes.length > 0) {
                 data.nodes.forEach(newNodeData => {
+                    // FIX: Add guard clause here as well for robustness
+                    if (!newNodeData || typeof newNodeData.text !== 'string') return;
+                    
                     const newNodeId = `${currentActiveCentral}-${newNodeData.text}-${cluster.currentView}`;
                     if (!cluster.nodes.some(n => n.id === newNodeId)) {
                         const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral };
@@ -658,7 +653,6 @@ async function validateAndAddNode(word) {
             }
         } catch (error) {
             console.error("Failed to fetch more nodes:", error);
-            // Optionally, show a temporary error message in the tooltip
             tooltip.textContent = "Error loading more.";
             tooltip.classList.add('visible');
             setTimeout(() => tooltip.classList.remove('visible'), 2000);
@@ -672,7 +666,7 @@ async function validateAndAddNode(word) {
         if (!currentActiveCentral) return;
         const centralNodeElement = graphGroup.selectAll('.central-node').filter(d => d.clusterId === currentActiveCentral);
         if (centralNodeElement.empty()) return;
-        const isPaginatedView = currentView !== 'meaning'; // Example condition
+        const isPaginatedView = currentView !== 'meaning';
         centralNodeElement.classed('loadable', isPaginatedView && viewState.hasMore);
     }
     
@@ -693,92 +687,91 @@ async function validateAndAddNode(word) {
     }
     
     function saveAsPng() {
-    if (centralNodes.length === 0) return alert("Nothing to save yet!");
+        if (centralNodes.length === 0) return alert("Nothing to save yet!");
     
-    const svgEl = svg.node();
-    const { width, height } = svgEl.getBoundingClientRect();
-    
-    const clonedSvg = svgEl.cloneNode(true);
-    clonedSvg.setAttribute('width', width);
-    clonedSvg.setAttribute('height', height);
-    
-    const rootStyles = getComputedStyle(document.documentElement);
-    
-    const originalElements = svgEl.querySelectorAll('circle, text, line, rect, tspan');
-    const clonedElements = clonedSvg.querySelectorAll('circle, text, line, rect, tspan');
-    
-    originalElements.forEach((originalEl, i) => {
-        if (i < clonedElements.length) {
-            const clonedEl = clonedElements[i];
-            const computedStyle = getComputedStyle(originalEl);
+        const svgEl = svg.node();
+        const { width, height } = svgEl.getBoundingClientRect();
+        
+        const clonedSvg = svgEl.cloneNode(true);
+        clonedSvg.setAttribute('width', width);
+        clonedSvg.setAttribute('height', height);
+        
+        const rootStyles = getComputedStyle(document.documentElement);
+        
+        const originalElements = svgEl.querySelectorAll('circle, text, line, rect, tspan');
+        const clonedElements = clonedSvg.querySelectorAll('circle, text, line, rect, tspan');
+        
+        originalElements.forEach((originalEl, i) => {
+            if (i < clonedElements.length) {
+                const clonedEl = clonedElements[i];
+                const computedStyle = getComputedStyle(originalEl);
+                
+                const styleProps = [
+                    'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
+                    'font-size', 'font-family', 'font-weight', 'text-anchor',
+                    'opacity', 'fill-opacity', 'stroke-opacity'
+                ];
+                
+                styleProps.forEach(prop => {
+                    const value = computedStyle.getPropertyValue(prop);
+                    if (value && value !== 'none' && value !== '') {
+                        clonedEl.setAttribute(prop, value);
+                    }
+                });
+            }
+        });
+        
+        const originalGroups = svgEl.querySelectorAll('g');
+        const clonedGroups = clonedSvg.querySelectorAll('g');
+        
+        originalGroups.forEach((originalGroup, i) => {
+            if (i < clonedGroups.length && originalGroup.className) {
+                clonedGroups[i].setAttribute('class', originalGroup.className.baseVal || originalGroup.className);
+            }
+        });
+        
+        const svgString = new XMLSerializer().serializeToString(clonedSvg);
+        const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+        const image = new Image();
+        
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            const scale = 2;
             
-            const styleProps = [
-                'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
-                'font-size', 'font-family', 'font-weight', 'text-anchor',
-                'opacity', 'fill-opacity', 'stroke-opacity'
-            ];
+            canvas.width = width * scale;
+            canvas.height = height * scale;
             
-            styleProps.forEach(prop => {
-                const value = computedStyle.getPropertyValue(prop);
-                if (value && value !== 'none' && value !== '') {
-                    clonedEl.setAttribute(prop, value);
-                }
-            });
-        }
-    });
-    
-    const originalGroups = svgEl.querySelectorAll('g');
-    const clonedGroups = clonedSvg.querySelectorAll('g');
-    
-    originalGroups.forEach((originalGroup, i) => {
-        if (i < clonedGroups.length && originalGroup.className) {
-            clonedGroups[i].setAttribute('class', originalGroup.className.baseVal || originalGroup.className);
-        }
-    });
-    
-    const svgString = new XMLSerializer().serializeToString(clonedSvg);
-    const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
-    const image = new Image();
-    
-    image.onload = () => {
-        const canvas = document.createElement('canvas');
-        const scale = 2;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.scale(scale, scale);
+            
+            const bgColor = rootStyles.getPropertyValue('--canvas-bg')?.trim() || 
+                           (rootStyles.getPropertyValue('--bg-primary')?.trim()) || 
+                           '#ffffff';
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(image, 0, 0, width, height);
+            
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Wordsplainer-${currentActiveCentral || 'graph'}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png', 1.0);
+        };
         
-        canvas.width = width * scale;
-        canvas.height = height * scale;
+        image.onerror = (e) => {
+            console.error('Failed to load SVG:', e);
+            alert('Failed to save image. Please try again.');
+        };
         
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.scale(scale, scale);
-        
-        const bgColor = rootStyles.getPropertyValue('--canvas-bg')?.trim() || 
-                       (rootStyles.getPropertyValue('--bg-primary')?.trim()) || 
-                       '#ffffff';
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(image, 0, 0, width, height);
-        
-        canvas.toBlob((blob) => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Wordsplainer-${currentActiveCentral || 'graph'}.png`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 'image/png', 1.0);
-    };
-    
-    image.onerror = (e) => {
-        console.error('Failed to load SVG:', e);
-        console.log('SVG String:', svgString.substring(0, 500) + '...');
-        alert('Failed to save image. Please try again.');
-    };
-    
-    image.src = svgDataUrl;
-}
+        image.src = svgDataUrl;
+    }
 
     function dragstarted(event, d) { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
     function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
