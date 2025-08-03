@@ -368,23 +368,31 @@ graphGroup.selectAll(".link")
             });
 
             // Process new nodes from the API response
-            if (view === 'translation' && options.language) {
-                const lang = options.language;
-                data.nodes.forEach(nodeData => {
-                    // Check for the new unified translation format
-                    const translation = nodeData.translationData?.[lang] || 'N/A';
-                    const newNode = { ...nodeData, id: `${currentActiveCentral}-${translation}`, text: translation, type: 'translation', clusterId: currentActiveCentral, exampleTranslations: data.exampleTranslations, lang, x: initialX, y: initialY };
-                    cluster.nodes.push(newNode);
-                    cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-                });
-            } else {
-                data.nodes.forEach(nodeData => {
-                    if (nodeData.text.toLowerCase().includes('no data')) return;
-                    const newNode = { ...nodeData, id: `${currentActiveCentral}-${nodeData.text}-${view}`, text: nodeData.text, type: view, clusterId: currentActiveCentral, x: initialX, y: initialY };
-                    cluster.nodes.push(newNode);
-                    cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-                });
-            }
+    data.nodes.forEach(nodeData => {
+    // Check if a similar node (by text) already exists from the API for this view.
+    const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
+    if (cluster.nodes.some(n => n.id === nodeId)) return;
+    if (nodeData.text.toLowerCase().includes('no data')) return;
+
+    // Create the new node. The backend now standardizes the structure for us.
+    const newNode = {
+        ...nodeData, // This will include 'text' and potentially 'examples'
+        id: nodeId,
+        type: view,
+        clusterId: currentActiveCentral,
+        x: initialX,
+        y: initialY
+    };
+
+    // For translations, attach the language code and the example translations object
+    if (view === 'translation') {
+        newNode.lang = options.language;
+        newNode.exampleTranslations = data.exampleTranslations;
+    }
+
+    cluster.nodes.push(newNode);
+    cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
+});
 
             const addNodeId = `add-${currentActiveCentral}`;
             if (!cluster.nodes.some(n => n.id === addNodeId)) {
