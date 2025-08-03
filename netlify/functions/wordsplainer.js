@@ -1,24 +1,26 @@
 // /netlify/functions/wordsplainer.js
+// This file is now the single source of truth for your backend logic.
+
 const fetch = require('node-fetch');
 
-// --- START: CACHE SETUP ---
+// --- START: CACHE & RATE LIMIT SETUP ---
 const cache = new Map();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const rateLimits = new Map();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 30;
 
 function getCacheKey(word, type, language) {
     return `${word.toLowerCase()}:${type}:${language || 'en'}`;
 }
-// --- END: CACHE SETUP ---
+// --- END: CACHE & RATE LIMIT SETUP ---
 
 
-// --- LLM HELPER (Full version, including API key check) ---
+// --- START: API & LLM HELPERS ---
 async function callOpenRouter(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    
-    // This check is essential and correctly included here.
-    if (!OPENROUTER_API_KEY) {
-        throw new Error('API key is not configured.');
-    }
+    if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -29,151 +31,118 @@ async function callOpenRouter(systemPrompt, userPrompt) {
             "messages": [{ "role": "system", "content": systemPrompt }, { "role": "user", "content": userPrompt }]
         })
     });
+
     if (!response.ok) {
         const errorBody = await response.text();
         console.error("OpenRouter API Error:", errorBody);
-        throw new Error(`API request failed with status ${response.status}`);
+        throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
     }
     const data = await response.json();
     return JSON.parse(data.choices[0].message.content);
 }
 
-function getSystemPrompts(type, language = null) {
-    const prompts = {
-        idioms: 'You are a linguistic data expert. You will be given a word and must respond with a JSON object containing a "nodes" array. The "nodes" should contain objects with common idioms that include the given word.',
-        translation: `You are a translator. You will be given a word and a target language code ('${language}'). Respond with a JSON object containing a "nodes" array. Inside, provide ONE object with the primary translation in the "text" property. Additionally, provide an "exampleTranslations" object. Keys are English example sentences, values are their translations into '${language}'.
-        Example for word "plan", language "es":
-        {"nodes":[{"text":"el plan"}], "exampleTranslations":{"the plan was to meet at the cafe":"el plan era encontrarse en el café","do you have a backup plan?":"¿tienes un plan de respaldo?"}}`
-    };
-    return prompts[type];
-}
-
-
-// --- API HELPERS (Full versions) ---
-async function fetchFromDictionaryAPI(word) {
-    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-    if (!response.ok) {
-        if (response.status === 404) return null;
-        throw new Error(`DictionaryAPI request failed with status ${response.status}`);
-    }
-    const data = await response.json();
-    return data[0];
-}
-
 async function fetchFromDatamuse(query) {
-    const response = await fetch(`https://api.datamuse.com/words?${query}`);
+    const response = await fetch(`https://api.datamuse.com/words?${query}&max=10`);
     if (!response.ok) throw new Error(`Datamuse request failed with status ${response.status}`);
     return response.json();
 }
+// --- END: API & LLM HELPERS ---
+
 
 // --- MAIN HANDLER ---
 exports.handler = async function(event) {
+    // Standard headers for all responses
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Content-Type': 'application/json'
+    };
+
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 204, headers };
+    }
     if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
     }
 
     try {
-        const { word, type, offset = 0, limit = 5, language } = JSON.parse(event.body);
+        // Rate Limiting
+        const ip = event.headers['x-forwarded-for']?.split(',')[0] || '127.0.0.1';
+        const userRequests = (rateLimits.get(ip) || []).filter(time => Date.now() - time < RATE_LIMIT_WINDOW_MS);
+        if (userRequests.length >= RATE_LIMIT_MAX_REQUESTS) {
+            return { statusCode: 429, headers, body: JSON.stringify({ error: 'Too Many Requests' }) };
+        }
+        userRequests.push(Date.now());
+        rateLimits.set(ip, userRequests);
 
-        // --- CACHE CHECK ---
+        const { word, type, offset = 0, limit = 5, language, userWord, relationship } = JSON.parse(event.body);
+
+        // --- ROUTE 1: Word Validation Logic ---
+        if (type === 'validate') {
+            const systemPrompt = `You are a strict linguistic validator. You will receive a central word, a user's word, and their supposed relationship (e.g., synonym, opposite). Determine if the user's word is a valid, common example of that relationship to the central word. Be critical. Respond ONLY with a JSON object with two keys: "isValid" (a boolean) and "reason" (a brief, one-sentence explanation for your decision).`;
+            const userPrompt = `Central Word: "${word}", User Word: "${userWord}", Relationship: "${relationship}"`;
+            const validationResponse = await callOpenRouter(systemPrompt, userPrompt);
+            return { statusCode: 200, headers, body: JSON.stringify(validationResponse) };
+        }
+
+        // --- ROUTE 2: Word Data Fetching Logic ---
         const cacheKey = getCacheKey(word, type, language);
         if (cache.has(cacheKey)) {
-            const cachedItem = cache.get(cacheKey);
-            if (Date.now() - cachedItem.timestamp < CACHE_TTL_MS) {
-                console.log(`CACHE HIT for key: ${cacheKey}`);
-                const allNodes = cachedItem.data.nodes || [];
-                const total = allNodes.length;
-                const paginatedNodes = allNodes.slice(offset, offset + limit);
-                const hasMore = (offset + limit) < total;
-
-                const response = {
-                    nodes: paginatedNodes,
-                    hasMore: hasMore,
-                    total: total,
-                    exampleTranslations: cachedItem.data.exampleTranslations
-                };
-                
-                return { statusCode: 200, body: JSON.stringify(response) };
-            }
+            console.log(`CACHE HIT for key: ${cacheKey}`);
+            const cachedData = cache.get(cacheKey);
+            // Paginate from the cached full dataset
+            const paginatedNodes = cachedData.nodes.slice(offset, offset + limit);
+            const response = { ...cachedData, nodes: paginatedNodes, hasMore: (offset + limit) < cachedData.total };
+            return { statusCode: 200, headers, body: JSON.stringify(response) };
         }
-        
         console.log(`CACHE MISS for key: ${cacheKey}`);
         
         let apiResponse;
         
-        const apiDrivenTypes = ['meaning', 'synonyms', 'opposites', 'derivatives', 'collocations', 'context'];
-        if (apiDrivenTypes.includes(type)) {
-            let results = [];
-            switch (type) {
-                case 'meaning':
-                    const dictData = await fetchFromDictionaryAPI(word);
-                    if (dictData && dictData.meanings) {
-                        const firstMeaning = dictData.meanings[0];
-                        const firstDefinition = firstMeaning.definitions[0];
-                        if (firstDefinition) {
-                            results.push({
-                                text: `(${firstMeaning.partOfSpeech}) ${firstDefinition.definition}`,
-                                examples: firstDefinition.example ? [firstDefinition.example] : []
-                            });
-                        }
-                    }
-                    break;
-                case 'synonyms':
-                    const synData = await fetchFromDatamuse(`rel_syn=${word}`);
-                    results = synData.map(item => ({ text: item.word }));
-                    break;
-                case 'opposites':
-                    const oppData = await fetchFromDatamuse(`rel_ant=${word}`);
-                    results = oppData.map(item => ({ text: item.word }));
-                    break;
-                case 'derivatives':
-                    const derData = await fetchFromDatamuse(`rel_trg=${word}`);
-                    results = derData.map(item => ({ text: item.word }));
-                    break;
-                case 'collocations':
-                    const colData = await fetchFromDatamuse(`rel_col=${word}`);
-                    results = colData.map(item => ({ text: item.word }));
-                    break;
-                case 'context':
-                    const topicData = await fetchFromDatamuse(`topics=${word}`);
-                    results = topicData.map(item => ({ text: item.word }));
-                    break;
-            }
+        // Use real APIs for factual data
+        if (['synonyms', 'opposites', 'collocations'].includes(type)) {
+            let query;
+            if (type === 'synonyms') query = `rel_syn=${word}`;
+            if (type === 'opposites') query = `rel_ant=${word}`;
+            if (type === 'collocations') query = `rel_col=${word}`; // Datamuse is great for collocations
+            const results = (await fetchFromDatamuse(query)).map(item => ({ text: item.word }));
             apiResponse = { nodes: results };
-        } else {
-            const systemPrompt = getSystemPrompts(type, language);
-            if (!systemPrompt) {
-                return { statusCode: 400, body: JSON.stringify({ error: 'Invalid data type requested.' }) };
+        } else { // Use LLM for generative/creative tasks
+            let systemPrompt, userPrompt;
+            if (type === 'idioms') {
+                systemPrompt = 'You are a linguistic expert. Respond with a JSON object containing a "nodes" array. The "nodes" should contain objects with common idioms that include the given word.';
+                userPrompt = `Word: "${word}"`;
+            } else if (type === 'translation' && language) {
+                systemPrompt = `You are a translator. You will be given a word and a target language code. Respond with a JSON object containing a "nodes" array with ONE object with the primary translation. Additionally, provide an "exampleTranslations" object. Keys are English example sentences, values are their translations.`;
+                userPrompt = `Translate the word "${word}" to language code "${language}". Provide two example sentences.`;
             }
-            const userPrompt = type === 'translation' 
-                ? `Translate the word "${word}" to language "${language}". Use context sentences: "the plan was to meet at the cafe" and "do you have a backup plan?".`
-                : `Word: "${word}"`;
-            
+             else { // Fallback for meaning, context, etc.
+                 systemPrompt = 'You are a dictionary assistant. Provide a definition and two examples for the given word. Respond with a JSON object: {"nodes": [{"text": "definition", "examples": ["example1", "example2"]}]}';
+                 userPrompt = `Word: "${word}"`;
+            }
             apiResponse = await callOpenRouter(systemPrompt, userPrompt);
         }
 
-        // --- CACHE STORE ---
-        if (apiResponse && apiResponse.nodes && apiResponse.nodes.length > 0) {
-            cache.set(cacheKey, { data: apiResponse, timestamp: Date.now() });
-            console.log(`CACHE SET for key: ${cacheKey}`);
-        }
-
+        // --- Universal Response Handling ---
         const allNodes = apiResponse.nodes || [];
         const total = allNodes.length;
-        const paginatedNodes = allNodes.slice(offset, offset + limit);
-        const hasMore = (offset + limit) < total;
-
-        const response = {
-            nodes: paginatedNodes,
-            hasMore: hasMore,
+        const fullResponse = {
+            nodes: allNodes,
             total: total,
-            exampleTranslations: apiResponse.exampleTranslations
+            exampleTranslations: apiResponse.exampleTranslations,
         };
 
-        return { statusCode: 200, body: JSON.stringify(response) };
+        cache.set(cacheKey, fullResponse); // Cache the full, unpaginated response
+        
+        // Paginate for the final send-off
+        const paginatedNodes = allNodes.slice(offset, offset + limit);
+        const responseToSend = { ...fullResponse, nodes: paginatedNodes, hasMore: (offset + limit) < total };
+
+        return { statusCode: 200, headers, body: JSON.stringify(responseToSend) };
 
     } catch (error) {
-        console.error("Error in wordsplainer function:", error);
-        return { statusCode: 500, body: JSON.stringify({ error: error.message || 'An internal server error occurred.' }) };
+        console.error("Function Error:", error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: error.message || 'An internal server error occurred.' }) };
     }
 };
