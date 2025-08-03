@@ -2,8 +2,6 @@
 
 const fetch = require('node-fetch');
 
-// --- HELPERS ---
-
 const cache = new Map();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours for dictionary data
 
@@ -31,7 +29,7 @@ async function callOpenRouter(systemPrompt, userPrompt) {
 
     // Define our primary and fallback models
     const primaryModel = "openai/gpt-4.1-nano"; 
-    const fallbackModel = "mistralai/mistral-7b-instruct:free"; // Fixed missing semicolon
+    const fallbackModel = "mistralai/mistral-7b-instruct:free";
 
     let response;
     
@@ -129,9 +127,8 @@ exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     try {
-        const { word, type, offset = 0, limit = 5, language, userWord, relationship, centralWord, context } = JSON.parse(event.body);
+        const { word, type, offset = 0, limit = 5, language, centralWord, context } = JSON.parse(event.body);
 
-        // Cache check should be inside the handler
         const cacheKey = getCacheKey(word, type, language);
         let cachedResult = getCachedData(cacheKey);
         if (cachedResult) {
@@ -160,15 +157,7 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(exampleResponse) };
         }
 
-        // --- Route: Word Validation ---
-        if (type === 'validate') {
-            const systemPrompt = `You are a strict linguistic validator. Respond ONLY with a JSON object: {"isValid": boolean, "reason": "A brief explanation."}.`;
-            const userPrompt = `Is "${userWord}" a valid example of a "${relationship}" for the word "${word}"?`;
-            const validationResponse = await callOpenRouter(systemPrompt, userPrompt);
-            return { statusCode: 200, body: JSON.stringify(validationResponse) };
-        }
-
-        // --- Route: Word Data Fetching ---
+            // --- Route: Word Data Fetching ---
         let apiResponse = { nodes: [] };
 
         switch (type) {
@@ -213,17 +202,15 @@ exports.handler = async function(event) {
             case 'synonyms':
             case 'opposites':
             case 'collocations':
-                let query;
-                if (type === 'synonyms') query = `rel_syn=${word}`;
-                else if (type === 'opposites') query = `rel_ant=${word}`;
-                else if (type === 'collocations') query = `rel_jjb=${word}`; // Fixed: rel_col doesn't exist, use rel_jjb for adjectives or rel_trg for general
-                
-                const datamuseResults = await fetchFromDatamuse(query);
+                const datamuseQuery = `rel_jjb=${word}`; // Adjectives that modify the word
+                const datamuseResults = await fetchFromDatamuse(datamuseQuery);
                 
                 if (datamuseResults.length > 0) {
                     apiResponse.nodes = datamuseResults.map(item => ({ text: item.word }));
                 } else {
-                    const systemPrompt = getLLMPrompt(type);
+                    // Fallback to LLM if Datamuse gives no results
+                    console.log(`Datamuse returned no collocations for "${word}". Falling back to LLM.`);
+                    const systemPrompt = getLLMPrompt('collocations');
                     apiResponse = await callOpenRouter(systemPrompt, `Word: "${word}"`);
                 }
                 break;
