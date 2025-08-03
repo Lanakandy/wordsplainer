@@ -1,5 +1,4 @@
 // /netlify/functions/wordsplainer.js
-// FINAL, ROBUST VERSION
 
 const fetch = require('node-fetch');
 
@@ -53,10 +52,29 @@ exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     try {
-        const { word, type, offset = 0, limit = 5, language, userWord, relationship } = JSON.parse(event.body);
+        const { word, type, offset = 0, limit = 5, language, userWord, relationship, context, centralWord } = JSON.parse(event.body);
 
-        // --- ROUTE 1: Word Validation ---
+        // --- NEW ROUTE: On-Demand Example Generation ---
+        if (type === 'generateExample') {
+            let systemPrompt, userPrompt;
+
+            if (context && centralWord) {
+                // This is the special case for context nodes
+                systemPrompt = `You are a language assistant. Create a single, clear example sentence that uses the 'centralWord' in the specified 'context'. Respond ONLY with a JSON object: {\"example\": \"The sentence goes here.\"}`;
+                userPrompt = `Central Word: "${centralWord}", Context: "${context}"`;
+            } else {
+                // This is the standard case for all other nodes
+                systemPrompt = `You are a language assistant. Create a single, clear example sentence using the given word. Respond ONLY with a JSON object: {\"example\": \"The sentence goes here.\"}`;
+                userPrompt = `Word: "${word}"`;
+            }
+
+            const exampleResponse = await callOpenRouter(systemPrompt, userPrompt);
+            return { statusCode: 200, body: JSON.stringify(exampleResponse) };
+        }
+        
+        // --- ROUTE 1: Word Validation (no change needed here) ---
         if (type === 'validate') {
+             // ... (existing validation logic) ...
              const systemPrompt = `You are a strict linguistic validator. Respond ONLY with a JSON object: {"isValid": boolean, "reason": "A brief explanation."}.`;
              const userPrompt = `Is "${userWord}" a valid example of a "${relationship}" for the word "${word}"?`;
              const validationResponse = await callOpenRouter(systemPrompt, userPrompt);
