@@ -127,7 +127,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return { nodes, links: [...links, ...crossConnections] };
     }
 
-    // --- CORRECTED `updateGraph` FUNCTION ---
     function updateGraph() {
         const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
         const { width, height } = graphContainer.getBoundingClientRect();
@@ -157,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         .on("mouseout", handleMouseOut)
                         .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-                    // Append circles/rects
                     nodeGroup.append(d => (d.type === 'example' && !d.isUserAdded) ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'))
                         .on("click", handleNodeClick);
 
@@ -170,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     nodeGroup.select("rect").style("opacity", 0);
 
-                    // Append text
                     nodeGroup.append("text")
                        .on("click", (e, d) => (d.type !== 'example' && d.type !== 'add') && handleLabelClick(e, d));
 
@@ -190,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .remove()
             )
             .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
-            .each(function(d) { // This .each runs for both enter and update selections
+            .each(function(d) {
                 const selection = d3.select(this);
                 const textElement = selection.select("text");
                 
@@ -204,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         selection.select('circle').style("fill", `var(--${singularView}-color)`);
                     }
                 } else if (d.type === 'example' && !d.isUserAdded) {
-                    textElement.attr("x", 10).attr("y", 15).selectAll("tspan").remove(); // Clear old text
+                    textElement.attr("x", 10).attr("y", 15).selectAll("tspan").remove();
                     const lines = d.text.split('\n');
                     textElement.selectAll("tspan").data(lines).enter().append("tspan")
                         .attr("x", 10).attr("dy", (l, i) => i === 0 ? 0 : "1.2em").text(t => t)
@@ -314,7 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
 
-    // --- CORRECTED `generateGraphForView` FUNCTION ---
     async function generateGraphForView(view, options = {}) {
         if (!currentActiveCentral) return;
         const cluster = graphClusters.get(currentActiveCentral);
@@ -342,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             data.nodes.forEach(nodeData => {
-                // FIX: Add guard clause to prevent error on undefined text property
                 if (!nodeData || typeof nodeData.text !== 'string') return;
                 
                 const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
@@ -420,130 +415,130 @@ document.addEventListener('DOMContentLoaded', () => {
         overlayInput.addEventListener('blur', handleBlur);
     }
     
-   async function toggleExampleForNode(nodeData) {
-    const cluster = graphClusters.get(nodeData.clusterId);
-    if (!cluster) return;
+    // --- CORRECTED `toggleExampleForNode` FUNCTION ---
+    async function toggleExampleForNode(nodeData) {
+        const cluster = graphClusters.get(nodeData.clusterId);
+        if (!cluster) return;
 
-    // Check if an example for this node is already shown
-    const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
+        const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
 
-    if (existingExample) {
-        // If it exists, remove it (toggle off)
-        cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
-        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
+        if (existingExample) {
+            cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
+            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
+            updateGraph();
+        } else {
+            try {
+                const body = {
+                    type: 'generateExample',
+                    word: nodeData.text,
+                    ...(nodeData.type === 'context' && {
+                        centralWord: nodeData.clusterId,
+                        context: nodeData.text
+                    })
+                };
+
+                const response = await fetch('/.netlify/functions/wordsplainer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                if (!response.ok) {
+                    // This is the fix: get the detailed error message from the server response
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Server returned an error.');
+                }
+                
+                const data = await response.json();
+
+                if (data.example) {
+                    const exId = `${nodeData.id}-ex`;
+                    const exNode = {
+                        id: exId,
+                        text: data.example,
+                        type: 'example',
+                        sourceNodeId: nodeData.id,
+                        clusterId: nodeData.clusterId
+                    };
+                    cluster.nodes.push(exNode);
+                    cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
+                    updateGraph();
+                }
+            } catch (error) {
+                // Now this will log and alert a much more useful error message
+                console.error("Error getting example:", error);
+                alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
+            }
+        }
+    }
+    
+    async function validateAndAddNode(word) {
+        if (!currentActiveCentral) return;
+        const cluster = graphClusters.get(currentActiveCentral);
+        if (!cluster) return;
+
+        const lowerWord = word.toLowerCase();
+
+        const pendingNode = {
+            id: `${currentActiveCentral}-user-${lowerWord}-pending`,
+            text: lowerWord,
+            type: 'pending',
+            isUserAdded: true,
+            clusterId: currentActiveCentral
+        };
+        cluster.nodes.push(pendingNode);
+        cluster.links.push({ source: `central-${currentActiveCentral}`, target: pendingNode.id });
         updateGraph();
-    } else {
-        // If it doesn't exist, fetch and create it (toggle on)
-        try {
-            const body = {
-                type: 'generateExample',
-                word: nodeData.text,
-                // Conditionally add context-specific data
-                ...(nodeData.type === 'context' && {
-                    centralWord: nodeData.clusterId,
-                    context: nodeData.text
-                })
-            };
 
+        try {
             const response = await fetch('/.netlify/functions/wordsplainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+                body: JSON.stringify({
+                    type: 'validate',
+                    word: currentActiveCentral,
+                    userWord: lowerWord,
+                    relationship: cluster.currentView
+                })
             });
-            if (!response.ok) throw new Error('Failed to fetch example.');
-            
-            const data = await response.json();
 
-            if (data.example) {
-                const exId = `${nodeData.id}-ex`;
-                const exNode = {
-                    id: exId,
-                    text: data.example,
-                    type: 'example',
-                    sourceNodeId: nodeData.id, // Link back to the parent node
-                    clusterId: nodeData.clusterId
-                };
-                cluster.nodes.push(exNode);
-                cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
-                updateGraph();
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Validation server error: ${response.status}`);
             }
+
+            const validation = await response.json();
+            const validatedNode = cluster.nodes.find(n => n.id === pendingNode.id);
+            if (!validatedNode) return;
+
+            if (validation.isValid) {
+                validatedNode.type = cluster.currentView;
+                const newId = `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`;
+                validatedNode.id = newId;
+
+                const link = cluster.links.find(l => (l.target.id || l.target) === pendingNode.id);
+                if (link) link.target = newId;
+
+                updateGraph();
+            } else {
+                validatedNode.type = 'invalid';
+                validatedNode.reason = validation.reason;
+                updateGraph();
+
+                setTimeout(() => {
+                    handleWordSubmitted(lowerWord, true);
+                }, 2000);
+            }
+
         } catch (error) {
-            console.error("Error getting example:", error);
-            alert("Sorry, we couldn't generate an example for that word.");
+            console.error("Validation failed:", error);
+            cluster.nodes = cluster.nodes.filter(n => n.id !== pendingNode.id);
+            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== pendingNode.id);
+            updateGraph();
+            alert(`An error occurred during validation: ${error.message}`);
         }
     }
-}
-async function validateAndAddNode(word) {
-    if (!currentActiveCentral) return;
-    const cluster = graphClusters.get(currentActiveCentral);
-    if (!cluster) return;
-
-    const lowerWord = word.toLowerCase();
-
-    const pendingNode = {
-        id: `${currentActiveCentral}-user-${lowerWord}-pending`,
-        text: lowerWord,
-        type: 'pending',
-        isUserAdded: true,
-        clusterId: currentActiveCentral
-    };
-    cluster.nodes.push(pendingNode);
-    cluster.links.push({ source: `central-${currentActiveCentral}`, target: pendingNode.id });
-    updateGraph();
-
-    try {
-        // VVV THIS FETCH CALL IS THE ONLY PART THAT CHANGES VVV
-        const response = await fetch('/.netlify/functions/wordsplainer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type: 'validate', // Tell the backend which logic to run
-                word: currentActiveCentral, // The central word for context
-                userWord: lowerWord, // The word we are validating
-                relationship: cluster.currentView
-            })
-        });
-        // ^^^ THIS FETCH CALL IS THE ONLY PART THAT CHANGES ^^^
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Validation server error: ${response.status}`);
-        }
-
-        const validation = await response.json();
-        const validatedNode = cluster.nodes.find(n => n.id === pendingNode.id);
-        if (!validatedNode) return;
-
-        if (validation.isValid) {
-            validatedNode.type = cluster.currentView;
-            const newId = `${currentActiveCentral}-user-${lowerWord}-${cluster.currentView}`;
-            validatedNode.id = newId;
-
-            const link = cluster.links.find(l => (l.target.id || l.target) === pendingNode.id);
-            if (link) link.target = newId;
-
-            updateGraph();
-        } else {
-            validatedNode.type = 'invalid';
-            validatedNode.reason = validation.reason;
-            updateGraph();
-
-            setTimeout(() => {
-                handleWordSubmitted(lowerWord, true);
-            }, 2000);
-        }
-
-    } catch (error) {
-        console.error("Validation failed:", error);
-        cluster.nodes = cluster.nodes.filter(n => n.id !== pendingNode.id);
-        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== pendingNode.id);
-        updateGraph();
-        alert(`An error occurred during validation: ${error.message}`);
-    }
-}
-
-// ... rest of your script.js file
-
+    
     function handleDockClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
@@ -580,8 +575,8 @@ async function validateAndAddNode(word) {
         event.stopPropagation();
         const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
         if (exampleTypes.includes(d.type)) {
-        return toggleExampleForNode(d);
-    }
+            return toggleExampleForNode(d);
+        }
         if (event.shiftKey && d.text && d.type !== 'add') return handleWordSubmitted(d.text, true);
         if (d.clusterId && d.clusterId !== currentActiveCentral) focusOnCentralNode(d.clusterId);
         if (d.isCentral) fetchMoreNodes();
@@ -595,7 +590,6 @@ async function validateAndAddNode(word) {
         if (d.text) handleWordSubmitted(d.text, true);
     }
  
-    // --- CORRECTED `handleMouseOver` FUNCTION ---
     function handleMouseOver(event, d) {
         let tooltipText = '';
         if (d.isCentral) {
@@ -696,7 +690,6 @@ async function validateAndAddNode(word) {
 
             if (data.nodes.length > 0) {
                 data.nodes.forEach(newNodeData => {
-                    // FIX: Add guard clause here as well for robustness
                     if (!newNodeData || typeof newNodeData.text !== 'string') return;
                     
                     const newNodeId = `${currentActiveCentral}-${newNodeData.text}-${cluster.currentView}`;
