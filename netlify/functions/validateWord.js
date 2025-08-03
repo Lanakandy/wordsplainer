@@ -13,7 +13,7 @@ async function callOpenRouter(systemPrompt, userPrompt) {
         method: "POST",
         headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-            "model": "openai/gpt-4o-mini",
+            "model": "mistralai/mistral-small-3.2-24b-instruct:free",
             "response_format": { "type": "json_object" }, // Critical for reliable parsing
             "messages": [{ "role": "system", "content": systemPrompt }, { "role": "user", "content": userPrompt }]
         })
