@@ -420,8 +420,59 @@ document.addEventListener('DOMContentLoaded', () => {
         overlayInput.addEventListener('blur', handleBlur);
     }
     
-    // ... inside script.js
+   async function toggleExampleForNode(nodeData) {
+    const cluster = graphClusters.get(nodeData.clusterId);
+    if (!cluster) return;
 
+    // Check if an example for this node is already shown
+    const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
+
+    if (existingExample) {
+        // If it exists, remove it (toggle off)
+        cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
+        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
+        updateGraph();
+    } else {
+        // If it doesn't exist, fetch and create it (toggle on)
+        try {
+            const body = {
+                type: 'generateExample',
+                word: nodeData.text,
+                // Conditionally add context-specific data
+                ...(nodeData.type === 'context' && {
+                    centralWord: nodeData.clusterId,
+                    context: nodeData.text
+                })
+            };
+
+            const response = await fetch('/.netlify/functions/wordsplainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) throw new Error('Failed to fetch example.');
+            
+            const data = await response.json();
+
+            if (data.example) {
+                const exId = `${nodeData.id}-ex`;
+                const exNode = {
+                    id: exId,
+                    text: data.example,
+                    type: 'example',
+                    sourceNodeId: nodeData.id, // Link back to the parent node
+                    clusterId: nodeData.clusterId
+                };
+                cluster.nodes.push(exNode);
+                cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
+                updateGraph();
+            }
+        } catch (error) {
+            console.error("Error getting example:", error);
+            alert("Sorry, we couldn't generate an example for that word.");
+        }
+    }
+}
 async function validateAndAddNode(word) {
     if (!currentActiveCentral) return;
     const cluster = graphClusters.get(currentActiveCentral);
@@ -527,6 +578,10 @@ async function validateAndAddNode(word) {
 
     function handleNodeClick(event, d) {
         event.stopPropagation();
+        const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
+        if (exampleTypes.includes(d.type)) {
+        return toggleExampleForNode(d);
+    }
         if (event.shiftKey && d.text && d.type !== 'add') return handleWordSubmitted(d.text, true);
         if (d.clusterId && d.clusterId !== currentActiveCentral) focusOnCentralNode(d.clusterId);
         if (d.isCentral) fetchMoreNodes();
