@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return { nodes, links: [...links, ...crossConnections] };
     }
 
+// REPLACE your entire updateGraph function with this fully corrected version.
 function updateGraph() {
     const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
     const { width, height } = graphContainer.getBoundingClientRect();
@@ -133,12 +134,11 @@ function updateGraph() {
         .data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
         .join(
             enter => enter.append("line")
-                // ⭐ CHANGE: Links to meaning/example nodes will be dashed.
                 .attr("class", d => `link ${d.target.type === 'example' || d.target.type === 'meaning' ? 'link-example' : ''}`)
                 .style("opacity", 0)
                 .transition().duration(600).delay(200)
                 .style("opacity", 1),
-            update => update.attr("class", d => `link ${d.target.type === 'example' || d.target.type === 'meaning' ? 'link-example' : ''}`), // Also update existing links
+            update => update.attr("class", d => `link ${d.target.type === 'example' || d.target.type === 'meaning' ? 'link-example' : ''}`),
             exit => exit.transition().duration(300)
                 .style("opacity", 0)
                 .remove()
@@ -160,7 +160,6 @@ function updateGraph() {
                     .on("click", handleNodeClick)
                     .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-                // ⭐ CHANGE: Create a rect for BOTH 'example' and 'meaning' types.
                 nodeGroup.append(d => (d.type === 'example' || d.type === 'meaning') ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
 
                 nodeGroup.select("circle")
@@ -171,7 +170,6 @@ function updateGraph() {
                     .attr("r", d => d.isCentral ? 40 : 15);
                 
                 nodeGroup.select("rect").style("opacity", 0);
-
                 nodeGroup.append("text");
 
                 nodeGroup.style("opacity", 0)
@@ -194,16 +192,30 @@ function updateGraph() {
             const selection = d3.select(this);
             const textElement = selection.select("text");
             
+            // ⭐ FIX: Restore the logic for central nodes
             if (d.isCentral) {
-                // ... (no change here)
+                textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
+                if (d.phonetic) {
+                    selection.append("text")
+                        .attr("class", "phonetic-text")
+                        .attr("dy", "1.5em")
+                        .style("font-size", "12px")
+                        .style("fill", "var(--text-secondary)")
+                        .text(d.phonetic);
+                }
+            // ⭐ FIX: Restore the logic for 'add' nodes
             } else if (d.type === 'add') {
-                // ... (no change here)
-            // ⭐ CHANGE: Combine 'meaning' and 'example' logic into one block.
+                textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
+                const cluster = graphClusters.get(d.clusterId);
+                if (cluster) {
+                    const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
+                    selection.select('circle').style("fill", `var(--${singularView}-color)`);
+                }
+            // This is our correct, unified logic
             } else if (d.type === 'meaning' || d.type === 'example') {
                 selection.select("rect").attr("class", "example-bg"); 
                 
                 let fullText = d.text;
-                // If it's a meaning node and has examples, format and append them.
                 if (d.type === 'meaning' && d.examples && d.examples.length > 0) {
                     const exampleLines = d.examples.map(ex => `\n  •  ${ex}`).join('');
                     fullText += exampleLines;
@@ -222,6 +234,7 @@ function updateGraph() {
                             .transition().duration(200).style("opacity", 1);
                     }
                 }, 0);
+            // This is the correct fallback for other node types
             } else {
                 textElement.text(d.text || d.id).attr("dy", -22);
             }
@@ -487,7 +500,8 @@ async function toggleExampleForNode(nodeData) {
         }
     }
 
-   function handleNodeClick(event, d) {
+   // REPLACE your existing handleNodeClick with this one.
+function handleNodeClick(event, d) {
     event.stopPropagation();
     const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
 
@@ -499,18 +513,17 @@ async function toggleExampleForNode(nodeData) {
     // If it's the central node, focus on it.
     if (d.isCentral) {
         focusOnCentralNode(d.clusterId);
-    } 
+    }
     // If it's the '+' button, fetch more.
     else if (d.type === 'add') {
         fetchMoreNodes();
-    } 
+    }
     // Handle specific example types.
     else if (d.type === 'translation') {
         toggleTranslationExamples(d);
-    } else if (d.type === 'meaning') {
-        toggleMeaningExamples(d);
     }
 }
+
 
 /** ⭐ NEW HELPER FUNCTION **/
 /**
@@ -607,27 +620,6 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
         } else {
             renderInitialPrompt();
         }
-    }
-
-    function toggleMeaningExamples(meaningNode) {
-        const cluster = graphClusters.get(meaningNode.clusterId);
-        if (!cluster) return;
-        const examplesShown = cluster.nodes.some(n => n.sourceMeaningId === meaningNode.id);
-        if (examplesShown) {
-            cluster.nodes = cluster.nodes.filter(n => n.sourceMeaningId !== meaningNode.id);
-            cluster.links = cluster.links.filter(l => !l.target.sourceMeaningId || l.target.sourceMeaningId !== meaningNode.id);
-        } else {
-            if (meaningNode.examples) {
-                meaningNode.examples.forEach((exText, i) => {
-                    const exId = `${meaningNode.id}-ex-${i}`;
-                    const exNode = { id: exId, text: exText, type: 'example', sourceMeaningId: meaningNode.id, clusterId: meaningNode.clusterId };
-                    cluster.nodes.push(exNode);
-                    cluster.links.push({ source: meaningNode.id, target: exId, type: 'example' });
-                });
-            }
-        }
-        detectCrossConnections();
-        updateGraph();
     }
 
     function toggleTranslationExamples(translationNode) {
