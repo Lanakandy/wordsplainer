@@ -165,8 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     nodeGroup.select("rect").style("opacity", 0);
 
                     nodeGroup.append("text")
-                       .on("click", (e, d) => (d.type !== 'example' && d.type !== 'add') && handleLabelClick(e, d));
-
+                     
                     nodeGroup.style("opacity", 0)
                         .transition()
                         .duration(300)
@@ -541,11 +540,6 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
     });
 }
 
-    function handleLabelClick(event, d) {
-        event.stopPropagation();
-        if (d.text) handleWordSubmitted(d.text, true);
-    }
- 
     function handleMouseOver(event, d) {
     let tooltipText = '';
     if (d.isCentral) {
