@@ -148,8 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
             .join(
                 enter => {
                     const nodeGroup = enter.append("g")
-                        .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended))
-                        .on("mouseover", handleMouseOver)
+    .call(d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended)
+        .filter(event => !event.target.classList.contains('interactive-word')) 
+    )
                         .on("mouseout", handleMouseOut)
                         .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
@@ -205,8 +209,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         selection.select('circle').style("fill", `var(--${singularView}-color)`);
                     }
                 } else if (d.type === 'example') {
-                     createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true)); 
-setTimeout(() => {
+    selection.select("rect").attr("class", "example-bg"); 
+    createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true));
+    setTimeout(() => {
         const bbox = textElement.node()?.getBBox();
         if (bbox) {
             selection.select("rect")

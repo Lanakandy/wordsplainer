@@ -483,6 +483,12 @@ main#graph-panel {
     letter-spacing: 0.5px;
 }
 
+.example-bg {
+    fill: var(--bg-secondary); /* Give it a subtle background color */
+    rx: 8px; /* Rounded corners look nice */
+    pointer-events: none; /* This makes the rectangle ignore mouse events */
+}
+
 /* --- Enhanced D3 Styles --- */
 .status-text { 
     fill: var(--primary-coral); 
