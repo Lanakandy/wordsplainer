@@ -37,6 +37,25 @@
     --text-muted: #7F8C8D;
 }
 
+.node.node-detaching circle {
+    stroke: var(--primary-coral);
+    stroke-width: 4px;
+    stroke-dasharray: 8 4;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        stroke-opacity: 1;
+    }
+    50% {
+        stroke-opacity: 0.5;
+    }
+    100% {
+        stroke-opacity: 1;
+    }
+}
+
 /* --- Canvas Theme Control --- */
 
 /* By default, canvas is LIGHT */
@@ -1073,5 +1092,17 @@ html[data-theme='dark'] .link.link-example {
 /* 4. For the Translated Text Line within Example Nodes */
 [data-theme="dark"] .node-example .example-translation {
     /* 2. Restore the distinct coral color for the translation. */
+    fill: var(--primary-coral);
+}
+
+.interactive-word {
+    cursor: pointer;
+    fill: var(--text-link); /* Use a link color */
+    text-decoration: none;
+    transition: text-decoration 0.2s ease-in-out;
+}
+
+.interactive-word:hover {
+    text-decoration: underline;
     fill: var(--primary-coral);
 }

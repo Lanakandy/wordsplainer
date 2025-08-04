@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
+    const SNAP_OFF_THRESHOLD = 120;
 
     // --- Enhanced State Management ---
     let centralNodes = [];
@@ -481,23 +482,25 @@ async function toggleExampleForNode(nodeData) {
         }
     }
 
-    function handleNodeClick(event, d) {
+   function handleNodeClick(event, d) {
     event.stopPropagation();
     const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
 
+    // If it's a node that provides examples, toggle them.
     if (exampleTypes.includes(d.type)) {
         return toggleExampleForNode(d);
     }
-    if (event.shiftKey && d.text && d.type !== 'add') {
-        return handleWordSubmitted(d.text, true);
-    }
+
+    // If it's the central node, focus on it.
     if (d.isCentral) {
-        // Clicking a central node now ONLY focuses it. It does NOT fetch more nodes.
         focusOnCentralNode(d.clusterId);
-    } else if (d.type === 'add') {
-        // The '+' node is now ONLY for fetching more nodes.
+    } 
+    // If it's the '+' button, fetch more.
+    else if (d.type === 'add') {
         fetchMoreNodes();
-    } else if (d.type === 'translation') {
+    } 
+    // Handle specific example types.
+    else if (d.type === 'translation') {
         toggleTranslationExamples(d);
     } else if (d.type === 'meaning') {
         toggleMeaningExamples(d);
@@ -786,9 +789,58 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
         image.src = svgDataUrl;
     }
 
-    function dragstarted(event, d) { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
-    function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
-    function dragended(event, d) { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
+    function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+    // Store the starting position for our distance calculation
+    d.startX = d.x;
+    d.startY = d.y;
+}
+
+    function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+
+    // Give visual feedback if the node is being dragged far enough
+    const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
+    if (!d.isCentral && distance > SNAP_OFF_THRESHOLD) {
+        d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', true);
+    } else {
+        d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
+    }
+}
+
+    function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+
+    // Remove the visual feedback class
+    d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
+
+    const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
+
+    // If it's not a central node and was dragged past the threshold...
+    if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD) {
+        // --- This is the "Snap Off" logic ---
+        
+        // 1. Find the cluster this node belongs to.
+        const cluster = graphClusters.get(d.clusterId);
+        if (cluster) {
+            // 2. Remove the old node from its original cluster's data.
+            cluster.nodes = cluster.nodes.filter(n => n.id !== d.id);
+            // 3. Remove the link that connected it.
+            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== d.id);
+        }
+        
+        // 4. Create the new graph with the detached node's word as the new central word.
+        handleWordSubmitted(d.text, true);
+
+    } else {
+        // --- This is a normal drag (just repositioning) ---
+        d.fx = null;
+        d.fy = null;
+    }
+}
 
     // --- Initialization ---
     renderInitialPrompt();
