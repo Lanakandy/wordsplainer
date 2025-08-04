@@ -517,40 +517,346 @@ async function toggleExampleForNode(nodeData) {
     }
 }
 
-function createInteractiveText(d3TextElement, text, onWordClick) {
+// Enhanced createInteractiveText function with better word detection and UX
+function createInteractiveText(d3TextElement, text, onWordClick, sourceNodeData) {
     d3TextElement.selectAll("tspan").remove(); // Clear previous content
 
+    // Enhanced word detection - includes contractions, hyphenated words, etc.
+    const WORD_PATTERN = /\b[a-zA-Z]+(?:[''][a-zA-Z]+)*(?:-[a-zA-Z]+)*\b/g;
+    
     // Split text into lines first
     const lines = text.split('\n');
+    
     lines.forEach((line, lineIndex) => {
-        // Split each line into words and punctuation
-        const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
+        // More sophisticated tokenization that preserves word boundaries
+        const tokens = [];
+        let lastIndex = 0;
         
+        // Find all words and their positions
+        const wordMatches = [...line.matchAll(WORD_PATTERN)];
+        
+        wordMatches.forEach(match => {
+            // Add any text before this word
+            if (match.index > lastIndex) {
+                tokens.push({
+                    text: line.slice(lastIndex, match.index),
+                    type: 'punctuation'
+                });
+            }
+            
+            // Add the word
+            tokens.push({
+                text: match[0],
+                type: 'word',
+                cleanWord: match[0].toLowerCase().replace(/['']s?$/, '') // Remove possessive
+            });
+            
+            lastIndex = match.index + match[0].length;
+        });
+        
+        // Add any remaining text
+        if (lastIndex < line.length) {
+            tokens.push({
+                text: line.slice(lastIndex),
+                type: 'punctuation'
+            });
+        }
+
         const lineTspan = d3TextElement.append('tspan')
             .attr('x', 10)
             .attr('dy', lineIndex === 0 ? 0 : '1.2em');
 
         tokens.forEach(token => {
-            const cleanedToken = token.trim().toLowerCase();
-            // Make it clickable if it's a word (not just punctuation or space)
-            if (cleanedToken && /^[a-z']+$/.test(cleanedToken)) {
-                lineTspan.append('tspan')
-                    .attr('class', 'interactive-word')
-                    .text(token)
-                    .on('click', (event) => {
-                        event.stopPropagation();
-                        // Get the raw text, remove punctuation for the API call
-                        const wordToExplore = token.replace(/[.,!?;:"]+/g, '').trim();
-                        if(wordToExplore) {
-                           onWordClick(wordToExplore);
-                        }
-                    });
+            if (token.type === 'word') {
+                // Skip very common words that aren't useful for exploration
+                const isCommonWord = isVeryCommonWord(token.cleanWord);
+                const isSourceWord = token.cleanWord === sourceNodeData?.text?.toLowerCase();
+                
+                const wordTspan = lineTspan.append('tspan')
+                    .attr('class', `interactive-word ${isCommonWord ? 'common-word' : 'explorable-word'} ${isSourceWord ? 'source-word' : ''}`)
+                    .text(token.text);
+                
+                if (!isCommonWord) {
+                    wordTspan
+                        .style('cursor', 'pointer')
+                        .on('click', (event) => {
+                            event.stopPropagation();
+                            handleWordClickWithFeedback(token.cleanWord, event.target, onWordClick);
+                        })
+                        .on('mouseover', (event) => {
+                            showWordPreview(event, token.cleanWord);
+                        })
+                        .on('mouseout', hideWordPreview);
+                } else {
+                    // Add subtle styling for common words
+                    wordTspan.style('opacity', '0.7');
+                }
             } else {
                 // Append non-clickable parts (spaces, punctuation)
-                lineTspan.append('tspan').text(token);
+                lineTspan.append('tspan').text(token.text);
             }
         });
     });
+}
+
+// Enhanced word click handler with visual feedback
+function handleWordClickWithFeedback(word, targetElement, onWordClick) {
+    // Visual feedback for the clicked word
+    const wordElement = d3.select(targetElement);
+    
+    // Add loading state
+    wordElement.classed('word-loading', true);
+    
+    // Add ripple effect
+    createRippleEffect(targetElement);
+    
+    // Call the original handler
+    onWordClick(word);
+    
+    // Remove loading state after a short delay
+    setTimeout(() => {
+        wordElement.classed('word-loading', false);
+    }, 800);
+}
+
+// Create visual ripple effect for word clicks
+function createRippleEffect(element) {
+    const rect = element.getBoundingClientRect();
+    const ripple = document.createElement('div');
+    ripple.className = 'word-ripple';
+    ripple.style.cssText = `
+        position: absolute;
+        left: ${rect.left + rect.width/2}px;
+        top: ${rect.top + rect.height/2}px;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: var(--primary-coral);
+        opacity: 0.6;
+        pointer-events: none;
+        z-index: 1000;
+        animation: ripple 0.6s ease-out;
+    `;
+    
+    document.body.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+}
+
+// Helper function to identify very common words
+function isVeryCommonWord(word) {
+    const commonWords = new Set([
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+        'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during',
+        'before', 'after', 'above', 'below', 'between', 'among', 'is', 'are', 
+        'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
+        'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can',
+        'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 
+        'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'this', 'that', 
+        'these', 'those', 'here', 'there', 'where', 'when', 'why', 'how', 'what',
+        'who', 'which', 'whose', 'whom'
+    ]);
+    return commonWords.has(word.toLowerCase());
+}
+
+// Word preview tooltip system
+let wordPreviewTimeout;
+const wordPreviewTooltip = createWordPreviewTooltip();
+
+function createWordPreviewTooltip() {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'word-preview-tooltip';
+    tooltip.style.cssText = `
+        position: absolute;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        pointer-events: none;
+        z-index: 1001;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition: opacity 0.2s, transform 0.2s;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    `;
+    document.body.appendChild(tooltip);
+    return tooltip;
+}
+
+function showWordPreview(event, word) {
+    clearTimeout(wordPreviewTimeout);
+    
+    wordPreviewTimeout = setTimeout(() => {
+        wordPreviewTooltip.textContent = `Click to explore "${word}"`;
+        wordPreviewTooltip.style.left = `${event.pageX + 10}px`;
+        wordPreviewTooltip.style.top = `${event.pageY - 35}px`;
+        wordPreviewTooltip.style.opacity = '1';
+        wordPreviewTooltip.style.transform = 'translateY(0)';
+    }, 300); // Delay to avoid showing on quick mouse movements
+}
+
+function hideWordPreview() {
+    clearTimeout(wordPreviewTimeout);
+    wordPreviewTooltip.style.opacity = '0';
+    wordPreviewTooltip.style.transform = 'translateY(-5px)';
+}
+
+// Enhanced example generation with context awareness
+async function toggleExampleForNode(nodeData) {
+    const cluster = graphClusters.get(nodeData.clusterId);
+    if (!cluster) return;
+
+    const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
+
+    if (existingExample) {
+        // Remove existing example
+        cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
+        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
+        updateGraph();
+    } else {
+        // Generate new example with enhanced context
+        try {
+            // Show loading state on the node
+            const nodeElement = graphGroup.selectAll('.node').filter(d => d.id === nodeData.id);
+            nodeElement.classed('generating-example', true);
+
+            const body = {
+                type: 'generateExample',
+                word: nodeData.text,
+                difficulty: 'intermediate', // Could be user-configurable
+                contextType: nodeData.type, // synonyms, opposites, etc.
+                ...(nodeData.type === 'context' && {
+                    centralWord: nodeData.clusterId,
+                    context: nodeData.text
+                })
+            };
+
+            const response = await fetch('/.netlify/functions/wordsplainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate example');
+            }
+
+            const data = await response.json();
+
+            if (data.example) {
+                const exId = `${nodeData.id}-ex`;
+                const exNode = {
+                    id: exId,
+                    text: data.example,
+                    type: 'example',
+                    sourceNodeId: nodeData.id,
+                    clusterId: nodeData.clusterId,
+                    sourceWord: nodeData.text, // Store for highlighting
+                    difficulty: data.difficulty || 'intermediate'
+                };
+                
+                cluster.nodes.push(exNode);
+                cluster.links.push({ 
+                    source: nodeData.id, 
+                    target: exId, 
+                    type: 'example' 
+                });
+                
+                updateGraph();
+                
+                // Auto-scroll to show the new example
+                setTimeout(() => {
+                    const exampleNode = graphGroup.selectAll('.node').filter(d => d.id === exId);
+                    if (!exampleNode.empty()) {
+                        const exampleData = exampleNode.datum();
+                        highlightNewExample(exampleData);
+                    }
+                }, 100);
+            }
+        } catch (error) {
+            console.error("Error generating example:", error);
+            showErrorFeedback(nodeData.id, `Could not generate example: ${error.message}`);
+        } finally {
+            // Remove loading state
+            const nodeElement = graphGroup.selectAll('.node').filter(d => d.id === nodeData.id);
+            nodeElement.classed('generating-example', false);
+        }
+    }
+}
+
+// Highlight newly created examples
+function highlightNewExample(exampleData) {
+    const exampleElement = graphGroup.selectAll('.node').filter(d => d.id === exampleData.id);
+    
+    exampleElement
+        .classed('new-example', true)
+        .transition()
+        .duration(2000)
+        .ease(d3.easeLinear)
+        .on('end', function() {
+            d3.select(this).classed('new-example', false);
+        });
+}
+
+// Enhanced error feedback system
+function showErrorFeedback(nodeId, message) {
+    const nodeElement = graphGroup.selectAll('.node').filter(d => d.id === nodeId);
+    
+    // Create temporary error indicator
+    const errorIndicator = nodeElement.append('circle')
+        .attr('class', 'error-indicator')
+        .attr('r', 0)
+        .style('fill', 'var(--error-color)')
+        .style('opacity', 0.8);
+    
+    errorIndicator
+        .transition()
+        .duration(200)
+        .attr('r', 25)
+        .transition()
+        .duration(200)
+        .attr('r', 20)
+        .transition()
+        .delay(1000)
+        .duration(300)
+        .style('opacity', 0)
+        .remove();
+    
+    // Show error message in tooltip
+    tooltip.textContent = message;
+    tooltip.classList.add('visible', 'error');
+    setTimeout(() => {
+        tooltip.classList.remove('visible', 'error');
+    }, 3000);
+}
+
+// Update the main handleNodeClick function
+function handleNodeClick(event, d) {
+    event.stopPropagation();
+    
+    // Add click feedback for all interactive nodes
+    if (d.type !== 'example') {
+        const nodeElement = d3.select(event.currentTarget);
+        nodeElement.classed('node-clicked', true);
+        setTimeout(() => nodeElement.classed('node-clicked', false), 200);
+    }
+    
+    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
+
+    if (exampleTypes.includes(d.type)) {
+        return toggleExampleForNode(d);
+    }
+
+    if (d.isCentral) {
+        focusOnCentralNode(d.clusterId);
+    } else if (d.type === 'add') {
+        fetchMoreNodes();
+    } else if (d.type === 'translation') {
+        toggleTranslationExamples(d);
+    } else if (d.type === 'meaning') {
+        toggleMeaningExamples(d);
+    }
 }
 
     function handleMouseOver(event, d) {
