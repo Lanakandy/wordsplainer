@@ -6,8 +6,7 @@
     --primary-dark: #1A252F; /* Darker navy for depth */
     --accent-white: #FFFFFF;
     --accent-light: #F8F9FA;
-    --text-tertiary: #95A5A6;
-    --text-link: var(--primary-coral);
+    --text-link: #3498DB;
     
     /* Canvas and backgrounds */
     --canvas-bg: #FFFFFF;
@@ -602,24 +601,27 @@ g[style*="cursor: pointer"]:hover .prompt-plus {
 
 /* --- Example Node Styles --- */
 .node.node-example text {
-    font-size: 11px;
-    font-weight: 400;
+    font-size: 12px; /* Slightly larger for readability */
+    font-weight: 500; /* Medium weight is nice */
     font-style: italic;
-    fill: #555;
-    text-anchor: start; /* Align text to the start of the node */
+    fill: var(--canvas-text-color);
+    text-anchor: middle; /* Center the text block */
+    pointer-events: none; /* Text itself isn't clickable, only tspans inside */
+    transition: fill 0.3s ease;
 }
 
-/* Use a different shape for examples */
-.node.node-example circle {
-    display: none; /* Hide the circle */
+.node.node-example .example-bg {
+    fill: var(--accent-light);
+    stroke: #E0E0E0;
+    stroke-width: 1.5px;
+    rx: 8px; /* Nicely rounded corners */
+    ry: 8px;
+    transition: fill 0.3s ease, stroke 0.3s ease;
 }
-.node.node-example rect {
-    fill: #F4F6F8; /* A light grey/off-white */
-    rx: 5; /* Rounded corners */
-}
-html[data-theme='dark'] .node.node-example rect {
+
+html[data-theme='dark'] .node.node-example .example-bg {
     fill: #34495E; /* A darker grey for dark mode */
-    
+    stroke: #4A6572;
 }
 html[data-theme='dark'] .node.node-example text {
     fill: var(--accent-light);
@@ -627,12 +629,39 @@ html[data-theme='dark'] .node.node-example text {
 
 .link.link-example {
     stroke: #D5DBDB;
-    stroke-dasharray: 2 2; /* Make it a dashed line */
+    stroke-dasharray: 3 3; /* A clearer dashed line */
+    stroke-width: 1.5px;
+    transition: stroke 0.3s ease;
 }
+
 html[data-theme='dark'] .link.link-example {
     stroke: #7F8C8D;
 }
 
+/** ⭐ NEW: Styles for Interactive Words **/
+.interactive-word {
+    cursor: pointer;
+    fill: var(--text-link); /* Use a distinct link color */
+    font-weight: 600; /* Make it bold to stand out */
+    text-decoration: none; /* No underline by default */
+    transition: fill 0.2s ease-in-out, text-decoration 0.2s ease-in-out;
+    pointer-events: all; /* Make sure it's clickable */
+}
+
+.interactive-word:hover {
+    fill: var(--primary-coral); /* Highlight with main brand color on hover */
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 2px;
+}
+
+html[data-theme='dark'] .interactive-word {
+    fill: #5DADE2; /* A slightly brighter blue for dark backgrounds */
+}
+
+html[data-theme='dark'] .interactive-word:hover {
+    fill: var(--primary-coral);
+}
 /* --- Central Node "Load More" Styles --- */
 .node.central-node.loadable {
     cursor: pointer;
@@ -1104,40 +1133,13 @@ html[data-theme='dark'] .link.link-example {
 }
 
 .interactive-word {
-    transition: all 0.2s ease;
+    cursor: pointer;
+    fill: var(--text-link); /* Use a link color */
+    text-decoration: none;
+    transition: text-decoration 0.2s ease-in-out;
 }
 
-.explorable-word {
-    fill: var(--primary-coral);
-    font-weight: 500;
+.interactive-word:hover {
     text-decoration: underline;
-    text-decoration-color: transparent;
-    transition: all 0.2s ease;
-}
-
-.explorable-word:hover {
-    fill: var(--accent-yellow);
-    text-decoration-color: var(--accent-yellow);
-    transform: translateY(-1px);
-}
-
-.common-word {
-    fill: var(--text-tertiary);
-    opacity: 0.7;
-}
-
-.source-word {
     fill: var(--primary-coral);
-    font-weight: 600;
-    text-shadow: 0 0 3px rgba(255, 107, 107, 0.3);
-}
-
-.word-loading {
-    fill: var(--accent-yellow);
-    animation: pulse 0.8s ease-in-out;
-}
-
-.word-preview-tooltip {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    white-space: nowrap;
 }
