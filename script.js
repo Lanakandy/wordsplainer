@@ -192,7 +192,6 @@ function updateGraph() {
             const selection = d3.select(this);
             const textElement = selection.select("text");
             
-            // ⭐ FIX: Restore the logic for central nodes
             if (d.isCentral) {
                 textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
                 if (d.phonetic) {
@@ -221,7 +220,7 @@ function updateGraph() {
                     fullText += exampleLines;
                 }
                 
-                createInteractiveText(textElement, fullText, (word) => handleWordSubmitted(word, true));
+                createInteractiveText(textElement, fullText, (word) => handleWordSubmitted(word, true, d));
 
                 setTimeout(() => {
                     const bbox = textElement.node()?.getBBox();
@@ -256,14 +255,19 @@ function updateGraph() {
         graphGroup.selectAll('.node').attr("transform", d => `translate(${d.x},${d.y})`);
     });
 
-    function calculateClusterCenter(clusterIndex) {
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const centerX = width / 2, centerY = height / 2;
-        if (clusterIndex === 0) return { x: centerX, y: centerY };
-        const radius = Math.min(width, height) * 0.25;
-        const angle = (2 * Math.PI * (clusterIndex - 1)) / Math.max(1, centralNodes.length - 1);
-        return { x: centerX + radius * Math.cos(angle), y: centerY + radius * Math.sin(angle) };
-    }
+function panToNode(node, scale = 1.2) {
+    if (!node) return;
+    const { width, height } = graphContainer.getBoundingClientRect();
+    const transform = d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale)
+        .translate(-node.x, -node.y);
+    
+    svg.transition()
+        .duration(750)
+        .ease(d3.easeCubicOut)
+        .call(zoomBehavior.transform, transform);
+}
 
     function detectCrossConnections() {
         crossConnections = [];
@@ -335,36 +339,68 @@ async function toggleExampleForNode(nodeData) {
     }
 }   
 
-    async function handleWordSubmitted(word, isNewCentral = true) {
-        const lowerWord = word.toLowerCase();
-        if (isNewCentral) {
-            if (centralNodes.some(c => c.word === lowerWord)) {
-                focusOnCentralNode(lowerWord);
-                return;
-            }
-            const centralNodeData = { word: lowerWord, id: `central-${lowerWord}`, isCentral: true, type: 'central', clusterId: lowerWord };
-            centralNodes.push(centralNodeData);
-            graphClusters.set(lowerWord, { nodes: [centralNodeData], links: [], center: calculateClusterCenter(centralNodes.length - 1), currentView: 'meaning' });
-        }
-        currentActiveCentral = lowerWord;
-        currentView = 'meaning';
-        viewState = { offset: 0, hasMore: true };
-        updateActiveButton();
-        await generateGraphForView(currentView);
-    }
+    // REPLACE your handleWordSubmitted function with this new, more powerful version
+async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
+    const lowerWord = word.toLowerCase();
     
-    function focusOnCentralNode(centralWord) {
-        currentActiveCentral = centralWord;
-        const cluster = graphClusters.get(centralWord);
-        if (cluster) {
-            currentView = cluster.currentView;
-            updateActiveButton();
-            updateGraph();
-            const { width, height } = graphContainer.getBoundingClientRect();
-            const transform = d3.zoomIdentity.translate(width / 2, height / 2).scale(1.2).translate(-cluster.center.x, -cluster.center.y);
-            svg.transition().duration(750).call(zoomBehavior.transform, transform);
+    if (isNewCentral) {
+        if (centralNodes.some(c => c.word === lowerWord)) {
+            focusOnCentralNode(lowerWord);
+            return;
         }
+
+        const { width, height } = graphContainer.getBoundingClientRect();
+        let newCenter;
+        
+        // Determine the position for the new graph's center
+        if (sourceNode) {
+            // Place it to the right of the node that triggered it
+            newCenter = { x: sourceNode.x + 450, y: sourceNode.y };
+        } else {
+            // This is the very first word, place it in the middle of the screen
+            const currentTransform = d3.zoomTransform(svg.node());
+            newCenter = { 
+                x: (width / 2 - currentTransform.x) / currentTransform.k, 
+                y: (height / 2 - currentTransform.y) / currentTransform.k 
+            };
+        }
+
+        const centralNodeData = { 
+            word: lowerWord, 
+            id: `central-${lowerWord}`, 
+            isCentral: true, 
+            type: 'central', 
+            clusterId: lowerWord,
+            x: newCenter.x, // Set initial position
+            y: newCenter.y,
+            fx: newCenter.x, // Fix its position initially to avoid wild simulation swings
+            fy: newCenter.y
+        };
+        
+        // Unfix the position after a short delay to let the simulation take over smoothly
+        setTimeout(() => {
+            centralNodeData.fx = null;
+            centralNodeData.fy = null;
+        }, 1500);
+
+        centralNodes.push(centralNodeData);
+        graphClusters.set(lowerWord, { 
+            nodes: [centralNodeData], 
+            links: [], 
+            center: newCenter, // The 'center' for the cluster force is the node itself
+            currentView: 'meaning' 
+        });
+
+        // Pan to the new node *before* fetching data
+        panToNode(centralNodeData, 1.2);
     }
+
+    currentActiveCentral = lowerWord;
+    currentView = 'meaning';
+    viewState = { offset: 0, hasMore: true };
+    updateActiveButton();
+    await generateGraphForView(currentView);
+}
 
        async function generateGraphForView(view, options = {}) {
         if (!currentActiveCentral) return;
@@ -610,17 +646,14 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
         svg.attr("width", width).attr("height", height);
-        centralNodes.forEach((node, index) => {
-            const cluster = graphClusters.get(node.word);
-            if (cluster) cluster.center = calculateClusterCenter(index);
-        });
+        
         if (centralNodes.length > 0) {
             simulation.force("center").x(width / 2).y(height / 2);
             simulation.alpha(0.3).restart();
         } else {
             renderInitialPrompt();
-        }
     }
+}
 
     function toggleTranslationExamples(translationNode) {
         const cluster = graphClusters.get(translationNode.clusterId);
@@ -819,29 +852,20 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
     function dragended(event, d) {
     if (!event.active) simulation.alphaTarget(0);
 
-    // Remove the visual feedback class
     d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
-
     const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
 
-    // If it's not a central node and was dragged past the threshold...
     if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD) {
-        // --- This is the "Snap Off" logic ---
-        
-        // 1. Find the cluster this node belongs to.
         const cluster = graphClusters.get(d.clusterId);
         if (cluster) {
-            // 2. Remove the old node from its original cluster's data.
             cluster.nodes = cluster.nodes.filter(n => n.id !== d.id);
-            // 3. Remove the link that connected it.
             cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== d.id);
         }
         
-        // 4. Create the new graph with the detached node's word as the new central word.
-        handleWordSubmitted(d.text, true);
+        // ⭐ CHANGE: Pass the snapped-off node 'd' as the source
+        handleWordSubmitted(d.text, true, d);
 
     } else {
-        // --- This is a normal drag (just repositioning) ---
         d.fx = null;
         d.fy = null;
     }
