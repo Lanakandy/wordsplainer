@@ -145,40 +145,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
         graphGroup.selectAll(".node")
             .data(allNodes, d => d.id)
-            .join(
-                enter => {
-                    const nodeGroup = enter.append("g")
-    .call(d3.drag()
-        .on("start", dragstarted)
-        .on("drag", dragged)
-        .on("end", dragended)
-        .filter(event => !event.target.classList.contains('interactive-word')) 
-    )
-                        .on("mouseout", handleMouseOut)
-                        .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
+            // ... inside updateGraph ...
+.join(
+    enter => {
+        const nodeGroup = enter.append("g")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended)
+                .filter(event => !event.target.classList.contains('interactive-word'))
+            )
+            // ATTACH ALL HANDLERS TO THE GROUP FOR A CONSISTENT HIT AREA
+            .on("mouseover", handleMouseOver) // Added back the missing mouseover
+            .on("mouseout", handleMouseOut)
+            .on("click", handleNodeClick) // <-- CLICK IS NOW ON THE GROUP
+            .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-                    nodeGroup.append(d => (d.type === 'example') ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'))
-                        .on("click", handleNodeClick);
+        // The shape now has NO event listeners. It's just for visuals.
+        nodeGroup.append(d => (d.type === 'example') ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
 
-                    nodeGroup.select("circle")
-                        .attr("r", 0)
-                        .transition()
-                        .duration(400)
-                        .ease(d3.easeElasticOut.amplitude(1).period(0.5))
-                        .attr("r", d => d.isCentral ? 40 : 15);
-                    
-                    nodeGroup.select("rect").style("opacity", 0);
+        nodeGroup.select("circle")
+            .attr("r", 0)
+            .transition()
+            .duration(400)
+            .ease(d3.easeElasticOut.amplitude(1).period(0.5))
+            .attr("r", d => d.isCentral ? 40 : 15);
+        
+        nodeGroup.select("rect").style("opacity", 0);
 
-                    nodeGroup.append("text")
-                     
-                    nodeGroup.style("opacity", 0)
-                        .transition()
-                        .duration(300)
-                        .delay(150)
-                        .style("opacity", 1);
-                    
-                    return nodeGroup;
-                },
+        // The text element also has NO event listeners.
+        nodeGroup.append("text");
+
+        nodeGroup.style("opacity", 0)
+            .transition()
+            .duration(300)
+            .delay(150)
+            .style("opacity", 1);
+        
+        return nodeGroup;
+    },
                 update => update,
                 exit => exit.transition()
                     .duration(200)
