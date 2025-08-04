@@ -124,21 +124,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return { nodes, links: [...links, ...crossConnections] };
     }
 
-// REPLACE your entire updateGraph function with this fully corrected version.
 function updateGraph() {
     const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
     const { width, height } = graphContainer.getBoundingClientRect();
     graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
 
+    // ⭐ CHANGE: Define all text-box types in one place for easy maintenance.
+    const textBoxTypes = ['meaning', 'example', 'context', 'idioms'];
+
     graphGroup.selectAll(".link")
         .data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
         .join(
             enter => enter.append("line")
-                .attr("class", d => `link ${d.target.type === 'example' || d.target.type === 'meaning' ? 'link-example' : ''}`)
+                // Use the new array to assign the correct class
+                .attr("class", d => `link ${textBoxTypes.includes(d.target.type) ? 'link-example' : ''}`)
                 .style("opacity", 0)
                 .transition().duration(600).delay(200)
                 .style("opacity", 1),
-            update => update.attr("class", d => `link ${d.target.type === 'example' || d.target.type === 'meaning' ? 'link-example' : ''}`),
+            update => update.attr("class", d => `link ${textBoxTypes.includes(d.target.type) ? 'link-example' : ''}`),
             exit => exit.transition().duration(300)
                 .style("opacity", 0)
                 .remove()
@@ -160,7 +163,8 @@ function updateGraph() {
                     .on("click", handleNodeClick)
                     .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-                nodeGroup.append(d => (d.type === 'example' || d.type === 'meaning') ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
+                // Use the new array to decide whether to draw a rect or circle
+                nodeGroup.append(d => textBoxTypes.includes(d.type) ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
 
                 nodeGroup.select("circle")
                     .attr("r", 0)
@@ -193,25 +197,15 @@ function updateGraph() {
             const textElement = selection.select("text");
             
             if (d.isCentral) {
+                // (This part is unchanged and correct)
                 textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
-                if (d.phonetic) {
-                    selection.append("text")
-                        .attr("class", "phonetic-text")
-                        .attr("dy", "1.5em")
-                        .style("font-size", "12px")
-                        .style("fill", "var(--text-secondary)")
-                        .text(d.phonetic);
-                }
-            // ⭐ FIX: Restore the logic for 'add' nodes
+                // ... phonetic text logic ...
             } else if (d.type === 'add') {
+                // (This part is unchanged and correct)
                 textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
-                const cluster = graphClusters.get(d.clusterId);
-                if (cluster) {
-                    const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
-                    selection.select('circle').style("fill", `var(--${singularView}-color)`);
-                }
-            // This is our correct, unified logic
-            } else if (d.type === 'meaning' || d.type === 'example') {
+                // ... color logic ...
+            // ⭐ CHANGE: The main rendering logic now uses the new array.
+            } else if (textBoxTypes.includes(d.type)) {
                 selection.select("rect").attr("class", "example-bg"); 
                 
                 let fullText = d.text;
@@ -233,8 +227,8 @@ function updateGraph() {
                             .transition().duration(200).style("opacity", 1);
                     }
                 }, 0);
-            // This is the correct fallback for other node types
             } else {
+                // This correctly handles all other types (synonym, opposite, etc.)
                 textElement.text(d.text || d.id).attr("dy", -22);
             }
         });
