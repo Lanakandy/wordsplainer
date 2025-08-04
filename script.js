@@ -19,10 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
     const SNAP_OFF_THRESHOLD = 120;
-    const linkGroup = graphGroup.append("g").attr("class", "links");
-    const exampleGroup = graphGroup.append("g").attr("class", "examples");
-    const nodeRenderGroup = graphGroup.append("g").attr("class", "nodes");
-
 
     // --- Enhanced State Management ---
     let centralNodes = [];
@@ -129,134 +125,128 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGraph() {
-    const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
-    const { width, height } = graphContainer.getBoundingClientRect();
-    graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
+        const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
+        const { width, height } = graphContainer.getBoundingClientRect();
+        graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
 
-    // --- 1. RENDER LINKS (in the bottom layer) ---
-    linkGroup.selectAll(".link")
-        .data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
-        .join(
-            enter => enter.append("line")
-                .attr("class", d => `link ${d.type === 'example' ? 'link-example' : ''}`)
-                .style("opacity", 0)
-                .transition().duration(600).delay(200)
-                .style("opacity", 1),
-            update => update,
-            exit => exit.transition().duration(300)
-                .style("opacity", 0)
-                .remove()
-        );
-    
-    // Split nodes into two types for separate rendering
-    const exampleNodes = allNodes.filter(d => d.type === 'example');
-    const regularNodes = allNodes.filter(d => d.type !== 'example');
+        graphGroup.selectAll(".link")
+            .data(allLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+            .join(
+                enter => enter.append("line")
+                    .attr("class", d => `link ${d.type === 'example' ? 'link-example' : ''}`)
+                    .style("opacity", 0)
+                    .transition().duration(600).delay(200)
+                    .style("opacity", 1),
+                update => update,
+                exit => exit.transition().duration(300)
+                    .style("opacity", 0)
+                    .remove()
+            );
 
-    // --- 2. RENDER EXAMPLE NODES (in the middle layer) ---
-    exampleGroup.selectAll(".node-example")
-        .data(exampleNodes, d => d.id)
-        .join(
-            enter => {
-                const exNodeGroup = enter.append("g")
-                    .attr("class", "node node-example") // Add specific class
-                    .call(d3.drag()
-                        .on("start", dragstarted).on("drag", dragged).on("end", dragended)
-                        .filter(event => !event.target.classList.contains('interactive-word'))
-                    )
-                    .on("mouseover", handleMouseOver).on("mouseout", handleMouseOut)
-                    .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
+        graphGroup.selectAll(".node")
+            .data(allNodes, d => d.id)
+            // ... inside updateGraph ...
+.join(
+    enter => {
+        const nodeGroup = enter.append("g")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended)
+                .filter(event => !event.target.classList.contains('interactive-word'))
+            )
+            // ATTACH ALL HANDLERS TO THE GROUP FOR A CONSISTENT HIT AREA
+            .on("mouseover", handleMouseOver) // Added back the missing mouseover
+            .on("mouseout", handleMouseOut)
+            .on("click", handleNodeClick) // <-- CLICK IS NOW ON THE GROUP
+            .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
 
-                exNodeGroup.append("rect").attr("class", "example-bg").style("opacity", 0);
-                exNodeGroup.append("text");
+        // The shape now has NO event listeners. It's just for visuals.
+        nodeGroup.append(d => (d.type === 'example') ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
 
-                exNodeGroup.style("opacity", 0).transition().duration(300).delay(150).style("opacity", 1);
-                return exNodeGroup;
-            },
-            update => update,
-            exit => exit.transition().duration(200).remove()
-        )
-        .each(function(d) {
-            const selection = d3.select(this);
-            const textElement = selection.select("text");
-            createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true));
-            setTimeout(() => {
-                const bbox = textElement.node()?.getBBox();
-                if (bbox) {
-                    selection.select("rect")
-                        .attr("width", bbox.width + 20).attr("height", bbox.height + 10)
-                        .attr("x", bbox.x - 10).attr("y", bbox.y - 5)
-                        .transition().duration(200).style("opacity", 1);
-                }
-            }, 0);
-        });
+        nodeGroup.select("circle")
+            .attr("r", 0)
+            .transition()
+            .duration(400)
+            .ease(d3.easeElasticOut.amplitude(1).period(0.5))
+            .attr("r", d => d.isCentral ? 40 : 15);
+        
+        nodeGroup.select("rect").style("opacity", 0);
 
-    // --- 3. RENDER REGULAR NODES (in the top layer) ---
-    nodeRenderGroup.selectAll(".node:not(.node-example)")
-        .data(regularNodes, d => d.id)
-        .join(
-            enter => {
-                const nodeGroup = enter.append("g")
-                    .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended))
-                    .on("click", handleNodeClick)
-                    .on("mouseover", handleMouseOver).on("mouseout", handleMouseOut)
-                    .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
+        // The text element also has NO event listeners.
+        nodeGroup.append("text");
+
+        nodeGroup.style("opacity", 0)
+            .transition()
+            .duration(300)
+            .delay(150)
+            .style("opacity", 1);
+        
+        return nodeGroup;
+    },
+                update => update,
+                exit => exit.transition()
+                    .duration(200)
+                    .ease(d3.easeCircleIn)
+                    .attr("transform", d => `translate(${d.x}, ${d.y}) scale(0)`)
+                    .remove()
+            )
+            .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
+            .each(function(d) {
+                const selection = d3.select(this);
+                const textElement = selection.select("text");
                 
-                nodeGroup.append("circle");
-                nodeGroup.append("text");
-                
-                nodeGroup.select("circle").attr("r", 0)
-                    .transition().duration(400).ease(d3.easeElasticOut.amplitude(1).period(0.5))
-                    .attr("r", d => d.isCentral ? 40 : 15);
-                
-                nodeGroup.style("opacity", 0).transition().duration(300).delay(150).style("opacity", 1);
-                return nodeGroup;
-            },
-            update => update,
-            exit => exit.transition().duration(200)
-                .ease(d3.easeCircleIn)
-                .attr("transform", d => `translate(${d.x}, ${d.y}) scale(0)`)
-                .remove()
-        )
-        .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
-        .each(function(d) {
-            const selection = d3.select(this);
-            const textElement = selection.select("text");
-            
-            if (d.isCentral) {
-                textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
-                if (d.phonetic && selection.selectAll(".phonetic-text").empty()) {
-                    selection.append("text").attr("class", "phonetic-text").attr("dy", "1.5em")
-                        .style("font-size", "12px").style("fill", "var(--text-secondary)")
-                        .text(d.phonetic);
+                if (d.isCentral) {
+                    textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
+                    if (d.phonetic) {
+                        selection.append("text")
+                            .attr("class", "phonetic-text")
+                            .attr("dy", "1.5em")
+                            .style("font-size", "12px")
+                            .style("fill", "var(--text-secondary)")
+                            .text(d.phonetic);
+                    }
+                } else if (d.type === 'add') {
+                    textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
+                    const cluster = graphClusters.get(d.clusterId);
+                    if (cluster) {
+                        const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
+                        selection.select('circle').style("fill", `var(--${singularView}-color)`);
+                    }
+                } else if (d.type === 'example') {
+    selection.select("rect").attr("class", "example-bg"); 
+    createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true));
+    setTimeout(() => {
+        const bbox = textElement.node()?.getBBox();
+        if (bbox) {
+            selection.select("rect")
+                .attr("width", bbox.width + 20)
+                .attr("height", bbox.height + 10)
+                .attr("x", bbox.x - 10)
+                .attr("y", bbox.y - 5)
+                .transition().duration(200).style("opacity", 1);
+        }
+    }, 0);
+} else {
+                    textElement.text(d.text || d.id).attr("dy", -22);
                 }
-            } else if (d.type === 'add') {
-                textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
-                const cluster = graphClusters.get(d.clusterId);
-                if (cluster) {
-                    const singularView = cluster.currentView.endsWith('s') ? cluster.currentView.slice(0, -1) : cluster.currentView;
-                    selection.select('circle').style("fill", `var(--${singularView}-color)`);
-                }
-            } else {
-                textElement.text(d.text || d.id).attr("dy", -22);
-            }
-        });
+            });
 
-    // Final simulation setup
-    simulation.nodes(allNodes);
-    simulation.force("link").links(allLinks);
-    simulation.force("center").x(width / 2).y(height / 2);
-    simulation.alpha(1).restart();
-    
-    updateCentralNodeState();
-}
+        graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? '#ff6b6b' : '#999').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "5,5" : "none");
+
+        simulation.nodes(allNodes);
+        simulation.force("link").links(allLinks);
+        simulation.force("center").x(width / 2).y(height / 2);
+        simulation.alpha(1).restart();
+        graphGroup.selectAll('.central-node').raise();
+        
+        updateCentralNodeState();
+    }
+
     simulation.on("tick", () => {
-    linkGroup.selectAll('.link')
-        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-
-    graphGroup.selectAll('.node')
-        .attr("transform", d => `translate(${d.x},${d.y})`);
-});
+        graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        graphGroup.selectAll('.node').attr("transform", d => `translate(${d.x},${d.y})`);
+    });
 
     function calculateClusterCenter(clusterIndex) {
         const { width, height } = graphContainer.getBoundingClientRect();
