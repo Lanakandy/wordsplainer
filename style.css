@@ -657,7 +657,7 @@ html[data-theme='dark'] .link.link-example {
 }
 
 html[data-theme='dark'] .interactive-word {
-    fill: #c6e2f5; /* A slightly brighter blue for dark backgrounds */
+    fill: #FFFFFF; /* A slightly brighter blue for dark backgrounds */
 }
 
 html[data-theme='dark'] .interactive-word:hover {
