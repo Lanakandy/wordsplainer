@@ -6,7 +6,7 @@
     --primary-dark: #1A252F; /* Darker navy for depth */
     --accent-white: #FFFFFF;
     --accent-light: #F8F9FA;
-    --text-link: #3498DB;
+     --text-link: var(--primary-dark);
     
     /* Canvas and backgrounds */
     --canvas-bg: #FFFFFF;
@@ -70,6 +70,7 @@
 html[data-theme='dark'] {
     --canvas-bg: var(--primary-dark);
     --canvas-text-color: var(--accent-light);
+    --text-link: var(--accent-white);
 }
 
 /* --- Input Field Theming --- */
@@ -1134,12 +1135,23 @@ html[data-theme='dark'] .link.link-example {
 
 .interactive-word {
     cursor: pointer;
-    fill: var(--text-link); /* Use a link color */
-    text-decoration: none;
-    transition: text-decoration 0.2s ease-in-out;
+    /* This now automatically switches between dark navy and pure white! */
+    fill: var(--text-link); 
+    font-weight: 600; 
+    
+    /* Suggestion: Add a subtle underline by default for better accessibility. */
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    
+    transition: fill 0.2s ease-in-out, text-decoration-style 0.2s ease-in-out;
+    pointer-events: all;
 }
 
 .interactive-word:hover {
-    text-decoration: underline;
+    /* The hover effect remains a vibrant, consistent coral in both themes. */
     fill: var(--primary-coral);
+    /* Make the underline solid on hover for extra feedback. */
+    text-decoration-style: solid;
 }
