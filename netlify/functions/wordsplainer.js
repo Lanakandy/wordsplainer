@@ -200,20 +200,28 @@ exports.handler = async function(event) {
                 break;
 
             case 'synonyms':
-            case 'opposites':
-            case 'collocations':
-                const datamuseQuery = `rel_jjb=${word}`; // Adjectives that modify the word
-                const datamuseResults = await fetchFromDatamuse(datamuseQuery);
-                
-                if (datamuseResults.length > 0) {
-                    apiResponse.nodes = datamuseResults.map(item => ({ text: item.word }));
-                } else {
-                    // Fallback to LLM if Datamuse gives no results
-                    console.log(`Datamuse returned no collocations for "${word}". Falling back to LLM.`);
-                    const systemPrompt = getLLMPrompt('collocations');
-                    apiResponse = await callOpenRouter(systemPrompt, `Word: "${word}"`);
-                }
-                break;
+case 'opposites':
+case 'collocations':
+    let query;
+    if (type === 'synonyms') {
+        query = `rel_syn=${word}`;
+    } else if (type === 'opposites') {
+        query = `rel_ant=${word}`;
+    } else { // collocations
+        query = `rel_jjb=${word}`;
+    }
+
+    const datamuseResults = await fetchFromDatamuse(query);
+    
+    if (datamuseResults.length > 0) {
+        apiResponse.nodes = datamuseResults.map(item => ({ text: item.word }));
+    } else {
+        // Fallback to LLM if Datamuse gives no results
+        console.log(`Datamuse returned no results for type "${type}" on word "${word}". Falling back to LLM.`);
+        const systemPrompt = getLLMPrompt(type);
+        apiResponse = await callOpenRouter(systemPrompt, `Word: "${word}"`);
+    }
+    break;
             
             case 'translation':
                 const systemPrompt = `You are a translator. For the word provided, give its main translation into the target language and an example sentence with their translations. Respond with a JSON object: {"nodes": [{"text": "translation"}], "exampleTranslations": {"english sentence": "foreign translation"}}`;
