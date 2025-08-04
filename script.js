@@ -556,24 +556,24 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
             }
         }
     } else if (d.type === 'add') {
-        // The '+' node tooltip is now very specific
         const cluster = graphClusters.get(d.clusterId);
         if (cluster && viewState.hasMore) {
             tooltipText = `Load more ${cluster.currentView} for "${d.clusterId}"`;
         } else {
             tooltipText = `No more ${cluster?.currentView || ''} to load`;
         }
-    } else if (d.text) {
-        tooltipText = `Shift+click to explore "${d.text}" in a new cluster`;
+    } 
+       else if (d.text && !d.isCentral && d.type !== 'add' && d.type !== 'example') {
+        tooltipText = `Drag to explore "${d.text}"`;
     }
         
-        if (tooltipText) {
-            tooltip.textContent = tooltipText;
-            tooltip.classList.add('visible');
-        }
-        d3.select(event.currentTarget).classed('hover-highlight', true);
-        svg.on('mousemove.tooltip', (e) => { tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
+    if (tooltipText) {
+        tooltip.textContent = tooltipText;
+        tooltip.classList.add('visible');
     }
+    d3.select(event.currentTarget).classed('hover-highlight', true);
+    svg.on('mousemove.tooltip', (e) => { tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
+}
 
     function handleMouseOut(event) {
         tooltip.classList.remove('visible');
