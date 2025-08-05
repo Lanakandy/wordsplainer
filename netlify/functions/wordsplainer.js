@@ -58,17 +58,18 @@ function getLLMPrompt(type, register, word, language = null, limit = 5) {
     return { systemPrompt, userPrompt };
 }
 
+// ⭐ New function using OpenAI GPT-4.1-Nano
 async function callOpenAIModel(systemPrompt, userPrompt) {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
 
-    const model = "google/gemma-2-9b-it:free";
+    const model = "gpt-3.5-turbo";
 
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Authorization": `Bearer ${OPENAI_API_KEY}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
