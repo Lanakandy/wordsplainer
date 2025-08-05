@@ -54,26 +54,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Central API fetching function ---
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
+    try {
+        console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}`);
+        
         const response = await fetch('/.netlify/functions/wordsplainer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            word: word,
-            type: type,
-            offset: offset,
-            limit: limit,
-            language: language,
-            register: currentRegister
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                word: word,
+                type: type,
+                offset: offset,
+                limit: limit,
+                language: language,
+                register: currentRegister
             }),
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Server error: ${response.status}`);
+            let errorMessage;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || `Server error: ${response.status}`;
+            } catch (jsonError) {
+                // If we can't parse the error response as JSON, get the text
+                const errorText = await response.text();
+                errorMessage = errorText || `HTTP ${response.status} error`;
+            }
+            throw new Error(errorMessage);
         }
 
-        return response.json();
+        const data = await response.json();
+        console.log("Received data:", data);
+        return data;
+
+    } catch (error) {
+        console.error("fetchData error:", error);
+        // Re-throw with more context
+        throw new Error(`Failed to fetch ${type} for "${word}": ${error.message}`);
     }
+}
 
     function forceCluster() {
         let strength = 0.1;
@@ -430,12 +449,14 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
        async function generateGraphForView(view, options = {}) {
     if (!currentActiveCentral) {
         console.error('No active central node');
+        renderError('No word selected. Please add a word first.');
         return;
     }
     
     const cluster = graphClusters.get(currentActiveCentral);
     if (!cluster) {
         console.error(`No cluster found for: ${currentActiveCentral}`);
+        renderError('Invalid word cluster. Please try again.');
         return;
     }
     
@@ -451,23 +472,50 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         
         const languageForRequest = (view === 'translation' && options.language) ? options.language : null;
         
-        // ✅ Fixed: Better error handling for API calls
+        // ⭐ RETRY LOGIC: Try the request with retry on failure
         let data;
-        try {
-            data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, languageForRequest);
-        } catch (fetchError) {
-            console.error("Fetch error:", fetchError);
-            renderError(`Failed to load ${view}: ${fetchError.message}`);
+        let retryCount = 0;
+        const maxRetries = 2;
+        
+        while (retryCount <= maxRetries) {
+            try {
+                data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, languageForRequest);
+                break; // Success, exit retry loop
+            } catch (fetchError) {
+                console.error(`Fetch attempt ${retryCount + 1} failed:`, fetchError);
+                retryCount++;
+                
+                if (retryCount > maxRetries) {
+                    // All retries failed
+                    renderError(`Failed to load ${view}: ${fetchError.message}`);
+                    return;
+                }
+                
+                // Wait a bit before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            }
+        }
+
+        // ⭐ ROBUST DATA VALIDATION
+        if (!data) {
+            renderError(`No data received for ${view}`);
             return;
         }
 
-        // ✅ Fixed: Validate data structure
-        if (!data || !Array.isArray(data.nodes)) {
-            console.error("Invalid data structure received:", data);
-            renderError(`Invalid data received for ${view}`);
+        // Handle different response formats
+        let nodes = [];
+        if (data.nodes && Array.isArray(data.nodes)) {
+            nodes = data.nodes;
+        } else if (data.example) {
+            // Handle generateExample response format
+            nodes = [{ text: data.example, type: 'example' }];
+        } else {
+            console.warn("Unexpected data format:", data);
+            renderError(`Unexpected data format for ${view}`);
             return;
         }
 
+        // Clear previous nodes of this type
         const keptNodeIds = new Set(cluster.nodes.filter(n => n.isCentral || n.type === 'add').map(n => n.id));
         cluster.nodes = cluster.nodes.filter(n => keptNodeIds.has(n.id));
         cluster.links = cluster.links.filter(l => {
@@ -476,8 +524,12 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             return keptNodeIds.has(sourceId) && keptNodeIds.has(targetId);
         });
 
-        data.nodes.forEach(nodeData => {
-            if (!nodeData || typeof nodeData.text !== 'string') return;
+        // Add new nodes
+        nodes.forEach(nodeData => {
+            if (!nodeData || typeof nodeData.text !== 'string') {
+                console.warn("Skipping invalid node data:", nodeData);
+                return;
+            }
             
             const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
             if (cluster.nodes.some(n => n.id === nodeId)) return;
@@ -501,6 +553,7 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
         });
 
+        // Add the "+" node for pagination
         const addNodeId = `add-${currentActiveCentral}`;
         if (!cluster.nodes.some(n => n.id === addNodeId)) {
             const addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral, x: initialX, y: initialY };
@@ -509,7 +562,7 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         }
         
         viewState = { 
-            offset: data.nodes ? data.nodes.length : 0, 
+            offset: nodes.length, 
             hasMore: data.hasMore || false, 
             total: data.total || null 
         };
