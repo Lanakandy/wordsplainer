@@ -5,7 +5,7 @@ async function callOpenRouter(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
-    const primaryModel = "google/gemma-2-9b-it:free";
+    const primaryModel = "google/gemini-flash-1.5-8b";
 
     console.log(`Attempting API call with primary model: ${primaryModel}`);
     
