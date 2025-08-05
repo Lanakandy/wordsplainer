@@ -113,7 +113,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'cross-cluster' ? 200 : 150))
         .force("charge", d3.forceManyBody().strength(-400))
-        .force("collision", d3.forceCollide().radius(d => d.isCentral ? 45 : 20))
+        .force("collision", d3.forceCollide().radius(d => {
+        if (d.isCentral) {
+            return 45; // Radius for central node
+        }
+        // For text boxes, calculate radius from their stored width/height
+        if (d.width && d.height) {
+            // Use half the diagonal as a good approximation for a bounding circle
+            return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 10; // +10 for padding
+        }
+        // Default radius for small peripheral nodes (like synonyms)
+        return 20;
+    }))
         .force("cluster", forceCluster())
         .force("center", d3.forceCenter());
 
@@ -195,14 +206,18 @@ function updateGraph() {
                 const nodeGroup = enter.append("g")
                     .call(d3.drag()
                         .on("start", dragstarted)
-                        .on("drag", dragged)
-                        .on("end", dragended)
-                        .filter(event => !event.target.classList.contains('interactive-word'))
-                    )
-                    .on("mouseover", handleMouseOver)
-                    .on("mouseout", handleMouseOut)
-                    .on("click", handleNodeClick)
-                    .attr("transform", d => `translate(${d.x || width / 2}, ${d.y || height / 2})`);
+    .on("drag", dragged)
+    .on("end", dragended)
+    .filter(event => !event.target.classList.contains('interactive-word'))
+)
+.on("mouseover", handleMouseOver)
+.on("mouseout", handleMouseOut)
+.on("click", (event, d) => {
+    // If the event has a 'dx' property from d3-drag, it means it was part of a drag.
+    // This is a very robust way to prevent clicks during/after a drag.
+    if (event.dx !== undefined) return;
+    handleNodeClick(event, d);
+})
 
                 // Use the new array to decide whether to draw a rect or circle
                 nodeGroup.append(d => textBoxTypes.includes(d.type) ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
@@ -261,16 +276,24 @@ function updateGraph() {
                 createInteractiveText(textElement, fullText, (word) => handleWordSubmitted(word, true, d));
 
                 setTimeout(() => {
-                    const bbox = textElement.node()?.getBBox();
-                    if (bbox && bbox.width > 0) {
-                        selection.select("rect")
-                            .attr("width", bbox.width + 20)
-                            .attr("height", bbox.height + 10)
-                            .attr("x", bbox.x - 10)
-                            .attr("y", bbox.y - 5)
-                            .transition().duration(200).style("opacity", 1);
-                    }
-                }, 0);
+    const bbox = textElement.node()?.getBBox();
+    if (bbox && bbox.width > 0) {
+        const padding = { x: 20, y: 10 };
+        // ⭐ FIX 2B: Store the calculated size on the data object 'd'
+        d.width = bbox.width + padding.x;
+        d.height = bbox.height + padding.y;
+
+        selection.select("rect")
+            .attr("width", d.width)
+            .attr("height", d.height)
+            .attr("x", bbox.x - (padding.x / 2))
+            .attr("y", bbox.y - (padding.y / 2))
+            .transition().duration(200).style("opacity", 1);
+        
+        // Give the simulation a 'kick' to re-evaluate forces with the new sizes
+        simulation.alpha(0.1).restart();
+    }
+}, 0);
             } else {
                 // This correctly handles all other types (synonym, opposite, etc.)
                 textElement.text(d.text || d.id).attr("dy", -22);
