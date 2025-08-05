@@ -317,9 +317,12 @@ async function toggleExampleForNode(nodeData) {
         updateGraph();
     } else {
         try {
+            // ⭐ FIX: Add the 'register' property to the request body
+            // This ensures on-demand examples respect the user's choice.
             const body = {
                 type: 'generateExample',
                 word: nodeData.text,
+                register: currentRegister, 
                 ...(nodeData.type === 'context' && {
                     centralWord: nodeData.clusterId,
                     context: nodeData.text
