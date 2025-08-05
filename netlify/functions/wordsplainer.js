@@ -1,8 +1,8 @@
-// /netlify/functions/wordsplainer.js - CORRECTED WITH FALLBACK
+// /netlify/functions/wordsplainer.js - OPENAI GPT-4.1-NANO VERSION
 
 const fetch = require('node-fetch');
 
-// This is the prompt generation function, it remains the same.
+// This is the prompt generation function, unchanged
 function getLLMPrompt(type, register, word, language = null, limit = 5) {
     const baseInstruction = `You are an expert English language tutor creating educational materials. Your tone is encouraging and clear. The user is a language learner. For the given request, provide a response STRICTLY in the specified JSON object format. Do not include any other text, explanations, or apologies outside of the JSON structure.`;
 
@@ -60,65 +60,53 @@ function getLLMPrompt(type, register, word, language = null, limit = 5) {
     return { systemPrompt, userPrompt };
 }
 
-// ⭐ NEW: This function now tries multiple models if the first one fails.
-async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
+// ⭐ New function using OpenAI GPT-4.1-Nano
+async function callOpenAIModel(systemPrompt, userPrompt) {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
 
-    // Define a list of models to try in order of preference.
-    const modelsToTry = [
-        "mistralai/mistral-7b-instruct:free", // A good, reliable free fallback
-        "openai/gpt-3.5-turbo" // A cheap, very reliable paid option if free ones fail
-    ];
+    const model = "gpt-4.1-nano";
 
-    for (const model of modelsToTry) {
-        console.log(`Attempting API call with model: ${model}`);
-        try {
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: model,
-                    response_format: { type: "json_object" },
-                    messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
-                })
-            });
+    try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ]
+            })
+        });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`);
-                continue; // Try the next model
-            }
-
-            const data = await response.json();
-
-            // Check for a valid, non-empty response
-            if (data.choices && data.choices.length > 0 && data.choices[0].message?.content) {
-                console.log(`Successfully received response from: ${model}`);
-                const messageContent = data.choices[0].message.content;
-                
-                try {
-                    const parsedContent = JSON.parse(messageContent);
-                    return parsedContent; // Success! Return the result.
-                } catch (parseError) {
-                    console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`);
-                    continue; // Invalid JSON, try next model
-                }
-            } else {
-                console.warn(`Model '${model}' returned no choices. Trying next model.`);
-            }
-
-        } catch (error) {
-            console.error(`An unexpected network error occurred with model '${model}':`, error);
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.warn(`OpenAI API call failed with status ${response.status}: ${errorBody}`);
+            throw new Error(`API error: ${response.status}`);
         }
-    }
 
-    // If all models in the list have failed.
-    console.error("All AI models failed to provide a valid response.");
-    throw new Error("The AI model could not provide a response. Please try a different word or try again later.");
+        const data = await response.json();
+        const messageContent = data.choices?.[0]?.message?.content;
+
+        if (!messageContent) throw new Error("No content returned by OpenAI.");
+
+        try {
+            return JSON.parse(messageContent);
+        } catch (parseError) {
+            throw new Error("OpenAI returned unparseable JSON.");
+        }
+
+    } catch (error) {
+        console.error("OpenAI API call failed:", error);
+        throw error;
+    }
 }
 
-// The main handler now uses the new fallback function.
+// Main Netlify handler function
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
@@ -126,31 +114,27 @@ exports.handler = async function(event) {
 
     try {
         const { word, type, offset = 0, limit = 5, language, register = 'conversational' } = JSON.parse(event.body);
-        
+
         const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, language, limit);
-        
-        // Use the new function with built-in retries and fallbacks
-        const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
-        
+
+        const apiResponse = await callOpenAIModel(systemPrompt, userPrompt);
+
         let responseData;
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
-            // Default to an empty array if the API somehow returns null/undefined
             const allNodes = apiResponse.nodes || [];
             responseData = {
                 nodes: allNodes,
-                hasMore: allNodes.length === limit && allNodes.length > 0, // hasMore is false if no nodes were returned
+                hasMore: allNodes.length === limit && allNodes.length > 0,
                 total: null
             };
         }
 
-        // Always return 200 OK, even with empty data, to prevent client-side error state
         return { statusCode: 200, body: JSON.stringify(responseData) };
 
     } catch (error) {
         console.error("Function Error:", error);
-        // This catch block now only triggers for critical errors (e.g., if all models fail)
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
