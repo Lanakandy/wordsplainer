@@ -1,5 +1,4 @@
-// /netlify/functions/wordsplainer.js - CORRECTED
-
+// /netlify/functions/wordsplainer.js
 const fetch = require('node-fetch');
 
 async function callOpenRouter(systemPrompt, userPrompt) {
@@ -30,7 +29,6 @@ async function callOpenRouter(systemPrompt, userPrompt) {
     console.log(`Successfully received response from: ${primaryModel}`);
     console.log("Full API response:", JSON.stringify(data, null, 2));
 
-    // ⭐ ENHANCED FIX: More robust validation and error handling
     if (!data.choices || data.choices.length === 0) {
         console.error("OpenRouter API returned no choices. Full response:", JSON.stringify(data, null, 2));
         throw new Error("The AI model returned no response choices.");
@@ -48,7 +46,6 @@ async function callOpenRouter(systemPrompt, userPrompt) {
         throw new Error("The AI model returned empty content.");
     }
 
-    // ⭐ CRITICAL FIX: Handle JSON parsing errors gracefully
     try {
         const parsedContent = JSON.parse(messageContent);
         console.log("Successfully parsed JSON content:", parsedContent);
