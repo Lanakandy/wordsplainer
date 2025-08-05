@@ -472,7 +472,6 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         
         const languageForRequest = (view === 'translation' && options.language) ? options.language : null;
         
-        // ⭐ RETRY LOGIC: Try the request with retry on failure
         let data;
         let retryCount = 0;
         const maxRetries = 2;
@@ -496,8 +495,7 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             }
         }
 
-        // ⭐ ROBUST DATA VALIDATION
-        if (!data) {
+       if (!data) {
             renderError(`No data received for ${view}`);
             return;
         }
