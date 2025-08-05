@@ -397,11 +397,13 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         let newCenter;
         
         // Determine the position for the new graph's center
-        if (sourceNode) {
-            // Place it to the right of the node that triggered it
+        // This logic is now more robust.
+        if (sourceNode && typeof sourceNode.x === 'number' && typeof sourceNode.y === 'number') {
+            // Place it to the right of the node that triggered it.
             newCenter = { x: sourceNode.x + 450, y: sourceNode.y };
         } else {
-            // This is the very first word, place it in the middle of the screen
+            // FALLBACK: If source is invalid or doesn't exist, place the new graph
+            // in the middle of the currently visible screen area.
             const currentTransform = d3.zoomTransform(svg.node());
             newCenter = { 
                 x: (width / 2 - currentTransform.x) / currentTransform.k, 
@@ -423,15 +425,17 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         
         // Unfix the position after a short delay to let the simulation take over smoothly
         setTimeout(() => {
-            centralNodeData.fx = null;
-            centralNodeData.fy = null;
+            if (centralNodeData) {
+               centralNodeData.fx = null;
+               centralNodeData.fy = null;
+            }
         }, 1500);
 
         centralNodes.push(centralNodeData);
         graphClusters.set(lowerWord, { 
             nodes: [centralNodeData], 
             links: [], 
-            center: newCenter, // The 'center' for the cluster force is the node itself
+            center: newCenter,
             currentView: 'meaning' 
         });
 
@@ -671,6 +675,9 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
 }
    
     function handleNodeClick(event, d) {
+    // If the event was part of a drag gesture, do nothing. This is the key fix.
+    if (event.defaultPrevented) return;
+
     event.stopPropagation();
     const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
 
