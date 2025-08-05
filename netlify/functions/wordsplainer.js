@@ -22,20 +22,44 @@ async function callOpenRouter(systemPrompt, userPrompt) {
 
     if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`Primary model failed with status ${response.status}: ${errorBody}`);
+        console.error(`Primary model failed with status ${response.status}: ${errorBody}`);
+        throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
     }
 
     const data = await response.json();
     console.log(`Successfully received response from: ${primaryModel}`);
+    console.log("Full API response:", JSON.stringify(data, null, 2));
 
-    // Validation for the API response structure
-    if (!data.choices || data.choices.length === 0 || !data.choices[0].message) {
-        console.error("OpenRouter API returned no choices or invalid structure. Full response:", JSON.stringify(data, null, 2));
-        const errorMessage = data.error?.message || "The AI model returned an empty or invalid response.";
-        throw new Error(errorMessage);
+    // ⭐ ENHANCED FIX: More robust validation and error handling
+    if (!data.choices || data.choices.length === 0) {
+        console.error("OpenRouter API returned no choices. Full response:", JSON.stringify(data, null, 2));
+        throw new Error("The AI model returned no response choices.");
     }
-    
-    return JSON.parse(data.choices[0].message.content);
+
+    const choice = data.choices[0];
+    if (!choice.message) {
+        console.error("OpenRouter API choice has no message. Full response:", JSON.stringify(data, null, 2));
+        throw new Error("The AI model returned an invalid response structure.");
+    }
+
+    const messageContent = choice.message.content;
+    if (!messageContent || typeof messageContent !== 'string') {
+        console.error("OpenRouter API message has no content. Full response:", JSON.stringify(data, null, 2));
+        throw new Error("The AI model returned empty content.");
+    }
+
+    // ⭐ CRITICAL FIX: Handle JSON parsing errors gracefully
+    try {
+        const parsedContent = JSON.parse(messageContent);
+        console.log("Successfully parsed JSON content:", parsedContent);
+        return parsedContent;
+    } catch (parseError) {
+        console.error("Failed to parse JSON content:", messageContent);
+        console.error("Parse error:", parseError.message);
+        
+        // Try to extract any meaningful content or provide a fallback
+        throw new Error(`The AI model returned invalid JSON: ${parseError.message}`);
+    }
 }
 
 function getLLMPrompt(type, register, word, language = null, limit = 5) {
