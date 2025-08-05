@@ -55,16 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Central API fetching function ---
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
         const response = await fetch('/.netlify/functions/wordsplainer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // ⭐ FIX 2: Use 'currentRegister' instead of the undefined 'register'
-            body: JSON.stringify({
-                word: word,
-                type: type,
-                offset: offset,
-                limit: limit,
-                language: language,
-                register: currentRegister
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            word: word,
+            type: type,
+            offset: offset,
+            limit: limit,
+            language: language,
+            register: currentRegister
             }),
         });
 
@@ -317,32 +316,33 @@ async function toggleExampleForNode(nodeData) {
         updateGraph();
     } else {
         try {
-            // ⭐ FIX: Add the 'register' property to the request body
-            // This ensures on-demand examples respect the user's choice.
-            const body = {
+            // ✅ Fixed: Properly construct request body
+            const requestBody = {
                 type: 'generateExample',
                 word: nodeData.text,
-                register: currentRegister, 
-                ...(nodeData.type === 'context' && {
-                    centralWord: nodeData.clusterId,
-                    context: nodeData.text
-                })
+                register: currentRegister  // ✅ Use currentRegister
             };
+
+            // Add context-specific data if it's a context node
+            if (nodeData.type === 'context') {
+                requestBody.centralWord = nodeData.clusterId;
+                requestBody.context = nodeData.text;
+            }
 
             const response = await fetch('/.netlify/functions/wordsplainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
                 throw new Error(errorData.error || 'Server returned an error.');
             }
 
             const data = await response.json();
 
-            if (data.example) {
+            if (data && data.example) {
                 const exId = `${nodeData.id}-ex`;
                 const exNode = {
                     id: exId,
@@ -354,6 +354,8 @@ async function toggleExampleForNode(nodeData) {
                 cluster.nodes.push(exNode);
                 cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
                 updateGraph();
+            } else {
+                throw new Error('No example received from server');
             }
         } catch (error) {
             console.error("Error getting example:", error);
@@ -426,72 +428,100 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
 }
 
        async function generateGraphForView(view, options = {}) {
-        if (!currentActiveCentral) return;
-        const cluster = graphClusters.get(currentActiveCentral);
-        if (!cluster) return;
-        
-        cluster.currentView = view;
-        currentView = view;
-        updateActiveButton();
-        renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
-
-        try {
-            const centralNode = cluster.nodes.find(n => n.isCentral);
-            const initialX = centralNode ? centralNode.x : (graphContainer.getBoundingClientRect().width / 2);
-            const initialY = centralNode ? centralNode.y : (graphContainer.getBoundingClientRect().height / 2);
-            
-            const languageForRequest = (view === 'translation' && options.language) ? options.language : null;
-            const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, languageForRequest);
-
-            const keptNodeIds = new Set(cluster.nodes.filter(n => n.isCentral || n.type === 'add').map(n => n.id));
-            cluster.nodes = cluster.nodes.filter(n => keptNodeIds.has(n.id));
-            cluster.links = cluster.links.filter(l => {
-                const sourceId = l.source.id || l.source;
-                const targetId = l.target.id || l.target;
-                return keptNodeIds.has(sourceId) && keptNodeIds.has(targetId);
-            });
-
-            data.nodes.forEach(nodeData => {
-                if (!nodeData || typeof nodeData.text !== 'string') return;
-                
-                const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
-                if (cluster.nodes.some(n => n.id === nodeId)) return;
-                if (nodeData.text.toLowerCase().includes('no data')) return;
-
-                const newNode = {
-                    ...nodeData,
-                    id: nodeId,
-                    type: view,
-                    clusterId: currentActiveCentral,
-                    x: initialX,
-                    y: initialY
-                };
-
-                if (view === 'translation') {
-                    newNode.lang = options.language;
-                    newNode.exampleTranslations = data.exampleTranslations;
-                }
-
-                cluster.nodes.push(newNode);
-                cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-            });
-
-            const addNodeId = `add-${currentActiveCentral}`;
-            if (!cluster.nodes.some(n => n.id === addNodeId)) {
-                const addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral, x: initialX, y: initialY };
-                cluster.nodes.push(addNode);
-                cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
-            }
-            viewState = { offset: data.nodes.length, hasMore: data.hasMore, total: data.total };
-            
-            detectCrossConnections();
-            updateGraph();
-
-        } catch (error) {
-            console.error("Error generating graph:", error);
-            renderError(error.message);
-        }
+    if (!currentActiveCentral) {
+        console.error('No active central node');
+        return;
     }
+    
+    const cluster = graphClusters.get(currentActiveCentral);
+    if (!cluster) {
+        console.error(`No cluster found for: ${currentActiveCentral}`);
+        return;
+    }
+    
+    cluster.currentView = view;
+    currentView = view;
+    updateActiveButton();
+    renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
+
+    try {
+        const centralNode = cluster.nodes.find(n => n.isCentral);
+        const initialX = centralNode ? centralNode.x : (graphContainer.getBoundingClientRect().width / 2);
+        const initialY = centralNode ? centralNode.y : (graphContainer.getBoundingClientRect().height / 2);
+        
+        const languageForRequest = (view === 'translation' && options.language) ? options.language : null;
+        
+        // ✅ Fixed: Better error handling for API calls
+        let data;
+        try {
+            data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, languageForRequest);
+        } catch (fetchError) {
+            console.error("Fetch error:", fetchError);
+            renderError(`Failed to load ${view}: ${fetchError.message}`);
+            return;
+        }
+
+        // ✅ Fixed: Validate data structure
+        if (!data || !Array.isArray(data.nodes)) {
+            console.error("Invalid data structure received:", data);
+            renderError(`Invalid data received for ${view}`);
+            return;
+        }
+
+        const keptNodeIds = new Set(cluster.nodes.filter(n => n.isCentral || n.type === 'add').map(n => n.id));
+        cluster.nodes = cluster.nodes.filter(n => keptNodeIds.has(n.id));
+        cluster.links = cluster.links.filter(l => {
+            const sourceId = l.source.id || l.source;
+            const targetId = l.target.id || l.target;
+            return keptNodeIds.has(sourceId) && keptNodeIds.has(targetId);
+        });
+
+        data.nodes.forEach(nodeData => {
+            if (!nodeData || typeof nodeData.text !== 'string') return;
+            
+            const nodeId = `${currentActiveCentral}-${nodeData.text}-${view}`;
+            if (cluster.nodes.some(n => n.id === nodeId)) return;
+            if (nodeData.text.toLowerCase().includes('no data')) return;
+
+            const newNode = {
+                ...nodeData,
+                id: nodeId,
+                type: view,
+                clusterId: currentActiveCentral,
+                x: initialX,
+                y: initialY
+            };
+
+            if (view === 'translation') {
+                newNode.lang = options.language;
+                newNode.exampleTranslations = data.exampleTranslations;
+            }
+
+            cluster.nodes.push(newNode);
+            cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
+        });
+
+        const addNodeId = `add-${currentActiveCentral}`;
+        if (!cluster.nodes.some(n => n.id === addNodeId)) {
+            const addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral, x: initialX, y: initialY };
+            cluster.nodes.push(addNode);
+            cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
+        }
+        
+        viewState = { 
+            offset: data.nodes ? data.nodes.length : 0, 
+            hasMore: data.hasMore || false, 
+            total: data.total || null 
+        };
+        
+        detectCrossConnections();
+        updateGraph();
+
+    } catch (error) {
+        console.error("Error generating graph:", error);
+        renderError(`Error loading ${view}: ${error.message}`);
+    }
+}
 
     function promptForInitialWord() {
     const inputOverlay = document.getElementById('input-overlay');
@@ -573,6 +603,21 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             generateGraphForView(currentView); 
         }
     }
+
+    function focusOnCentralNode(clusterId) {
+    const centralNode = centralNodes.find(n => n.word === clusterId || n.clusterId === clusterId);
+    if (centralNode) {
+        currentActiveCentral = clusterId;
+        const cluster = graphClusters.get(clusterId);
+        if (cluster) {
+            currentView = cluster.currentView || 'meaning';
+            updateActiveButton();
+        }
+        panToNode(centralNode, 1.2);
+        updateCentralNodeState();
+        console.log(`Focused on central node: ${clusterId}`);
+    }
+}
    
     function handleNodeClick(event, d) {
     event.stopPropagation();
