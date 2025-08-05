@@ -1,5 +1,3 @@
-// /netlify/functions/wordsplainer.js - OPENAI GPT-4.1-NANO VERSION
-
 const fetch = require('node-fetch');
 
 // This is the prompt generation function, unchanged
@@ -65,7 +63,7 @@ async function callOpenAIModel(systemPrompt, userPrompt) {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
 
-    const model = "gpt-4.1-nano";
+    const model = "gpt-3.5-turbo";
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
