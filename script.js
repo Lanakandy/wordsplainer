@@ -1,3 +1,5 @@
+// script.js - CORRECTED
+
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -15,6 +17,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const graphContainer = document.getElementById('graph-container');
     const controlsDock = document.getElementById('controls-dock');
     const zoomControls = document.getElementById('zoom-controls');
+    const registerToggleBtn = document.getElementById('register-toggle-btn');
+    
+    // ⭐ FIX 1: Use the correct variable name 'registerToggleBtn'
+    if (registerToggleBtn) {
+        registerToggleBtn.addEventListener('click', () => {
+            // This toggles the .is-academic class on the button itself
+            registerToggleBtn.classList.toggle('is-academic');
+
+            // You can get the current state to use in your logic
+            const isAcademic = registerToggleBtn.classList.contains('is-academic');
+            
+            console.log('Register is now:', isAcademic ? 'Academic' : 'Conversational');
+            
+            // TODO: Add your logic here to update the graph based on the new register.
+            // For example, you might call a function like:
+            // updateGraphForRegister(isAcademic);
+        });
+    }    
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
@@ -29,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let clusterColors = d3.scaleOrdinal(d3.schemeCategory10);
     
     let currentView = 'meaning';
+    let currentRegister = 'conversational';    
     let viewState = { offset: 0, hasMore: true };
 
     // --- Central API fetching function ---
@@ -36,12 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch('/.netlify/functions/wordsplainer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            // ⭐ FIX 2: Use 'currentRegister' instead of the undefined 'register'
             body: JSON.stringify({
                 word: word,
                 type: type,
                 offset: offset,
                 limit: limit,
-                language: language
+                language: language,
+                register: currentRegister
             }),
         });
 
@@ -204,11 +227,14 @@ function updateGraph() {
                 // (This part is unchanged and correct)
                 textElement.text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "white").style("stroke", "none");
                 // ... color logic ...
-            // ⭐ CHANGE: The main rendering logic now uses the new array.
             } else if (textBoxTypes.includes(d.type)) {
                 selection.select("rect").attr("class", "example-bg"); 
                 
                 let fullText = d.text;
+                if (d.explanation) {
+                    fullText += `\n(${d.explanation})`; // Display the explanation
+                }
+
                 if (d.type === 'meaning' && d.examples && d.examples.length > 0) {
                     const exampleLines = d.examples.map(ex => `\n  •  ${ex}`).join('');
                     fullText += exampleLines;
@@ -530,8 +556,22 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         }
     }
 
-   // REPLACE your existing handleNodeClick with this one.
-function handleNodeClick(event, d) {
+    function handleRegisterToggle() {
+        // 1. Flip the state
+        currentRegister = (currentRegister === 'conversational') ? 'academic' : 'conversational';
+        
+        // 2. Update the button's class for styling
+        registerToggleBtn.classList.toggle('is-academic', currentRegister === 'academic');
+        
+        // 3. If a word is currently active, re-fetch its data with the new register
+        if (currentActiveCentral) {
+            console.log(`Register changed to '${currentRegister}'. Re-fetching for '${currentActiveCentral}'.`);
+            // This will re-trigger the data fetch with the new `currentRegister` value
+            generateGraphForView(currentView); 
+        }
+    }
+   
+    function handleNodeClick(event, d) {
     event.stopPropagation();
     const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
 
@@ -554,8 +594,6 @@ function handleNodeClick(event, d) {
     }
 }
 
-
-/** ⭐ NEW HELPER FUNCTION **/
 /**
  * Renders text inside a D3 text element, making individual words interactive.
  * @param {d3.Selection} d3TextElement The D3 selection of the <text> element.
@@ -869,6 +907,7 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
     renderInitialPrompt();
     controlsDock.addEventListener('click', handleDockClick);
     zoomControls.addEventListener('click', handleZoomControlsClick);    
+    registerToggleBtn.addEventListener('click', handleRegisterToggle);    
     window.addEventListener('resize', handleResize);
     document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
     modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));

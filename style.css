@@ -252,17 +252,6 @@ main#graph-panel {
     border: 1px solid rgba(255, 107, 71, 0.2);
 }
 
-#zoom-controls {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    display: flex;
-    flex-direction: column; 
-    gap: 8px; 
-    z-index: 10; 
-    pointer-events: none;
-}
-
 #zoom-controls .control-btn {
     pointer-events: auto; 
     background-color: var(--dock-bg);
@@ -953,6 +942,23 @@ html[data-theme='dark'] .link.link-example {
     stroke: #7F8C8D;
 }
 
+html[data-theme='dark'] #canvas-controls .control-btn {
+    background-color: rgba(44, 62, 80, 0.9); /* Use primary-navy with opacity */
+    color: var(--text-light);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-theme='dark'] #canvas-controls .control-btn:hover {
+    background-color: rgba(255, 107, 71, 0.2); /* Subtle coral background */
+    border-color: var(--primary-coral);
+    color: var(--text-light); /* Keep text visible */
+}
+
+/* Ensure SVG icons remain visible in dark mode */
+html[data-theme='dark'] #zoom-controls .control-btn svg {
+    fill: var(--text-light);
+}
+
 /* Make node labels look clickable */
 .node text {
     cursor: pointer;
@@ -1167,3 +1173,129 @@ html[data-theme='dark'] .link.link-example {
     /* Make the underline solid on hover for extra feedback. */
     text-decoration-style: solid;
 }
+
+#canvas-controls {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    /* This gap now correctly applies between the register button and the zoom controls container */
+    gap: 10px;  
+}
+
+/* This rule is now the ONLY one for #zoom-controls. It is no longer absolutely positioned. */
+#zoom-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* This creates the space between the zoom-in and zoom-out buttons */
+}
+
+#canvas-controls .control-btn {
+    pointer-events: auto;
+    background-color: var(--dock-bg);
+    color: var(--dock-text-color);
+    border: 1px solid var(--btn-border);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    height: 38px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+#canvas-controls .control-btn:hover {
+    background-color: var(--btn-hover);
+    border-color: var(--primary-coral);
+}
+
+#register-toggle-btn {
+    position: relative; 
+    overflow: hidden; /* Important for clean animations */
+    width: 38px;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Base style for both states (Conversational and Academic) */
+.register-state {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Style for the text part (hidden by default) */
+.register-state .register-text {
+    opacity: 0;
+    position: absolute;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+/* Style for the icon part (visible by default) */
+.register-state .register-icon {
+    transition: opacity 0.2s ease;
+}
+
+/* --- Initial State (Conversational is active) --- */
+
+/* Show conversational, hide academic */
+.conversational-state { opacity: 1; transform: translateY(0); }
+.academic-state { opacity: 0; transform: translateY(20px); }
+
+/* --- Toggled State (.is-academic class on button) --- */
+
+/* Hide conversational, show academic */
+#register-toggle-btn.is-academic .conversational-state { opacity: 0; transform: translateY(-20px); }
+#register-toggle-btn.is-academic .academic-state { opacity: 1; transform: translateY(0); }
+
+/* --- Hover Behavior --- */
+
+#register-toggle-btn:hover {
+    /* ⭐ FIX 1C: Expand the button on hover to make space for the text. */
+    width: 145px;
+}
+
+/* On hover, hide the icon and show the text */
+#register-toggle-btn:hover .register-icon {
+    opacity: 0;
+}
+#register-toggle-btn:hover .register-text {
+    opacity: 1;
+}
+
+/* Specific size for the smaller, square zoom buttons */
+#zoom-controls .control-btn {
+    width: 38px;
+}
+
+#zoom-controls .control-btn svg {
+    fill: currentColor;
+    width: 20px;
+    height: 20px;
+}
+
+/* Animation styles for register toggle text (no changes needed) */
+.register-text {
+    position: absolute;
+    width: 100%;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.academic-text { opacity: 0; transform: translateY(-50%) translateY(10px); }
+.conversational-text { opacity: 1; transform: translateY(-50%) translateY(0); }
+#register-toggle-btn.is-academic .conversational-text { opacity: 0; transform: translateY(-50%) translateY(-10px); }
+#register-toggle-btn.is-academic .academic-text { opacity: 1; transform: translateY(-50%) translateY(0); }
