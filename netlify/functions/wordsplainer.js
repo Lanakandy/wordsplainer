@@ -25,7 +25,7 @@ function getLLMPrompt(type, register, word, language = null, limit = 5) {
             JSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
             break;
         case 'derivatives':
-            taskInstruction = `Provide word forms (noun, verb, adjective, etc.).
+            taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.
             JSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'collocations':
