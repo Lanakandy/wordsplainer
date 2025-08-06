@@ -15,12 +15,10 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     const baseInstruction = `You are an expert English language tutor creating non-trivial engaging educational materials. The user is a language learner.`;
 
-    // ⭐ FIX 1: Make the register instruction more general and robust.
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
         : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, everyday language that would be heard in conversations.`;
     
-    // ⭐ FIX 2: Isolate the JSON format rule to be placed at the very end of the prompt for emphasis.
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
     const limitInstruction = `Provide up to ${limit} distinct items.`;
@@ -132,30 +130,42 @@ async function callOpenAIModel(systemPrompt, userPrompt) {
 }
 
 
-// Main Netlify handler function
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
-        // Extract all possible properties from the request body
         const { word, type, offset = 0, limit = 5, language, register = 'conversational', centralWord, context, sourceNodeType, definition, translation } = JSON.parse(event.body);
-
-        // Pass them all in the new options object
         const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, { language, limit, centralWord, context, sourceNodeType, definition, translation });
-
         const apiResponse = await callOpenAIModel(systemPrompt, userPrompt);
 
-        // This part remains the same and correctly handles all response types
         let responseData;
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
-            const allNodes = apiResponse.nodes || [];
+            const rawNodes = apiResponse.nodes || [];
+
+            const seen = new Set();
+            const uniqueNodes = rawNodes.filter(node => {
+                // Ensure the node and its text are valid before processing
+                if (!node || typeof node.text !== 'string') {
+                    return false;
+                }
+                const normalizedText = node.text.toLowerCase().trim();
+                if (seen.has(normalizedText)) {
+                    return false; // This is a duplicate, so filter it out
+                } else {
+                    seen.add(normalizedText);
+                    return true; // This is a unique item, keep it
+                }
+            });
+
             responseData = {
-                nodes: allNodes,
-                hasMore: allNodes.length === limit && allNodes.length > 0,
+                nodes: uniqueNodes,
+                // The 'hasMore' logic is based on the original count from the LLM.
+                // If it sent back the max number we requested, more might exist.
+                hasMore: rawNodes.length === limit && rawNodes.length > 0,
                 total: null
             };
         }
