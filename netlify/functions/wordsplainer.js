@@ -1,7 +1,10 @@
+// wordsplainer.js
+
 const fetch = require('node-fetch');
 
-// This is the prompt generation function, unchanged
-function getLLMPrompt(type, register, word, language = null, limit = 5) {
+function getLLMPrompt(type, register, word, options = {}) {
+    const { language = null, limit = 5, centralWord = null, context = null, sourceNodeType = null } = options;
+
     const baseInstruction = `You are an expert English language tutor creating educational materials. Your tone is encouraging and clear. The user is a language learner. For the given request, provide a response STRICTLY in the specified JSON object format. Do not include any other text, explanations, or apologies outside of the JSON structure.`;
 
     const registerInstruction = register === 'academic' 
@@ -12,15 +15,16 @@ function getLLMPrompt(type, register, word, language = null, limit = 5) {
 
     let taskInstruction;
     let userPrompt = `Word: "${word}"`;
+    let systemPrompt;
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the word. For each, include its part of speech and an example sentence.
-            JSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb", "examples": ["example sentence here"]}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the word. For each, include its part of speech.
+            JSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.
-            JSON format: {"nodes": [{"text": "Context/Domain Name", "examples": ["example sentence here"]}]}`;
+            JSON format: {"nodes": [{"text": "Context/Domain Name"}]}]}`;
             break;
         case 'derivatives':
             taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.
@@ -31,8 +35,8 @@ function getLLMPrompt(type, register, word, language = null, limit = 5) {
             JSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
         case 'idioms':
-            taskInstruction = `Provide common idioms or phrases that use the word. For each, provide a brief explanation of its meaning.
-            JSON format: {"nodes": [{"text": "idiom phrase", "explanation": "meaning of the idiom"}]}`;
+            taskInstruction = `Provide common idioms or phrases that use the word.
+            JSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
         case 'synonyms':
         case 'opposites':
@@ -45,20 +49,37 @@ function getLLMPrompt(type, register, word, language = null, limit = 5) {
             JSON format: {"nodes": [{"text": "translation"}]}`;
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
             break;
-        case 'generateExample':
-            taskInstruction = `Create a single, high-quality, educational example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.
-            JSON format: {"example": "The generated sentence."}`;
-            const systemPromptForExample = [baseInstruction, registerInstruction, taskInstruction].join('\n\n');
-            return { systemPrompt: systemPromptForExample, userPrompt: `Word to use in a sentence: "${word}"` };
+        
+       case 'generateExample':
+            // Case 1: Example for an idiom, which needs an explanation.
+            if (sourceNodeType === 'idioms') {
+                taskInstruction = `The user clicked on an idiom. Create a single, high-quality example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.
+                JSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
+                userPrompt = `Idiom to use and explain: "${word}"`;
+            } 
+            // Case 2: Example for a specific context.
+            else if (centralWord && context) {
+                taskInstruction = `The user is exploring the word "${centralWord}" and has clicked on the context "${context}". Create a single, high-quality example sentence that uses the word "${centralWord}" in a way that is specific to the field of "${context}".
+                JSON format: {"example": "The generated sentence."}`;
+                userPrompt = `Word: "${centralWord}", Context: "${context}"`;
+            }
+            // Case 3: A standard example for any other word/phrase.
+            else {
+                taskInstruction = `Create a single, high-quality, educational example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.
+                JSON format: {"example": "The generated sentence."}`;
+                userPrompt = `Word to use in a sentence: "${word}"`;
+            }
+            systemPrompt = [baseInstruction, registerInstruction, taskInstruction].join('\n\n');
+            return { systemPrompt, userPrompt };
+
         default:
             throw new Error(`Unknown type: ${type}`);
     }
 
-    const systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction].join('\n\n');
+    systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
 
-// ⭐ New function using OpenAI GPT-4.1-Nano
 async function callOpenAIModel(systemPrompt, userPrompt) {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
@@ -104,21 +125,25 @@ async function callOpenAIModel(systemPrompt, userPrompt) {
     }
 }
 
-// Main Netlify handler function
+
+// ⭐ MODIFICATION: The handler now extracts and passes the new optional parameters.
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
-        const { word, type, offset = 0, limit = 5, language, register = 'conversational' } = JSON.parse(event.body);
+        // Extract new optional properties from the request body
+        const { word, type, offset = 0, limit = 5, language, register = 'conversational', centralWord, context, sourceNodeType } = JSON.parse(event.body);
 
-        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, language, limit);
+        // Pass them in the new options object
+        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, { language, limit, centralWord, context, sourceNodeType });
 
         const apiResponse = await callOpenAIModel(systemPrompt, userPrompt);
 
         let responseData;
         if (type === 'generateExample') {
+            // The response for examples is now dynamic (might have 'explanation')
             responseData = apiResponse;
         } else {
             const allNodes = apiResponse.nodes || [];
