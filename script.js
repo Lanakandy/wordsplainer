@@ -526,37 +526,32 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
     const cluster = graphClusters.get(currentActiveCentral);
     if (!cluster) return renderError('Invalid word cluster.');
 
-    // --- CACHE CHECK (No change here) ---
+    // --- CACHE CHECK ---
     const alreadyLoaded = cluster.nodes.some(n => n.type === view);
     if (alreadyLoaded) {
         console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
         cluster.currentView = view;
-        currentView = view;
+        currentView = view; 
         updateActiveButton();
 
         const nodesToHide = cluster.nodes.filter(n => !n.isCentral && n.type !== 'add' && n.visible === true && n.type !== view);
-    const nodesToShow = cluster.nodes.filter(n => n.type === view);
     
-    // 1. Animate out the old nodes
-    graphGroup.selectAll('.node')
-        .filter(d => nodesToHide.some(n => n.id === d.id))
-        .transition()
-        .duration(400)
-        .delay((d,i) => i * 30)
-        .ease(d3.easeCubicIn)
-        .attr("transform", d => `translate(${cluster.center.x}, ${cluster.center.y}) scale(0)`)
-        .remove();
+        graphGroup.selectAll('.node')
+            .filter(d => nodesToHide.some(n => n.id === d.id))
+            .transition()
+            .duration(400)
+            .delay((d,i) => i * 30)
+            .ease(d3.easeCubicIn)
+            .attr("transform", d => `translate(${cluster.center.x}, ${cluster.center.y}) scale(0)`)
+            .on("end", function() { d3.select(this).remove(); }); // Ensure removal after transition
 
-    // 2. Update visibility data
-    cluster.nodes.forEach(node => {
-        node.visible = node.isCentral || node.type === 'add' || node.type === view;
-    });
+        cluster.nodes.forEach(node => {
+            node.visible = node.isCentral || node.type === 'add' || node.type === view || (node.type === 'example' && cluster.nodes.find(n => n.id === node.sourceNodeId && n.type === view));
+        });
 
-    // 3. Call updateGraph, which will animate in the new nodes
-    // The existing staggered animation will handle the entrance beautifully.
-    updateGraph(); 
-    return;
-}
+        updateGraph(); 
+        return;
+    }
 
     // --- CACHE MISS ---
     console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
@@ -573,7 +568,9 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             if (!node.isCentral && node.type !== 'add') node.visible = false;
         });
 
-        // ⭐ --- REFACTOR START --- ⭐
+        // Get the starting position from the cluster's center point.
+        const startPos = cluster.center;
+
         data.nodes.forEach(nodeData => {
             if (!nodeData || typeof nodeData.text !== 'string') return;
             const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
@@ -585,12 +582,13 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
                 type: view,
                 clusterId: currentActiveCentral,
                 visible: true,
-                lang: options.language 
+                lang: options.language,
+                // ⭐ THE FIX: Initialize position to the cluster's center ⭐
+                x: startPos.x,
+                y: startPos.y
             };
 
-            // PRE-CALCULATE SIZE for text-box nodes
             if (view === 'example' || view === 'meaning') {
-                 // Build the full text as it would appear in the node
                 let fullText = nodeData.text;
                 if (nodeData.explanation) {
                     fullText += `\n(${nodeData.explanation})`;
@@ -598,18 +596,24 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
                 const size = getTextBoxSize(fullText, 'node node-example text');
                 newNode.width = size.width;
                 newNode.height = size.height;
-                newNode.bbox = size.bbox; // Store for later positioning
+                newNode.bbox = size.bbox;
             }
 
             cluster.nodes.push(newNode);
             cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
         });
-        // ⭐ --- REFACTOR END --- ⭐
         
         const addNodeId = `add-${currentActiveCentral}`;
         let addNode = cluster.nodes.find(n => n.id === addNodeId);
         if (!addNode) {
-            addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral };
+            addNode = { 
+                id: addNodeId, 
+                type: 'add', 
+                clusterId: currentActiveCentral,
+                // Also give the 'add' button a starting position
+                x: startPos.x,
+                y: startPos.y
+            };
             cluster.nodes.push(addNode);
             cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
         }
