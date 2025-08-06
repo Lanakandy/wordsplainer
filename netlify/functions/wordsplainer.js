@@ -13,92 +13,77 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert English language tutor creating educational materials. Your tone is encouraging and clear. The user is a language learner. For the given request, provide a response STRICTLY in the specified JSON object format. Do not include any other text, explanations, or apologies outside of the JSON structure.`;
+    const baseInstruction = `You are an expert English language tutor creating educational materials. Your tone is encouraging and clear. The user is a language learner.`;
 
+    // ⭐ FIX 1: Make the register instruction more general and robust.
     const registerInstruction = register === 'academic' 
-        ? `The user has selected the 'Academic' register. All definitions, examples, and explanations must use formal, precise language suitable for a university essay, research paper, or formal presentation. Focus on nuance and sophisticated vocabulary.`
-        : `The user has selected the 'Conversational' register. All definitions, examples, and explanations must use natural, everyday language that would be heard in conversations. Use common phrasings and contractions where appropriate.`;
+        ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, everyday language that would be heard in conversations.`;
     
+    // ⭐ FIX 2: Isolate the JSON format rule to be placed at the very end of the prompt for emphasis.
+    const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
+
     const limitInstruction = `Provide up to ${limit} distinct items.`;
 
     let taskInstruction;
-    // ⭐ FIX: Re-initialize userPrompt with a default value. This was accidentally removed.
     let userPrompt = `Word: "${word}"`;
     let systemPrompt;
 
     switch(type) {
+        // ... (cases 'meaning' through 'opposites' are unchanged, but they will now benefit from the new prompt structure)
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the word. For each, include its part of speech.
-            JSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the word. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
-            taskInstruction = `List different contexts or domains where this word is commonly used.
-            JSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
+            taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
             break;
         case 'derivatives':
-            taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.
-            JSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.\nJSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'collocations':
-            taskInstruction = `Provide words that often appear together with the target word.
-            JSON format: {"nodes": [{"text": "collocation phrase"}]}`;
+            taskInstruction = `Provide words that often appear together with the target word.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
         case 'idioms':
-            taskInstruction = `Provide common idioms or phrases that use the word.
-            JSON format: {"nodes": [{"text": "idiom phrase"}]}`;
+            taskInstruction = `Provide idioms or set phrases that use the word.\nJSON format: {"nodes": [{"text": "idiom"}]}`;
             break;
         case 'synonyms':
         case 'opposites':
             const wordType = type === 'synonyms' ? 'synonyms' : 'antonyms (opposites)';
-            taskInstruction = `Provide common ${wordType}.
-            JSON format: {"nodes": [{"text": "synonym/antonym"}]}`;
+            taskInstruction = `Provide common ${wordType}.\nJSON format: {"nodes": [{"text": "synonym/antonym"}]}`;
             break;
         case 'translation':
-            taskInstruction = `Provide the main translations for the word into the target language.
-            JSON format: {"nodes": [{"text": "translation"}]}`;
-            // This correctly overrides the default userPrompt
+            taskInstruction = `Provide the main translations for the word into the target language.\nJSON format: {"nodes": [{"text": "translation"}]}`;
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
             break;
         
         case 'generateExample':
-            // Case 1: Example for an idiom.
+            // This case handles its own more complex logic, which is fine.
             if (sourceNodeType === 'idioms') {
-                taskInstruction = `The user clicked on an idiom. Create a single, high-quality example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.
-                JSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
+                taskInstruction = `The user clicked on an idiom. Create a single, high-quality example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
                 userPrompt = `Idiom to use and explain: "${word}"`;
-            }
-            // Case 2: Example for a specific meaning/definition.
-            else if (sourceNodeType === 'meaning' && centralWord && definition) {
-                taskInstruction = `The user is exploring the word "${centralWord}" and clicked on this specific definition: "${definition}". Create a single, high-quality example sentence that uses "${centralWord}" to clearly illustrate this exact meaning.
-                JSON format: {"example": "The generated sentence."}`;
+            } else if (sourceNodeType === 'meaning' && centralWord && definition) {
+                taskInstruction = `The user is exploring the word "${centralWord}" and clicked on this specific definition: "${definition}". Create a single, high-quality example sentence that uses "${centralWord}" to clearly illustrate this exact meaning.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word: "${centralWord}", Definition to illustrate: "${definition}"`;
-            }
-            // Case 3: Example for a specific context.
-            else if (centralWord && context) {
-                taskInstruction = `The user is exploring the word "${centralWord}" and has clicked on the context "${context}". Create a single, high-quality example sentence that uses the word "${centralWord}" in a way that is specific to the field of "${context}".
-                JSON format: {"example": "The generated sentence."}`;
+            } else if (centralWord && context) {
+                taskInstruction = `The user is exploring the word "${centralWord}" and has clicked on the context "${context}". Create a single, high-quality example sentence that uses the word "${centralWord}" in a way that is specific to the field of "${context}".\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word: "${centralWord}", Context: "${context}"`;
-            }
-            // Case 4: Bilingual example for a translation.
-            else if (sourceNodeType === 'translation' && centralWord && translation && language) {
-                taskInstruction = `The user is exploring the English word "${centralWord}". They clicked on its translation into ${language}: "${translation}". Create a single, high-quality English example sentence using "${centralWord}". Then, provide its direct and natural translation into ${language}.
-                JSON format: {"english_example": "The English sentence.", "translated_example": "The sentence in the target language."}`;
+            } else if (sourceNodeType === 'translation' && centralWord && translation && language) {
+                taskInstruction = `The user is exploring the English word "${centralWord}". They clicked on its translation into ${language}: "${translation}". Create a single, high-quality English example sentence using "${centralWord}". Then, provide its direct and natural translation into ${language}.\nJSON format: {"english_example": "The English sentence.", "translated_example": "The sentence in the target language."}`;
                 userPrompt = `English Word: "${centralWord}", Target Language: "${language}", Translation: "${translation}"`;
-            }
-            // Case 5: A standard example for any other word/phrase.
-            else {
-                taskInstruction = `Create a single, high-quality, educational example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.
-                JSON format: {"example": "The generated sentence."}`;
+            } else {
+                taskInstruction = `Create a single, high-quality, educational example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            systemPrompt = [baseInstruction, registerInstruction, taskInstruction].join('\n\n');
+            // ⭐ FIX 3: Assemble the prompt for 'generateExample' using the new robust structure.
+            systemPrompt = [baseInstruction, registerInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
         default:
             throw new Error(`Unknown type: ${type}`);
     }
 
-    systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction].join('\n\n');
+    // ⭐ FIX 4: Assemble the final system prompt with the format instruction at the end.
+    systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
 
