@@ -137,23 +137,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Enhanced collision detection with adaptive radii
-    function getCollisionRadius(d) {
-        if (d.isCentral) {
-            return 50; // Larger buffer for central nodes
-        }
-        if (d.type === 'example') {
-            // Dynamic radius based on text content
-            if (d.width && d.height) {
-                return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 15;
-            }
-            return 60; // Default for examples
-        }
-        if (d.type === 'add') {
-            return 25;
-        }
-        // Regular peripheral nodes
-        return 30;
+function getCollisionRadius(d) {
+    if (d.isCentral) {
+        return 50;
     }
+    // For composite nodes (circle + text) or example boxes, calculate radius from their bounding box
+    if (d.width && d.height) {
+        // Use half the diagonal as an excellent approximation for a bounding circle
+        return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 10; // +10 for padding
+    }
+    if (d.type === 'add') {
+        return 25;
+    }
+    // Default for regular single-word peripheral nodes
+    return 30;
+}
 
     // Enhanced simulation with better forces
     const simulation = d3.forceSimulation()
@@ -325,25 +323,18 @@ document.addEventListener('DOMContentLoaded', () => {
             );
 
         // Enhanced node content rendering
-        // Enhanced node content rendering
 nodeGroups.each(function(d) {
     const selection = d3.select(this);
-    const textElement = selection.select("text");
 
-    // --- Define which nodes need HTML wrapping ---
-    const needsWrapping = textBoxTypes.includes(d.type) || countNotionalWords(d.text) > 1;
-
-    // Clear previous shapes before re-rendering
-    selection.select("circle").remove();
-    selection.select("rect").remove();
-    selection.select("foreignObject").remove();
+    // --- Clear previous shapes to prevent rendering artifacts ---
+    selection.selectAll("circle, rect, foreignObject, text").remove();
 
     if (d.isCentral) {
-        selection.insert("circle", "text") // insert() keeps text on top
+        selection.append("circle")
             .attr("r", 45)
             .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
         
-        textElement
+        selection.append("text")
             .attr("class", "node-text")
             .text(d.word || d.id)
             .attr("dy", "0.3em")
@@ -351,66 +342,88 @@ nodeGroups.each(function(d) {
             .style("font-size", "16px");
             
     } else if (d.type === 'add') {
-        selection.insert("circle", "text")
-            .attr("r", 20);
-            
-        textElement
+        selection.append("circle").attr("r", 20);
+        selection.append("text")
             .text('+')
-            .style("font-size", "20px")
+            .style("font-size", "24px")
             .style("font-weight", "300")
             .style("fill", "var(--primary-coral)");
             
-    } else if (needsWrapping) {
-        // --- NEW LOGIC: RENDER WITH HTML WRAPPING ---
-        const nodeWidth = 220; // Set a fixed width for wrapped text nodes
-        textElement.remove(); // Remove the SVG text element, we'll use HTML
-
+    } else if (d.type === 'example') {
+        // --- RENDER ACTUAL EXAMPLE NODES --- (Solid background boxes)
+        const nodeWidth = 220;
         const foreignObject = selection.append("foreignObject")
             .attr("class", "node-html-wrapper")
             .attr("width", nodeWidth)
-            .style("opacity", 0); // Start invisible
+            .style("opacity", 0);
 
         const div = foreignObject.append("xhtml:div")
-            .attr("class", "node-html-content");
-            
-        let fullText = d.text;
-        if(d.type === 'meaning' && d.examples && d.examples.length > 0) {
-            fullText += d.examples.map(ex => `\n\n• ${ex}`).join('');
-        }
-        
-        // Use createInteractiveText to populate the div
-        createInteractiveText(div, fullText, (word) => handleWordSubmitted(word, true, d));
+            .attr("class", "node-html-content")
+            .html(d.text.replace(/\n/g, '<br/>')); // Simple text for examples
 
-        // Use a timeout to let the browser render the HTML, then get its height
+        // Size the node after rendering
         setTimeout(() => {
             if (div.node()) {
                 const divHeight = div.node().scrollHeight;
-                d.width = nodeWidth;
-                d.height = divHeight;
-
-                foreignObject
-                    .attr("height", divHeight)
-                    .attr("x", -d.width / 2)
-                    .attr("y", -d.height / 2)
-                    .transition().duration(400)
-                    .style("opacity", 1);
-                
-                simulation.alpha(0.1).restart(); // Nudge simulation with new size
+                d.width = nodeWidth; d.height = divHeight;
+                foreignObject.attr("height", divHeight).attr("x", -d.width / 2).attr("y", -d.height / 2)
+                           .transition().duration(400).style("opacity", 1);
+                simulation.alpha(0.1).restart();
             }
         }, 50);
 
-        selection.style("cursor", "default"); // These nodes are not draggable
-
     } else {
-        // --- SINGLE-WORD PERIPHERAL NODES (Unchanged) ---
-        selection.insert("circle", "text")
-            .attr("r", 18);
-            
-        textElement
-            .text(d.text || d.id)
-            .attr("dy", "0.3em")
-            .style("font-size", "12px");
-        selection.style("cursor", "pointer"); // These are draggable
+        // --- RENDER COMPOSITE PERIPHERAL NODES --- (Circle + Text)
+        const CIRCLE_RADIUS = 18;
+        const PADDING = 12;
+
+        // 1. Add the colored circle, which is the main interactive element
+        selection.append("circle")
+            .attr("r", CIRCLE_RADIUS);
+        
+        // 2. Add the text content next to the circle
+        const textContent = d.text;
+        
+        if (countNotionalWords(textContent) > 1) {
+            // It's a phrase/definition, use <foreignObject> for wrapping
+            const textWidth = 200;
+            const foreignObject = selection.append("foreignObject")
+                .attr("class", "node-html-wrapper")
+                .attr("width", textWidth)
+                .attr("x", CIRCLE_RADIUS + PADDING) // Position it right of the circle
+                .style("opacity", 0);
+
+            const div = foreignObject.append("xhtml:div")
+                .attr("class", "node-html-content");
+
+            createInteractiveText(div, textContent, (word) => handleWordSubmitted(word, true, d));
+
+            setTimeout(() => {
+                if(div.node()) {
+                    const textHeight = div.node().scrollHeight;
+                    // Position vertically centered relative to the circle
+                    foreignObject.attr("height", textHeight).attr("y", -textHeight / 2)
+                               .transition().duration(400).style("opacity", 1);
+                    
+                    // Update overall node size for collision detection
+                    d.width = CIRCLE_RADIUS + PADDING + textWidth;
+                    d.height = Math.max(CIRCLE_RADIUS * 2, textHeight);
+                    simulation.alpha(0.1).restart();
+                }
+            }, 50);
+
+        } else {
+            // It's a single word, use a simple SVG <text> element
+            selection.append("text")
+                .attr("x", CIRCLE_RADIUS + PADDING)
+                .attr("y", 0)
+                .attr("dy", "0.3em")
+                .style("text-anchor", "start") // Align text to the left
+                .text(textContent);
+        }
+        
+        // Ensure the entire group is clickable, but drag is handled by JS filter
+        selection.style("cursor", "pointer");
     }
 });
         graphGroup.selectAll(".link")

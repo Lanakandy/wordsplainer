@@ -266,34 +266,40 @@ html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
 
 /* --- ENHANCED: Text Node Container Styles --- */
 .node .node-html-wrapper {
-    /* This ensures the foreignObject doesn't clip shadows or borders */
     overflow: visible;
 }
 
+/* Base style for the <div> inside the wrapper. TRANSPARENT by default. */
 .node .node-html-content {
-    /* Styling for the div inside the foreignObject */
-    background-color: var(--accent-light);
     color: var(--canvas-text-color);
+    font-size: 13px;
+    font-weight: 500;
+    height: 100%;
+    box-sizing: border-box;
+    word-wrap: break-word;
+    transition: color 0.3s ease;
+}
+
+/* Dark mode text color for the transparent container */
+html[data-theme='dark'] .node .node-html-content {
+    color: var(--accent-light);
+}
+
+.node-example .node-html-content {
+    background-color: var(--accent-light);
     border: 1px solid #E0E0E0;
     border-radius: 8px;
     padding: 12px;
-    font-size: 13px;
-    font-weight: 500;
-    height: 100%; /* Important: makes the div fill the foreignObject */
-    box-sizing: border-box;
-    /* This enables text wrapping */
-    word-wrap: break-word;
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Dark Mode Variants */
-html[data-theme='dark'] .node .node-html-content {
+/* Dark mode for the solid example boxes */
+html[data-theme='dark'] .node-example .node-html-content {
     background-color: #34495E;
-    color: var(--accent-light);
     border-color: #4A6572;
 }
 
-/* Make sure interactive words inside these new containers are styled correctly */
+/* Style for interactive words inside any of these containers */
 .node .node-html-content .interactive-word {
     color: var(--text-link);
     font-weight: 600;
@@ -304,22 +310,6 @@ html[data-theme='dark'] .node .node-html-content {
 .node .node-html-content .interactive-word:hover {
     color: var(--primary-coral);
     text-decoration-style: solid;
-}
-
-/* --- Interactive Words within Text Boxes --- */
-.interactive-word {
-    cursor: pointer;
-    fill: var(--text-link); 
-    font-weight: 600; 
-    text-decoration: none;
-    transition: fill 0.2s ease-in-out;
-    pointer-events: all;
-}
-.interactive-word:hover {
-    fill: var(--primary-coral);
-    text-decoration: underline;
-    text-decoration-thickness: 1.5px;
-    text-underline-offset: 2px;
 }
 
 /* --- Detaching Node Animation --- */
