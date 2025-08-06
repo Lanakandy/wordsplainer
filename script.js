@@ -349,82 +349,56 @@ nodeGroups.each(function(d) {
             .style("font-weight", "300")
             .style("fill", "var(--primary-coral)");
             
-    } else if (d.type === 'example') {
-        // --- RENDER ACTUAL EXAMPLE NODES --- (Solid background boxes)
-        const nodeWidth = 220;
-        const foreignObject = selection.append("foreignObject")
-            .attr("class", "node-html-wrapper")
-            .attr("width", nodeWidth)
-            .style("opacity", 0);
-
-        const div = foreignObject.append("xhtml:div")
-            .attr("class", "node-html-content")
-            .html(d.text.replace(/\n/g, '<br/>')); // Simple text for examples
-
-        // Size the node after rendering
-        setTimeout(() => {
-            if (div.node()) {
-                const divHeight = div.node().scrollHeight;
-                d.width = nodeWidth; d.height = divHeight;
-                foreignObject.attr("height", divHeight).attr("x", -d.width / 2).attr("y", -d.height / 2)
-                           .transition().duration(400).style("opacity", 1);
-                simulation.alpha(0.1).restart();
-            }
-        }, 50);
-
     } else {
-        // --- RENDER COMPOSITE PERIPHERAL NODES --- (Circle + Text)
-        const CIRCLE_RADIUS = 18;
-        const PADDING = 12;
-
-        // 1. Add the colored circle, which is the main interactive element
-        selection.append("circle")
-            .attr("r", CIRCLE_RADIUS);
-        
-        // 2. Add the text content next to the circle
-        const textContent = d.text;
-        
-        if (countNotionalWords(textContent) > 1) {
-            // It's a phrase/definition, use <foreignObject> for wrapping
-            const textWidth = 200;
-            const foreignObject = selection.append("foreignObject")
-                .attr("class", "node-html-wrapper")
-                .attr("width", textWidth)
-                .attr("x", CIRCLE_RADIUS + PADDING) // Position it right of the circle
-                .style("opacity", 0);
-
-            const div = foreignObject.append("xhtml:div")
-                .attr("class", "node-html-content");
-
-            createInteractiveText(div, textContent, (word) => handleWordSubmitted(word, true, d));
-
-            setTimeout(() => {
-                if(div.node()) {
-                    const textHeight = div.node().scrollHeight;
-                    // Position vertically centered relative to the circle
-                    foreignObject.attr("height", textHeight).attr("y", -textHeight / 2)
-                               .transition().duration(400).style("opacity", 1);
-                    
-                    // Update overall node size for collision detection
-                    d.width = CIRCLE_RADIUS + PADDING + textWidth;
-                    d.height = Math.max(CIRCLE_RADIUS * 2, textHeight);
-                    simulation.alpha(0.1).restart();
-                }
-            }, 50);
-
-        } else {
-            // It's a single word, use a simple SVG <text> element
-            selection.append("text")
-                .attr("x", CIRCLE_RADIUS + PADDING)
-                .attr("y", 0)
-                .attr("dy", "0.3em")
-                .style("text-anchor", "start") // Align text to the left
-                .text(textContent);
-        }
-        
-        // Ensure the entire group is clickable, but drag is handled by JS filter
-        selection.style("cursor", "pointer");
+    // --- RENDER ALL PERIPHERAL NODES (DEFINITIONS, EXAMPLES, ETC.) ---
+    const isExample = d.type === 'example';
+    
+    // For non-example nodes, create the interactive colored circle
+    if (!isExample) {
+        selection.append("circle").attr("r", 18);
     }
+
+    // Determine the width for the text container
+    const textWidth = isExample ? 220 : 200;
+    const PADDING = isExample ? 0 : 12; // No padding for examples
+    const circleRadius = isExample ? 0 : 18;
+
+    // Use <foreignObject> for robust text wrapping and styling
+    const foreignObject = selection.append("foreignObject")
+        .attr("class", "node-html-wrapper")
+        .attr("width", textWidth)
+        .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING) // Center examples, offset others
+        .style("opacity", 0);
+
+    const div = foreignObject.append("xhtml:div")
+        .attr("class", "node-html-content");
+
+    // Populate the div with interactive text
+    createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+
+    // After the browser renders the div, calculate its height and set final dimensions
+    setTimeout(() => {
+        if(div.node()) {
+            const textHeight = div.node().scrollHeight;
+            
+            // Position vertically
+            foreignObject.attr("height", textHeight)
+                       .attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+
+            // Update overall node size for collision detection
+            d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+            d.height = Math.max(circleRadius * 2, textHeight);
+
+            // Animate into view
+            foreignObject.transition().duration(400).style("opacity", 1);
+            
+            simulation.alpha(0.1).restart(); // Nudge simulation with new size
+        }
+    }, 50);
+    
+    // The colored circle is for getting an example. The text is for exploring.
+    selection.style("cursor", "pointer");
+}
 });
         graphGroup.selectAll(".link")
             .style("stroke", d => {
@@ -482,12 +456,8 @@ nodeGroups.each(function(d) {
                 `Load more ${cluster?.currentView || 'items'}` : 
                 'No more items to load';
         } else if (d.text && !d.isCentral && d.type !== 'example' && d.type !== 'add') {
-            if (countNotionalWords(d.text) > 1) {
-                tooltipText = `Click a word to explore it individually`;
-            } else {
-                tooltipText = `Click for examples • Drag to explore "${d.text}"`;
-            }
-        }
+    tooltipText = `Click circle for an example\nClick text to explore`;
+}
             
         if (tooltipText) {
             tooltip.textContent = tooltipText;
@@ -1141,48 +1111,24 @@ function repositionAllClusters() {
         image.src = svgDataUrl;
     }
 
-    // --- Drag handlers (kept from original for snap-off feature) ---
-    function dragstarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-        d.startX = d.x;
-        d.startY = d.y;
-    }
+    // --- SIMPLIFIED Drag Handlers ---
+function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
 
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-        const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
-        if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD && countNotionalWords(d.text) <= 1) {
-            d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', true);
-        } else {
-            d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
-        }
-    }
+function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+}
 
-    function dragended(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
-        const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
-        
-        // CORRECTED: Added the logic check here as well.
-        if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD && countNotionalWords(d.text) <= 1) {
-            const cluster = graphClusters.get(d.clusterId);
-            if (cluster) {
-                const nodesToRemove = new Set([d.id]);
-                const exampleNode = cluster.nodes.find(n => n.sourceNodeId === d.id);
-                if (exampleNode) nodesToRemove.add(exampleNode.id);
-
-                cluster.nodes = cluster.nodes.filter(n => !nodesToRemove.has(n.id));
-                cluster.links = cluster.links.filter(l => !nodesToRemove.has(l.target.id || l.target));
-            }
-            handleWordSubmitted(d.text, true, d);
-        } else {
-            d.fx = null;
-            d.fy = null;
-        }
-    }
+function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    // Unfix the node's position, letting the simulation place it back
+    d.fx = null;
+    d.fy = null;
+}
 
     // --- Initialization ---
     renderInitialPrompt();

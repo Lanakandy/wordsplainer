@@ -312,19 +312,6 @@ html[data-theme='dark'] .node-example .node-html-content {
     text-decoration-style: solid;
 }
 
-/* --- Detaching Node Animation --- */
-.node.node-detaching circle {
-    stroke: var(--primary-coral);
-    stroke-width: 4px;
-    stroke-dasharray: 8 4;
-    animation: pulse 1.5s infinite;
-}
-@keyframes pulse {
-    0% { stroke-opacity: 1; }
-    50% { stroke-opacity: 0.5; }
-    100% { stroke-opacity: 1; }
-}
-
 /* --- Loading Spinner on Canvas --- */
 .loading-spinner {
     animation: spin 2s linear infinite;
