@@ -43,7 +43,7 @@ function getLLMPrompt(type, register, word, options = {}) {
             taskInstruction = `Provide words that often appear together with the target word.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
         case 'idioms':
-            taskInstruction = `Provide idioms that use the word.\nJSON format: {"nodes": [{"text": "idiom"}]}`;
+            taskInstruction = `Provide idioms or set phrases that use the word.\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
         case 'synonyms':
         case 'opposites':
