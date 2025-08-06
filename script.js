@@ -550,29 +550,35 @@ nodeGroups.each(function(d) {
             return;
         }
 
-        // --- NEW LAYOUT LOGIC ---
+        // ⭐ FIX: Calculate the initial position BEFORE creating the node data.
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const currentTransform = d3.zoomTransform(svg.node());
+        const initialX = (width / 2 - currentTransform.x) / currentTransform.k;
+        const initialY = (height / 2 - currentTransform.y) / currentTransform.k;
+        
         const centralNodeData = { 
             word: lowerWord, id: `central-${lowerWord}`, 
             isCentral: true, type: 'central', clusterId: lowerWord,
-            visible: true
-            // x/y/fx/fy will be set by repositionAllClusters
+            visible: true,
+            // ⭐ FIX: Assign the valid initial coordinates immediately.
+            x: initialX,
+            y: initialY
+            // fx and fy will be set by repositionAllClusters, but x/y must exist now.
         };
         
         centralNodes.push(centralNodeData);
         graphClusters.set(lowerWord, { 
             nodes: [centralNodeData], 
             links: [], 
-            // The center will also be set by repositionAllClusters
-            center: { x: 0, y: 0 }, 
+            center: { x: initialX, y: initialY }, 
             currentView: 'meaning' 
         });
 
-        // Reposition ALL clusters, including the new one
+        // Reposition ALL clusters, which will now correctly set the fx/fy values.
         repositionAllClusters();
         
-        // Smoothly pan the camera to the new node, which is now perfectly centered
+        // This pan will now work correctly as the node has a valid position from the start.
         panToNode(centralNodeData, 1.3);
-
     }
 
     currentActiveCentral = lowerWord;
