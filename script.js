@@ -202,82 +202,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Enhanced cluster positioning to prevent overlaps
     function positionNewCluster(sourceNode) {
-    const { width, height } = graphContainer.getBoundingClientRect();
-    const existingCenters = Array.from(graphClusters.values()).map(c => c.center);
-    
-    let attempts = 0;
-    let newCenter;
-    const minDistance = 400; // Minimum distance between cluster centers
-
-    // ⭐️ KEY CHANGE: Determine the ideal starting point for the new cluster.
-    let idealStartPoint;
-    if (sourceNode && typeof sourceNode.x === 'number') {
-        // If branching from an existing node, the ideal point is near that node.
-        idealStartPoint = { x: sourceNode.x, y: sourceNode.y };
-    } else {
-        // If adding a new word, the ideal point is the EXACT CENTER of the current screen view.
-        const currentTransform = d3.zoomTransform(svg.node());
-        idealStartPoint = {
-            x: (width / 2 - currentTransform.x) / currentTransform.k,
-            y: (height / 2 - currentTransform.y) / currentTransform.k
-        };
-    }
-    
-    do {
-        // On the first attempt (attempts === 0), try to place the node at the ideal spot.
-        // If there's a source, add an initial distance. If not, place it right at the center.
-        // For subsequent attempts, spiral outwards from the ideal point.
-        const angle = (attempts > 0) ? (attempts * 45) * (Math.PI / 180) : 0; // Use 45-degree steps for spiral
-        const distance = sourceNode 
-            ? 450 + (attempts * 60) // Larger distance when branching off
-            : attempts * 150;        // Tighter spiral from view center
-
-        newCenter = {
-            x: idealStartPoint.x + Math.cos(angle) * distance,
-            y: idealStartPoint.y + Math.sin(angle) * distance
-        };
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const existingCenters = Array.from(graphClusters.values()).map(c => c.center);
         
-        // Check distance from existing clusters to avoid overlap
-        const tooClose = existingCenters.some(center => {
-            const dist = Math.sqrt(
-                Math.pow(newCenter.x - center.x, 2) + 
-                Math.pow(newCenter.y - center.y, 2)
-            );
-            return dist < minDistance;
+        let attempts = 0;
+        let newCenter;
+        const minDistance = 400; // Minimum distance between cluster centers
+
+        let idealStartPoint;
+        if (sourceNode && typeof sourceNode.x === 'number') {
+            idealStartPoint = { x: sourceNode.x, y: sourceNode.y };
+        } else {
+            const currentTransform = d3.zoomTransform(svg.node());
+            idealStartPoint = {
+                x: (width / 2 - currentTransform.x) / currentTransform.k,
+                y: (height / 2 - currentTransform.y) / currentTransform.k
+            };
+        }
+        
+        do {
+            const angle = (attempts > 0) ? (attempts * 45) * (Math.PI / 180) : 0;
+            const distance = sourceNode 
+                ? 450 + (attempts * 60)
+                : attempts * 150;
+
+            newCenter = {
+                x: idealStartPoint.x + Math.cos(angle) * distance,
+                y: idealStartPoint.y + Math.sin(angle) * distance
+            };
+            
+            const tooClose = existingCenters.some(center => {
+                const dist = Math.sqrt(
+                    Math.pow(newCenter.x - center.x, 2) + 
+                    Math.pow(newCenter.y - center.y, 2)
+                );
+                return dist < minDistance;
+            });
+            
+            if (!tooClose) break;
+            attempts++;
+            
+        } while (attempts < 12);
+        
+        return newCenter;
+    }
+
+    /**
+     * Counts the number of "notional" (meaningful) words in a string.
+     * This helps differentiate single words from phrases.
+     * @param {string} text The text to analyze.
+     * @returns {number} The count of notional words.
+     */
+    function countNotionalWords(text) {
+        if (!text || typeof text !== 'string') {
+            return 0;
+        }
+        // A simple list of common English stopwords.
+        const stopwords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of', 'with', 'by', 'is', 'am', 'are', 'was', 'were']);
+        
+        const words = text.toLowerCase().split(/\s+/);
+        
+        const notionalWords = words.filter(word => {
+            const cleanedWord = word.replace(/[.,!?;:"]+/g, ''); // Remove punctuation
+            // A word is considered "notional" if it's not a stopword and has more than 1 letter.
+            return cleanedWord.length > 1 && !stopwords.has(cleanedWord);
         });
         
-        if (!tooClose) break; // Found a good spot
-        attempts++;
-        
-    } while (attempts < 12); // Increased attempts for denser graphs
-    
-    // The boundary check in the boundary force is usually enough, but this is a good fallback.
-    // newCenter.x = Math.max(150, Math.min(width - 150, newCenter.x));
-    // newCenter.y = Math.max(150, Math.min(height - 150, newCenter.y));
-    
-    return newCenter;
-}
-
-* @param {string} text The text to analyze.
- * @returns {number} The count of notional words.
- */
-function countNotionalWords(text) {
-    if (!text || typeof text !== 'string') {
-        return 0;
+        return notionalWords.length;
     }
-    // A simple list of common English stopwords.
-    const stopwords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of', 'with', 'by', 'is', 'am', 'are', 'was', 'were']);
-    
-    const words = text.toLowerCase().split(/\s+/);
-    
-    const notionalWords = words.filter(word => {
-        const cleanedWord = word.replace(/[.,!?;:"]+/g, ''); // Remove punctuation
-        // A word is considered "notional" if it's not a stopword and has more than 1 letter.
-        return cleanedWord.length > 1 && !stopwords.has(cleanedWord);
-    });
-    
-    return notionalWords.length;
-}
 
     // Enhanced graph update with smooth animations
     function updateGraph() {
@@ -453,32 +445,34 @@ function countNotionalWords(text) {
                 }, 100);
                 
             } else {
-    // Regular peripheral nodes (synonyms, collocations, etc.)
-    selection.select("circle")
-        .attr("r", 18)
-        .style("transition", "all 0.2s ease");
-    
-    const notionalWordCount = countNotionalWords(d.text);
+                // Regular peripheral nodes (synonyms, collocations, etc.)
+                selection.select("circle")
+                    .attr("r", 18)
+                    .style("transition", "all 0.2s ease");
+                
+                const notionalWordCount = countNotionalWords(d.text);
 
-    // Apply the new interaction rule
-    if (notionalWordCount > 1) {
-        // --- MULTI-WORD NODE ---
-        // It's a phrase, so make individual words clickable.
-        createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true, d));
-        // Disable the "drag" cursor for the node itself.
-        selection.style("cursor", "default");
+                // Apply the new interaction rule
+                if (notionalWordCount > 1) {
+                    // --- MULTI-WORD NODE ---
+                    // It's a phrase, so make individual words clickable.
+                    createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true, d));
+                    // Disable the "drag" cursor for the node itself.
+                    selection.style("cursor", "default");
 
-    } else {
-        // --- SINGLE-WORD NODE ---
-        // It's a single word, so render it as plain text and keep it draggable.
-        textElement
-            .text(d.text || d.id)
-            .attr("dy", "0.3em")
-            .style("font-size", "12px");
-        // Ensure the "drag" cursor is active.
-        selection.style("cursor", "pointer");
-    }
-}
+                } else {
+                    // --- SINGLE-WORD NODE ---
+                    // It's a single word, so render it as plain text and keep it draggable.
+                    textElement
+                        .text(d.text || d.id)
+                        .attr("dy", "0.3em")
+                        .style("font-size", "12px");
+                    // Ensure the "drag" cursor is active.
+                    selection.style("cursor", "pointer");
+                }
+            }
+        }); // <-- CORRECTED: Properly close the .each() call
+
         graphGroup.selectAll(".link")
             .style("stroke", d => {
                 if (d.type === 'cross-cluster') return 'var(--accent-orange)';
@@ -506,89 +500,80 @@ function countNotionalWords(text) {
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
           if (d.type !== 'add') {
-        selection.transition()
-            .duration(200)
-            .ease(d3.easeCircleOut)
-            .attr("transform", `translate(${d.x},${d.y}) scale(1.1)`);
-    }
+            selection.transition()
+                .duration(200)
+                .ease(d3.easeCircleOut)
+                .attr("transform", `translate(${d.x},${d.y}) scale(1.1)`);
+        }
     
-    // Add glow effect (this part is fine)
-    if (d.isCentral) {
-        selection.select("circle")
-            .transition()
-            .duration(200)
-            .style("filter", "drop-shadow(0 0 20px var(--primary-coral))");
-    } else if (d.type !== 'example' && d.type !== 'add') { // Also exclude 'add' node from stroke effect
-        selection.select("circle")
-            .transition()
-            .duration(200)
-            .style("stroke", "var(--primary-coral)")
-            .style("stroke-width", "2px");
-    }
+        if (d.isCentral) {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("filter", "drop-shadow(0 0 20px var(--primary-coral))");
+        } else if (d.type !== 'example' && d.type !== 'add') {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("stroke", "var(--primary-coral)")
+                .style("stroke-width", "2px");
+        }
     
-    // Enhanced tooltip logic (this part is fine)
-    let tooltipText = '';
-    if (d.isCentral) {
-        const cluster = graphClusters.get(d.clusterId);
-        tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
-    } else if (d.type === 'add') {
-        const cluster = graphClusters.get(d.clusterId);
-        tooltipText = viewState.hasMore ? 
-            `Load more ${cluster?.currentView || 'items'}` : 
-            'No more items to load';
-    } else if (d.text && !d.isCentral && d.type !== 'example' && d.type !== 'add') {
-    if (countNotionalWords(d.text) > 1) {
-        // Tooltip for multi-word nodes (not draggable)
-        tooltipText = `Click a word to explore it individually`;
-    } else {
-        // Tooltip for single-word nodes (draggable)
-        tooltipText = `Click for examples • Drag to explore "${d.text}"`;
-    }
-}
+        let tooltipText = '';
+        if (d.isCentral) {
+            const cluster = graphClusters.get(d.clusterId);
+            tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
+        } else if (d.type === 'add') {
+            const cluster = graphClusters.get(d.clusterId);
+            tooltipText = viewState.hasMore ? 
+                `Load more ${cluster?.currentView || 'items'}` : 
+                'No more items to load';
+        } else if (d.text && !d.isCentral && d.type !== 'example' && d.type !== 'add') {
+            if (countNotionalWords(d.text) > 1) {
+                tooltipText = `Click a word to explore it individually`;
+            } else {
+                tooltipText = `Click for examples • Drag to explore "${d.text}"`;
+            }
+        }
+            
+        if (tooltipText) {
+            tooltip.textContent = tooltipText;
+            tooltip.classList.add('visible');
+            tooltip.style.transform = 'translateY(-10px)';
+        }
         
-    if (tooltipText) {
-        tooltip.textContent = tooltipText;
-        tooltip.classList.add('visible');
-        tooltip.style.transform = 'translateY(-10px)';
+        svg.on('mousemove.tooltip', (e) => {
+            tooltip.style.left = `${e.pageX + 15}px`;
+            tooltip.style.top = `${e.pageY - 30}px`;
+        });
     }
-    
-    svg.on('mousemove.tooltip', (e) => {
-        tooltip.style.left = `${e.pageX + 15}px`;
-        tooltip.style.top = `${e.pageY - 30}px`;
-    });
-}
 
     function handleMouseOut(event, d) {
-    const selection = d3.select(event.currentTarget);
-    
-    // ⭐ THE DEFINITIVE FIX:
-    // Only animate the node back to its original scale if it's NOT an 'add' node.
-    // This synchronizes the logic with handleMouseOver and stops the conflicting animations.
-    if (d.type !== 'add') {
-        selection.transition()
-            .duration(200)
-            .ease(d3.easeCircleOut)
-            .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+        const selection = d3.select(event.currentTarget);
+        
+        if (d.type !== 'add') {
+            selection.transition()
+                .duration(200)
+                .ease(d3.easeCircleOut)
+                .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+        }
+        
+        if (d.isCentral) {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+        } else if (d.type !== 'example' && d.type !== 'add') {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("stroke", "none");
+        }
+        
+        tooltip.classList.remove('visible');
+        tooltip.style.transform = 'translateY(0)';
+        svg.on('mousemove.tooltip', null);
     }
-    
-    // Remove glow effects (this part is already correct)
-    if (d.isCentral) {
-        selection.select("circle")
-            .transition()
-            .duration(200)
-            .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-    } else if (d.type !== 'example' && d.type !== 'add') { // Correctly excludes 'add'
-        selection.select("circle")
-            .transition()
-            .duration(200)
-            .style("stroke", "none");
-    }
-    
-    // Hide tooltip (this part is fine)
-    tooltip.classList.remove('visible');
-    tooltip.style.transform = 'translateY(0)';
-    svg.on('mousemove.tooltip', null);
-}
 
     function handleNodeClick(event, d) {
         if (event.defaultPrevented) return;
@@ -1073,7 +1058,6 @@ function countNotionalWords(text) {
     }
     
     function saveAsPng() {
-        // ... (saveAsPng function is complex and remains unchanged) ...
         if (centralNodes.length === 0) return alert("Nothing to save yet!");
     
         const svgEl = svg.node();
@@ -1184,10 +1168,11 @@ function countNotionalWords(text) {
         if (!event.active) simulation.alphaTarget(0);
         d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
         const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
-        if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD) {
+        
+        // CORRECTED: Added the logic check here as well.
+        if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD && countNotionalWords(d.text) <= 1) {
             const cluster = graphClusters.get(d.clusterId);
             if (cluster) {
-                // Hide the node and its examples before detaching
                 const nodesToRemove = new Set([d.id]);
                 const exampleNode = cluster.nodes.find(n => n.sourceNodeId === d.id);
                 if (exampleNode) nodesToRemove.add(exampleNode.id);

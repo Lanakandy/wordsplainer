@@ -410,6 +410,10 @@ html[data-theme='dark'] .node.node-example .example-bg {
     position: relative; overflow: hidden; width: 38px;
     transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+html[data-theme='dark'] #canvas-controls .control-btn:hover {
+    color: var(--text-light); /* Or simply 'white' */
+}
 .register-state {
     position: absolute; width: 100%; height: 100%; left: 0; top: 0;
     display: flex; justify-content: center; align-items: center;
