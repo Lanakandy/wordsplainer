@@ -258,6 +258,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return newCenter;
 }
 
+* @param {string} text The text to analyze.
+ * @returns {number} The count of notional words.
+ */
+function countNotionalWords(text) {
+    if (!text || typeof text !== 'string') {
+        return 0;
+    }
+    // A simple list of common English stopwords.
+    const stopwords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of', 'with', 'by', 'is', 'am', 'are', 'was', 'were']);
+    
+    const words = text.toLowerCase().split(/\s+/);
+    
+    const notionalWords = words.filter(word => {
+        const cleanedWord = word.replace(/[.,!?;:"]+/g, ''); // Remove punctuation
+        // A word is considered "notional" if it's not a stopword and has more than 1 letter.
+        return cleanedWord.length > 1 && !stopwords.has(cleanedWord);
+    });
+    
+    return notionalWords.length;
+}
+
     // Enhanced graph update with smooth animations
     function updateGraph() {
         const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
@@ -432,18 +453,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 100);
                 
             } else {
-                // This correctly handles all other types (synonym, opposite, etc.) that are circles
-                selection.select("circle")
-                    .attr("r", 18)
-                    .style("transition", "all 0.2s ease");
-                    
-                textElement
-                    .text(d.text || d.id)
-                    .attr("dy", "0.3em")
-                    .style("font-size", "12px");
-            }
-        });
+    // Regular peripheral nodes (synonyms, collocations, etc.)
+    selection.select("circle")
+        .attr("r", 18)
+        .style("transition", "all 0.2s ease");
+    
+    const notionalWordCount = countNotionalWords(d.text);
 
+    // Apply the new interaction rule
+    if (notionalWordCount > 1) {
+        // --- MULTI-WORD NODE ---
+        // It's a phrase, so make individual words clickable.
+        createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true, d));
+        // Disable the "drag" cursor for the node itself.
+        selection.style("cursor", "default");
+
+    } else {
+        // --- SINGLE-WORD NODE ---
+        // It's a single word, so render it as plain text and keep it draggable.
+        textElement
+            .text(d.text || d.id)
+            .attr("dy", "0.3em")
+            .style("font-size", "12px");
+        // Ensure the "drag" cursor is active.
+        selection.style("cursor", "pointer");
+    }
+}
         graphGroup.selectAll(".link")
             .style("stroke", d => {
                 if (d.type === 'cross-cluster') return 'var(--accent-orange)';
@@ -501,9 +536,15 @@ document.addEventListener('DOMContentLoaded', () => {
         tooltipText = viewState.hasMore ? 
             `Load more ${cluster?.currentView || 'items'}` : 
             'No more items to load';
-    } else if (d.text && !d.isCentral && d.type !== 'example') {
+    } else if (d.text && !d.isCentral && d.type !== 'example' && d.type !== 'add') {
+    if (countNotionalWords(d.text) > 1) {
+        // Tooltip for multi-word nodes (not draggable)
+        tooltipText = `Click a word to explore it individually`;
+    } else {
+        // Tooltip for single-word nodes (draggable)
         tooltipText = `Click for examples • Drag to explore "${d.text}"`;
     }
+}
         
     if (tooltipText) {
         tooltip.textContent = tooltipText;
@@ -518,29 +559,36 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 
     function handleMouseOut(event, d) {
-        const selection = d3.select(event.currentTarget);
-        
+    const selection = d3.select(event.currentTarget);
+    
+    // ⭐ THE DEFINITIVE FIX:
+    // Only animate the node back to its original scale if it's NOT an 'add' node.
+    // This synchronizes the logic with handleMouseOver and stops the conflicting animations.
+    if (d.type !== 'add') {
         selection.transition()
             .duration(200)
             .ease(d3.easeCircleOut)
             .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
-        
-        if (d.isCentral) {
-            selection.select("circle")
-                .transition()
-                .duration(200)
-                .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-        } else if (d.type !== 'example') {
-            selection.select("circle")
-                .transition()
-                .duration(200)
-                .style("stroke", "none");
-        }
-        
-        tooltip.classList.remove('visible');
-        tooltip.style.transform = 'translateY(0)';
-        svg.on('mousemove.tooltip', null);
     }
+    
+    // Remove glow effects (this part is already correct)
+    if (d.isCentral) {
+        selection.select("circle")
+            .transition()
+            .duration(200)
+            .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+    } else if (d.type !== 'example' && d.type !== 'add') { // Correctly excludes 'add'
+        selection.select("circle")
+            .transition()
+            .duration(200)
+            .style("stroke", "none");
+    }
+    
+    // Hide tooltip (this part is fine)
+    tooltip.classList.remove('visible');
+    tooltip.style.transform = 'translateY(0)';
+    svg.on('mousemove.tooltip', null);
+}
 
     function handleNodeClick(event, d) {
         if (event.defaultPrevented) return;
@@ -1125,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         d.fx = event.x;
         d.fy = event.y;
         const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
-        if (!d.isCentral && distance > SNAP_OFF_THRESHOLD) {
+        if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD && countNotionalWords(d.text) <= 1) {
             d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', true);
         } else {
             d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
