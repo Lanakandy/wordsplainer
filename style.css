@@ -304,11 +304,13 @@ html[data-theme='dark'] .node-example .node-html-content {
     color: var(--text-link);
     font-weight: 600;
     cursor: pointer;
-    text-decoration: underline;
-    text-decoration-style: dotted;
+    text-decoration: none; /* <--- CHANGE: No underline by default */
+    transition: color 0.2s ease, text-decoration 0.2s ease; /* Added transition for smoothness */
 }
+
 .node .node-html-content .interactive-word:hover {
     color: var(--primary-coral);
+    text-decoration: underline; /* <--- CHANGE: Add underline ONLY on hover */
     text-decoration-style: solid;
 }
 
