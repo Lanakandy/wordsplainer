@@ -235,22 +235,33 @@ html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
 
 /* --- 'Add More' Node --- */
 .node.node-add circle {
-    fill: var(--primary-dark);
+    /* Make it visible: transparent fill with a thicker, bright stroke */
+    fill: transparent;
     stroke: var(--primary-coral);
-    stroke-width: 2px;
-    stroke-dasharray: 4 2;
+    stroke-width: 2.5px;
+    stroke-dasharray: 5 3;
     transform-origin: center;
-    transition: all 0.3s ease, transform 0.4s ease;
+    transition: all 0.3s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.node.node-add:hover circle {
-    transform: rotate(90deg);
-    stroke-dasharray: none;
-    fill: var(--primary-coral);
-}
+
 .node.node-add text {
-    fill: var(--accent-light);
+    /* Match the text color to the stroke for a cohesive look */
+    fill: var(--primary-coral);
     font-size: 24px;
     font-weight: 300;
+    transition: fill 0.3s ease;
+}
+
+/* Define a clean, self-contained hover effect */
+.node.node-add:hover circle {
+    fill: var(--primary-coral);
+    stroke-dasharray: none; /* Make the stroke solid */
+    transform: rotate(90deg);
+}
+
+.node.node-add:hover text {
+    /* Change text to white for contrast when the circle fills in */
+    fill: var(--accent-white);
 }
 
 /* --- Example/Text Box Node --- */

@@ -202,51 +202,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Enhanced cluster positioning to prevent overlaps
     function positionNewCluster(sourceNode) {
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const existingCenters = Array.from(graphClusters.values()).map(c => c.center);
-        
-        let attempts = 0;
-        let newCenter;
-        const minDistance = 400; // Minimum distance between cluster centers
-        
-        do {
-            if (sourceNode && typeof sourceNode.x === 'number') {
-                // Position relative to source node with some randomization
-                const angle = (attempts * 60) * (Math.PI / 180); // Try different angles
-                const distance = 450 + (attempts * 50);
-                newCenter = {
-                    x: sourceNode.x + Math.cos(angle) * distance,
-                    y: sourceNode.y + Math.sin(angle) * distance
-                };
-            } else {
-                // Random positioning with bias toward center
-                const centerBias = 0.3;
-                newCenter = {
-                    x: width * (centerBias + Math.random() * (1 - 2 * centerBias)),
-                    y: height * (centerBias + Math.random() * (1 - 2 * centerBias))
-                };
-            }
-            
-            // Check distance from existing clusters
-            const tooClose = existingCenters.some(center => {
-                const distance = Math.sqrt(
-                    Math.pow(newCenter.x - center.x, 2) + 
-                    Math.pow(newCenter.y - center.y, 2)
-                );
-                return distance < minDistance;
-            });
-            
-            if (!tooClose) break;
-            attempts++;
-            
-        } while (attempts < 8);
-        
-        // Ensure within bounds
-        newCenter.x = Math.max(150, Math.min(width - 150, newCenter.x));
-        newCenter.y = Math.max(150, Math.min(height - 150, newCenter.y));
-        
-        return newCenter;
+    const { width, height } = graphContainer.getBoundingClientRect();
+    const existingCenters = Array.from(graphClusters.values()).map(c => c.center);
+    
+    let attempts = 0;
+    let newCenter;
+    const minDistance = 400; // Minimum distance between cluster centers
+
+    // ⭐️ KEY CHANGE: Determine the ideal starting point for the new cluster.
+    let idealStartPoint;
+    if (sourceNode && typeof sourceNode.x === 'number') {
+        // If branching from an existing node, the ideal point is near that node.
+        idealStartPoint = { x: sourceNode.x, y: sourceNode.y };
+    } else {
+        // If adding a new word, the ideal point is the EXACT CENTER of the current screen view.
+        const currentTransform = d3.zoomTransform(svg.node());
+        idealStartPoint = {
+            x: (width / 2 - currentTransform.x) / currentTransform.k,
+            y: (height / 2 - currentTransform.y) / currentTransform.k
+        };
     }
+    
+    do {
+        // On the first attempt (attempts === 0), try to place the node at the ideal spot.
+        // If there's a source, add an initial distance. If not, place it right at the center.
+        // For subsequent attempts, spiral outwards from the ideal point.
+        const angle = (attempts > 0) ? (attempts * 45) * (Math.PI / 180) : 0; // Use 45-degree steps for spiral
+        const distance = sourceNode 
+            ? 450 + (attempts * 60) // Larger distance when branching off
+            : attempts * 150;        // Tighter spiral from view center
+
+        newCenter = {
+            x: idealStartPoint.x + Math.cos(angle) * distance,
+            y: idealStartPoint.y + Math.sin(angle) * distance
+        };
+        
+        // Check distance from existing clusters to avoid overlap
+        const tooClose = existingCenters.some(center => {
+            const dist = Math.sqrt(
+                Math.pow(newCenter.x - center.x, 2) + 
+                Math.pow(newCenter.y - center.y, 2)
+            );
+            return dist < minDistance;
+        });
+        
+        if (!tooClose) break; // Found a good spot
+        attempts++;
+        
+    } while (attempts < 12); // Increased attempts for denser graphs
+    
+    // The boundary check in the boundary force is usually enough, but this is a good fallback.
+    // newCenter.x = Math.max(150, Math.min(width - 150, newCenter.x));
+    // newCenter.y = Math.max(150, Math.min(height - 150, newCenter.y));
+    
+    return newCenter;
+}
 
     // Enhanced graph update with smooth animations
     function updateGraph() {
@@ -460,49 +470,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
-        
+          if (d.type !== 'add') {
         selection.transition()
             .duration(200)
             .ease(d3.easeCircleOut)
             .attr("transform", `translate(${d.x},${d.y}) scale(1.1)`);
-        
-        if (d.isCentral) {
-            selection.select("circle")
-                .transition()
-                .duration(200)
-                .style("filter", "drop-shadow(0 0 20px var(--primary-coral))");
-        } else if (d.type !== 'example') {
-            selection.select("circle")
-                .transition()
-                .duration(200)
-                .style("stroke", "var(--primary-coral)")
-                .style("stroke-width", "2px");
-        }
-        
-        let tooltipText = '';
-        if (d.isCentral) {
-            const cluster = graphClusters.get(d.clusterId);
-            tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
-        } else if (d.type === 'add') {
-            const cluster = graphClusters.get(d.clusterId);
-            tooltipText = viewState.hasMore ? 
-                `Load more ${cluster?.currentView || 'items'}` : 
-                'No more items to load';
-        } else if (d.text && !d.isCentral && d.type !== 'example') {
-            tooltipText = `Click for examples • Drag to explore "${d.text}"`;
-        }
-            
-        if (tooltipText) {
-            tooltip.textContent = tooltipText;
-            tooltip.classList.add('visible');
-            tooltip.style.transform = 'translateY(-10px)';
-        }
-        
-        svg.on('mousemove.tooltip', (e) => {
-            tooltip.style.left = `${e.pageX + 15}px`;
-            tooltip.style.top = `${e.pageY - 30}px`;
-        });
     }
+    
+    // Add glow effect (this part is fine)
+    if (d.isCentral) {
+        selection.select("circle")
+            .transition()
+            .duration(200)
+            .style("filter", "drop-shadow(0 0 20px var(--primary-coral))");
+    } else if (d.type !== 'example' && d.type !== 'add') { // Also exclude 'add' node from stroke effect
+        selection.select("circle")
+            .transition()
+            .duration(200)
+            .style("stroke", "var(--primary-coral)")
+            .style("stroke-width", "2px");
+    }
+    
+    // Enhanced tooltip logic (this part is fine)
+    let tooltipText = '';
+    if (d.isCentral) {
+        const cluster = graphClusters.get(d.clusterId);
+        tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
+    } else if (d.type === 'add') {
+        const cluster = graphClusters.get(d.clusterId);
+        tooltipText = viewState.hasMore ? 
+            `Load more ${cluster?.currentView || 'items'}` : 
+            'No more items to load';
+    } else if (d.text && !d.isCentral && d.type !== 'example') {
+        tooltipText = `Click for examples • Drag to explore "${d.text}"`;
+    }
+        
+    if (tooltipText) {
+        tooltip.textContent = tooltipText;
+        tooltip.classList.add('visible');
+        tooltip.style.transform = 'translateY(-10px)';
+    }
+    
+    svg.on('mousemove.tooltip', (e) => {
+        tooltip.style.left = `${e.pageX + 15}px`;
+        tooltip.style.top = `${e.pageY - 30}px`;
+    });
+}
 
     function handleMouseOut(event, d) {
         const selection = d3.select(event.currentTarget);
