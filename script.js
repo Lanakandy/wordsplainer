@@ -496,11 +496,17 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         };
         
         setTimeout(() => {
-            if (centralNodeData) {
-               centralNodeData.fx = null;
-               centralNodeData.fy = null;
-            }
-        }, 1500);
+            const cluster = graphClusters.get(lowerWord);
+    if (cluster) {
+        // Unpin ALL nodes in the new cluster simultaneously
+        cluster.nodes.forEach(node => {
+            node.fx = null;
+            node.fy = null;
+        });
+        // Give the simulation a "kick" to let the forces take over smoothly
+        simulation.alpha(0.3).restart();
+    }
+}, 1500);
 
         centralNodes.push(centralNodeData);
         graphClusters.set(lowerWord, { 
@@ -526,9 +532,10 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
     const cluster = graphClusters.get(currentActiveCentral);
     if (!cluster) return renderError('Invalid word cluster.');
 
-    // --- CACHE CHECK ---
+    // --- CACHE CHECK --- (Logic for cache hits remains the same)
     const alreadyLoaded = cluster.nodes.some(n => n.type === view);
     if (alreadyLoaded) {
+        // ... (your existing cache hit logic is fine, no changes needed here) ...
         console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
         cluster.currentView = view;
         currentView = view; 
@@ -543,7 +550,7 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             .delay((d,i) => i * 30)
             .ease(d3.easeCubicIn)
             .attr("transform", d => `translate(${cluster.center.x}, ${cluster.center.y}) scale(0)`)
-            .on("end", function() { d3.select(this).remove(); }); // Ensure removal after transition
+            .on("end", function() { d3.select(this).remove(); });
 
         cluster.nodes.forEach(node => {
             node.visible = node.isCentral || node.type === 'add' || node.type === view || (node.type === 'example' && cluster.nodes.find(n => n.id === node.sourceNodeId && n.type === view));
@@ -568,8 +575,12 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
             if (!node.isCentral && node.type !== 'add') node.visible = false;
         });
 
-        // Get the starting position from the cluster's center point.
-        const startPos = cluster.center;
+        // ⭐ THE FIX PART 1: Get the parent's exact position AND pinned status ⭐
+        const centralNode = cluster.nodes.find(n => n.isCentral);
+        if (!centralNode) throw new Error("Could not find central node for cluster.");
+
+        const startPos = { x: centralNode.x, y: centralNode.y };
+        const startPin = { fx: centralNode.fx, fy: centralNode.fy }; // Get the pinned coordinates
 
         data.nodes.forEach(nodeData => {
             if (!nodeData || typeof nodeData.text !== 'string') return;
@@ -583,9 +594,11 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
                 clusterId: currentActiveCentral,
                 visible: true,
                 lang: options.language,
-                // ⭐ THE FIX: Initialize position to the cluster's center ⭐
                 x: startPos.x,
-                y: startPos.y
+                y: startPos.y,
+                // Pin the new child node to the same spot as its parent
+                fx: startPin.fx,
+                fy: startPin.fy
             };
 
             if (view === 'example' || view === 'meaning') {
@@ -610,9 +623,10 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
                 id: addNodeId, 
                 type: 'add', 
                 clusterId: currentActiveCentral,
-                // Also give the 'add' button a starting position
                 x: startPos.x,
-                y: startPos.y
+                y: startPos.y,
+                fx: startPin.fx, // Also pin the '+' button
+                fy: startPin.fy
             };
             cluster.nodes.push(addNode);
             cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
