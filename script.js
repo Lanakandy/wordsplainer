@@ -364,23 +364,29 @@ async function toggleExampleForNode(nodeData) {
         updateGraph();
     } else {
         try {
-            // ⭐ MODIFICATION: Build a more intelligent request body
+            // ⭐ MODIFICATION: This function is now a smart dispatcher.
             const requestBody = {
                 type: 'generateExample',
                 word: nodeData.text, // The word/phrase from the clicked node
-                register: currentRegister
+                register: currentRegister,
+                sourceNodeType: nodeData.type // e.g., 'meaning', 'idioms', 'translation'
             };
 
-            // If it's a context node, add the central word and context
+            // Add specific context based on the node type
+            if (nodeData.type === 'meaning' || nodeData.type === 'context' || nodeData.type === 'translation') {
+                requestBody.centralWord = nodeData.clusterId;
+            }
+            if (nodeData.type === 'meaning') {
+                requestBody.definition = nodeData.text;
+            }
             if (nodeData.type === 'context') {
-                requestBody.centralWord = nodeData.clusterId; // e.g., "mitigate"
-                requestBody.context = nodeData.text;         // e.g., "environmental science"
+                requestBody.context = nodeData.text;
             }
-            // If it's an idiom node, flag its original type
-            else if (nodeData.type === 'idioms') {
-                requestBody.sourceNodeType = 'idioms';
+            if (nodeData.type === 'translation') {
+                requestBody.translation = nodeData.text;
+                requestBody.language = nodeData.lang; // Use the language code we stored
             }
-
+            
             const response = await fetch('/.netlify/functions/wordsplainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -394,19 +400,26 @@ async function toggleExampleForNode(nodeData) {
 
             const data = await response.json();
 
-            if (data && data.example) {
-                const exId = `${nodeData.id}-ex`;
-                
-                // ⭐ MODIFICATION: Check for the new 'explanation' field
-                let exampleText = data.example;
+            let exampleText = null;
+
+            // Handle the different possible response shapes
+            if (data.english_example && data.translated_example) {
+                // Bilingual example for translations
+                exampleText = `${data.english_example}\n${data.translated_example}`;
+            } else if (data.example) {
+                // Standard example (for meaning, context, idioms, etc.)
+                exampleText = data.example;
                 if (data.explanation) {
-                    // Append the explanation in parentheses for a clean look
+                    // Append explanation if it exists (for idioms)
                     exampleText += `\n\n(${data.explanation})`;
                 }
+            }
 
+            if (exampleText) {
+                const exId = `${nodeData.id}-ex`;
                 const exNode = {
                     id: exId,
-                    text: exampleText, // Use the potentially combined text
+                    text: exampleText,
                     type: 'example',
                     sourceNodeId: nodeData.id,
                     clusterId: nodeData.clusterId
@@ -415,7 +428,7 @@ async function toggleExampleForNode(nodeData) {
                 cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
                 updateGraph();
             } else {
-                throw new Error('No example received from server');
+                throw new Error('No valid example received from server');
             }
         } catch (error) {
             console.error("Error getting example:", error);
@@ -527,7 +540,7 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         });
 
         // Add new nodes from the fetch
-        data.nodes.forEach(nodeData => {
+         data.nodes.forEach(nodeData => {
             if (!nodeData || typeof nodeData.text !== 'string') return;
             const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
             if (cluster.nodes.some(n => n.id === nodeId)) return;
@@ -537,13 +550,14 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
                 id: nodeId,
                 type: view,
                 clusterId: currentActiveCentral,
-                visible: true // The new nodes are visible
+                visible: true,
+                // ⭐ CRITICAL FIX: Attach the language code to the node itself
+                lang: options.language 
             };
             cluster.nodes.push(newNode);
             cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
         });
         
-        // Ensure the 'add' node exists and is visible
         const addNodeId = `add-${currentActiveCentral}`;
         let addNode = cluster.nodes.find(n => n.id === addNodeId);
         if (!addNode) {
@@ -663,7 +677,8 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
     if (event.defaultPrevented) return;
 
     event.stopPropagation();
-    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context'];
+    // ⭐ MODIFICATION: Add 'meaning' and 'translation' to the list of example providers.
+    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
 
     // If it's a node that provides examples, toggle them.
     if (exampleTypes.includes(d.type)) {
@@ -677,10 +692,6 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
     // If it's the '+' button, fetch more.
     else if (d.type === 'add') {
         fetchMoreNodes();
-    }
-    // Handle specific example types.
-    else if (d.type === 'translation') {
-        toggleTranslationExamples(d);
     }
 }
 
