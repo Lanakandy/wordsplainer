@@ -1,3 +1,5 @@
+// --- START OF FILE script.js ---
+
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -24,12 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (registerToggleBtn) {
         registerToggleBtn.addEventListener('click', () => {
             registerToggleBtn.classList.toggle('is-academic');
-
             const isAcademic = registerToggleBtn.classList.contains('is-academic');
-            
             console.log('Register is now:', isAcademic ? 'Academic' : 'Conversational');
-            
-            });
+        });
     }    
 
     const tooltip = document.getElementById('graph-tooltip');
@@ -49,116 +48,577 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRegister = 'conversational';    
     let viewState = { offset: 0, hasMore: true };
 
-   function getTextBoxSize(text, className) {
-    const measuringSvg = d3.select("#text-measuring-svg");
-    measuringSvg.selectAll("*").remove(); // Clear previous
-
-    const textElement = measuringSvg.append("text")
-        .attr("class", className) // Apply the same class for accurate styling
-        .style("text-anchor", "middle");
-
-    // We need to simulate the multi-line tspan structure
-    const lines = text.split('\n');
-    lines.forEach((line, i) => {
-        textElement.append('tspan')
-            .attr('x', 0)
-            .attr('dy', i === 0 ? '0.3em' : '1.4em')
-            .text(line);
-    });
-
-    const bbox = textElement.node().getBBox();
-    const padding = { x: 20, y: 10 };
-
-    // Clean up
-    measuringSvg.selectAll("*").remove();
-
-    return {
-        width: bbox.width + padding.x,
-        height: bbox.height + padding.y,
-        bbox: bbox // Return the original bbox too, it's useful
-    };
-}
-
-   function stopRegisterButtonAnimation() {
+    function stopRegisterButtonAnimation() {
         if (registerToggleBtn) {
             registerToggleBtn.classList.remove('needs-attention');
         }
     }    
 
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
-    try {
-        console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}`);
-        
-        const response = await fetch('/.netlify/functions/wordsplainer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                word: word,
-                type: type,
-                offset: offset,
-                limit: limit,
-                language: language,
-                register: currentRegister
-            }),
-        });
+        try {
+            console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}`);
+            
+            const response = await fetch('/.netlify/functions/wordsplainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    word: word,
+                    type: type,
+                    offset: offset,
+                    limit: limit,
+                    language: language,
+                    register: currentRegister
+                }),
+            });
 
-        if (!response.ok) {
-            let errorMessage;
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || `Server error: ${response.status}`;
-            } catch (jsonError) {
-                // If we can't parse the error response as JSON, get the text
-                const errorText = await response.text();
-                errorMessage = errorText || `HTTP ${response.status} error`;
+            if (!response.ok) {
+                let errorMessage;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || `Server error: ${response.status}`;
+                } catch (jsonError) {
+                    const errorText = await response.text();
+                    errorMessage = errorText || `HTTP ${response.status} error`;
+                }
+                throw new Error(errorMessage);
             }
-            throw new Error(errorMessage);
+
+            const data = await response.json();
+            console.log("Received data:", data);
+            return data;
+
+        } catch (error) {
+            console.error("fetchData error:", error);
+            throw new Error(`Failed to fetch ${type} for "${word}": ${error.message}`);
         }
-
-        const data = await response.json();
-        console.log("Received data:", data);
-        return data;
-
-    } catch (error) {
-        console.error("fetchData error:", error);
-        // Re-throw with more context
-        throw new Error(`Failed to fetch ${type} for "${word}": ${error.message}`);
     }
-}
 
+    // --- START OF ENHANCED FUNCTIONS (from enhanced_graph_functions.js) ---
+
+    // Enhanced clustering with better spatial distribution
     function forceCluster() {
-        let strength = 0.1;
+        let strength = 0.15;
         return function(alpha) {
             const allNodes = getConsolidatedGraphData().nodes;
+            
             for (let node of allNodes) {
                 if (node.clusterId && graphClusters.has(node.clusterId)) {
                     const cluster = graphClusters.get(node.clusterId);
                     const target = cluster.center;
-                    const strengthFactor = node.isCentral ? 2 : 0.3;
-                    node.vx += (target.x - node.x) * strength * alpha * strengthFactor;
-                    node.vy += (target.y - node.y) * strength * alpha * strengthFactor;
+                    
+                    if (node.isCentral) {
+                        // Central nodes stay at cluster center with strong force
+                        const strengthFactor = 3.0;
+                        node.vx += (target.x - node.x) * strength * alpha * strengthFactor;
+                        node.vy += (target.y - node.y) * strength * alpha * strengthFactor;
+                    } else {
+                        // Peripheral nodes arrange in concentric circles around center
+                        const clusterNodes = cluster.nodes.filter(n => !n.isCentral && n.visible !== false);
+                        const nodeIndex = clusterNodes.indexOf(node);
+                        const totalNodes = clusterNodes.length;
+                        
+                        if (totalNodes > 0) {
+                            // Calculate ideal position in circular arrangement
+                            const radius = Math.min(180 + (Math.floor(nodeIndex / 8) * 60), 300);
+                            const angleStep = (2 * Math.PI) / Math.min(8, totalNodes);
+                            const angle = (nodeIndex % 8) * angleStep + (Math.floor(nodeIndex / 8) * 0.5);
+                            
+                            const idealX = target.x + Math.cos(angle) * radius;
+                            const idealY = target.y + Math.sin(angle) * radius;
+                            
+                            const strengthFactor = 0.4;
+                            node.vx += (idealX - node.x) * strength * alpha * strengthFactor;
+                            node.vy += (idealY - node.y) * strength * alpha * strengthFactor;
+                        }
+                    }
                 }
             }
         };
     }
 
-    const simulation = d3.forceSimulation()
-        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'cross-cluster' ? 200 : 150))
-        .force("charge", d3.forceManyBody().strength(-400))
-        .force("collision", d3.forceCollide().radius(d => {
+    // Enhanced collision detection with adaptive radii
+    function getCollisionRadius(d) {
         if (d.isCentral) {
-            return 45; // Radius for central node
+            return 50; // Larger buffer for central nodes
         }
-        // For text boxes, calculate radius from their stored width/height
-        if (d.width && d.height) {
-            // Use half the diagonal as a good approximation for a bounding circle
-            return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 10; // +10 for padding
+        if (d.type === 'example') {
+            // Dynamic radius based on text content
+            if (d.width && d.height) {
+                return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 15;
+            }
+            return 60; // Default for examples
         }
-        // Default radius for small peripheral nodes (like synonyms)
-        return 20;
-    }))
+        if (d.type === 'add') {
+            return 25;
+        }
+        // Regular peripheral nodes
+        return 30;
+    }
+
+    // Enhanced simulation with better forces
+    const simulation = d3.forceSimulation()
+        .force("link", d3.forceLink()
+            .id(d => d.id)
+            .distance(d => {
+                if (d.type === 'cross-cluster') return 250;
+                if (d.target.type === 'example') return 120;
+                if (d.source.isCentral) return 160;
+                return 100;
+            })
+            .strength(d => {
+                if (d.type === 'cross-cluster') return 0.3;
+                if (d.target.type === 'example') return 0.8;
+                return 0.6;
+            })
+        )
+        .force("charge", d3.forceManyBody()
+            .strength(d => {
+                if (d.isCentral) return -800;
+                if (d.type === 'example') return -300;
+                return -200;
+            })
+            .distanceMax(400)
+        )
+        .force("collision", d3.forceCollide()
+            .radius(getCollisionRadius)
+            .strength(0.8)
+            .iterations(3)
+        )
         .force("cluster", forceCluster())
-        .force("center", d3.forceCenter());
+        .force("center", d3.forceCenter())
+        .force("boundary", () => {
+            // Keep nodes within viewport boundaries
+            const { width, height } = graphContainer.getBoundingClientRect();
+            const margin = 100;
+            
+            const allNodes = getConsolidatedGraphData().nodes;
+            allNodes.forEach(node => {
+                if (node.x < margin) node.x = margin;
+                if (node.x > width - margin) node.x = width - margin;
+                if (node.y < margin) node.y = margin;
+                if (node.y > height - margin) node.y = height - margin;
+            });
+        });
+
+    // Enhanced cluster positioning to prevent overlaps
+    function positionNewCluster(sourceNode) {
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const existingCenters = Array.from(graphClusters.values()).map(c => c.center);
+        
+        let attempts = 0;
+        let newCenter;
+        const minDistance = 400; // Minimum distance between cluster centers
+        
+        do {
+            if (sourceNode && typeof sourceNode.x === 'number') {
+                // Position relative to source node with some randomization
+                const angle = (attempts * 60) * (Math.PI / 180); // Try different angles
+                const distance = 450 + (attempts * 50);
+                newCenter = {
+                    x: sourceNode.x + Math.cos(angle) * distance,
+                    y: sourceNode.y + Math.sin(angle) * distance
+                };
+            } else {
+                // Random positioning with bias toward center
+                const centerBias = 0.3;
+                newCenter = {
+                    x: width * (centerBias + Math.random() * (1 - 2 * centerBias)),
+                    y: height * (centerBias + Math.random() * (1 - 2 * centerBias))
+                };
+            }
+            
+            // Check distance from existing clusters
+            const tooClose = existingCenters.some(center => {
+                const distance = Math.sqrt(
+                    Math.pow(newCenter.x - center.x, 2) + 
+                    Math.pow(newCenter.y - center.y, 2)
+                );
+                return distance < minDistance;
+            });
+            
+            if (!tooClose) break;
+            attempts++;
+            
+        } while (attempts < 8);
+        
+        // Ensure within bounds
+        newCenter.x = Math.max(150, Math.min(width - 150, newCenter.x));
+        newCenter.y = Math.max(150, Math.min(height - 150, newCenter.y));
+        
+        return newCenter;
+    }
+
+    // Enhanced graph update with smooth animations
+    function updateGraph() {
+        const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
+
+        const visibleNodes = allNodes.filter(n => n.visible !== false);
+        const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+        const visibleLinks = allLinks.filter(l => 
+            visibleNodeIds.has(l.source.id || l.source) &&
+            visibleNodeIds.has(l.target.id || l.target)
+        );
+        
+        const { width, height } = graphContainer.getBoundingClientRect();
+        graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
+
+        const textBoxTypes = ['example'];
+
+        // Enhanced link rendering with animations
+        graphGroup.selectAll(".link")
+            .data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+            .join(
+                enter => {
+                    const links = enter.append("line")
+                        .attr("class", d => `link ${textBoxTypes.includes(d.target.type) ? 'link-example' : ''}`)
+                        .style("opacity", 0)
+                        .style("stroke-width", 0);
+                    
+                    links.transition()
+                        .duration(800)
+                        .delay((d, i) => i * 50)
+                        .ease(d3.easeCircleOut)
+                        .style("opacity", 1)
+                        .style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1);
+                    
+                    return links;
+                },
+                update => update.attr("class", d => `link ${textBoxTypes.includes(d.target.type) ? 'link-example' : ''}`),
+                exit => exit.transition()
+                    .duration(400)
+                    .ease(d3.easeCircleIn)
+                    .style("opacity", 0)
+                    .style("stroke-width", 0)
+                    .remove()
+            );
+
+        // Enhanced node rendering with staggered animations
+        const nodeGroups = graphGroup.selectAll(".node")
+            .data(visibleNodes, d => d.id)
+            .join(
+                enter => {
+                    const nodeGroup = enter.append("g")
+                        .attr("class", d => `node ${d.isCentral ? 'central-node' : `node-${d.type}`}`)
+                        .style("opacity", 0)
+                        .attr("transform", d => {
+                            const cluster = graphClusters.get(d.clusterId);
+                            const startPos = cluster ? cluster.center : { x: width/2, y: height/2 };
+                            return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
+                        })
+                        .call(d3.drag()
+                            .on("start", dragstarted)
+                            .on("drag", dragged)
+                            .on("end", dragended)
+                            .filter(event => !event.target.classList.contains('interactive-word'))
+                        )
+                        .on("mouseover", handleMouseOver)
+                        .on("mouseout", handleMouseOut)
+                        .on("click", handleNodeClick);
+
+                    nodeGroup.append(d => 
+                        textBoxTypes.includes(d.type) ? 
+                        document.createElementNS(d3.namespaces.svg, 'rect') : 
+                        document.createElementNS(d3.namespaces.svg, 'circle')
+                    );
+
+                    nodeGroup.append("text");
+
+                    nodeGroup.transition()
+                        .duration(600)
+                        .delay((d, i) => {
+                            if (d.isCentral) return 0;
+                            if (d.type === 'add') return visibleNodes.length * 30;
+                            return i * 80;
+                        })
+                        .ease(d3.easeBackOut.overshoot(1.2))
+                        .style("opacity", 1)
+                        .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`);
+
+                    return nodeGroup;
+                },
+                update => update
+                    .transition()
+                    .duration(300)
+                    .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`),
+                exit => exit.transition()
+                    .duration(400)
+                    .ease(d3.easeCircleIn)
+                    .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
+                    .style("opacity", 0)
+                    .remove()
+            );
+
+        // Enhanced node content rendering
+        nodeGroups.each(function(d) {
+            const selection = d3.select(this);
+            const textElement = selection.select("text");
+            
+            if (d.isCentral) {
+                selection.select("circle")
+                    .attr("r", 45)
+                    .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+                
+                textElement
+                    .attr("class", "node-text")
+                    .text(d.word || d.id)
+                    .attr("dy", "0.3em")
+                    .style("font-weight", "bold")
+                    .style("font-size", "16px");
+                    
+            } else if (d.type === 'add') {
+                selection.select("circle")
+                    .attr("r", 20)
+                    .style("transition", "all 0.3s ease");
+                    
+                textElement
+                    .text('+')
+                    .style("font-size", "20px")
+                    .style("font-weight", "300")
+                    .style("fill", "white")
+                    .attr("dy", "0.3em");
+                    
+            } else if (textBoxTypes.includes(d.type)) {
+                selection.select("rect")
+                    .attr("class", "example-bg")
+                    .style("rx", "8")
+                    .style("ry", "8")
+                    .style("filter", "drop-shadow(0 2px 8px rgba(0,0,0,0.1))");
+                
+                let fullText = d.text;
+                if (d.explanation) {
+                    fullText += `\n(${d.explanation})`;
+                }
+
+                if (d.type === 'meaning' && d.examples && d.examples.length > 0) {
+                    const exampleLines = d.examples.map(ex => `\n  •  ${ex}`).join('');
+                    fullText += exampleLines;
+                }
+                
+                createInteractiveText(textElement, fullText, (word) => handleWordSubmitted(word, true, d));
+
+                setTimeout(() => {
+                    const bbox = textElement.node()?.getBBox();
+                    if (bbox && bbox.width > 0) {
+                        const padding = { x: 24, y: 14 };
+                        d.width = bbox.width + padding.x;
+                        d.height = bbox.height + padding.y;
+
+                        selection.select("rect")
+                            .attr("width", 0)
+                            .attr("height", 0)
+                            .attr("x", bbox.x)
+                            .attr("y", bbox.y)
+                            .transition()
+                            .duration(400)
+                            .ease(d3.easeBackOut.overshoot(1.1))
+                            .attr("width", d.width)
+                            .attr("height", d.height)
+                            .attr("x", bbox.x - (padding.x / 2))
+                            .attr("y", bbox.y - (padding.y / 2))
+                            .style("opacity", 1);
+                        
+                        simulation.alpha(0.2).restart();
+                    }
+                }, 100);
+                
+            } else {
+                // This correctly handles all other types (synonym, opposite, etc.) that are circles
+                selection.select("circle")
+                    .attr("r", 18)
+                    .style("transition", "all 0.2s ease");
+                    
+                textElement
+                    .text(d.text || d.id)
+                    .attr("dy", "0.3em")
+                    .style("font-size", "12px");
+            }
+        });
+
+        graphGroup.selectAll(".link")
+            .style("stroke", d => {
+                if (d.type === 'cross-cluster') return 'var(--accent-orange)';
+                if (d.target.type === 'example') return 'var(--primary-coral)';
+                return 'var(--text-secondary)';
+            })
+            .style("stroke-width", d => {
+                if (d.type === 'cross-cluster') return 2;
+                if (d.target.type === 'example') return 1.5;
+                return 1;
+            })
+            .style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none")
+            .style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
+
+        simulation.nodes(visibleNodes);
+        simulation.force("link").links(visibleLinks);
+        simulation.force("center").x(width / 2).y(height / 2);
+        simulation.alpha(1).restart();
+        
+        graphGroup.selectAll('.central-node').raise();
+        
+        updateCentralNodeState();
+    }
+
+    function handleMouseOver(event, d) {
+        const selection = d3.select(event.currentTarget);
+        
+        selection.transition()
+            .duration(200)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(1.1)`);
+        
+        if (d.isCentral) {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("filter", "drop-shadow(0 0 20px var(--primary-coral))");
+        } else if (d.type !== 'example') {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("stroke", "var(--primary-coral)")
+                .style("stroke-width", "2px");
+        }
+        
+        let tooltipText = '';
+        if (d.isCentral) {
+            const cluster = graphClusters.get(d.clusterId);
+            tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
+        } else if (d.type === 'add') {
+            const cluster = graphClusters.get(d.clusterId);
+            tooltipText = viewState.hasMore ? 
+                `Load more ${cluster?.currentView || 'items'}` : 
+                'No more items to load';
+        } else if (d.text && !d.isCentral && d.type !== 'example') {
+            tooltipText = `Click for examples • Drag to explore "${d.text}"`;
+        }
+            
+        if (tooltipText) {
+            tooltip.textContent = tooltipText;
+            tooltip.classList.add('visible');
+            tooltip.style.transform = 'translateY(-10px)';
+        }
+        
+        svg.on('mousemove.tooltip', (e) => {
+            tooltip.style.left = `${e.pageX + 15}px`;
+            tooltip.style.top = `${e.pageY - 30}px`;
+        });
+    }
+
+    function handleMouseOut(event, d) {
+        const selection = d3.select(event.currentTarget);
+        
+        selection.transition()
+            .duration(200)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+        
+        if (d.isCentral) {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+        } else if (d.type !== 'example') {
+            selection.select("circle")
+                .transition()
+                .duration(200)
+                .style("stroke", "none");
+        }
+        
+        tooltip.classList.remove('visible');
+        tooltip.style.transform = 'translateY(0)';
+        svg.on('mousemove.tooltip', null);
+    }
+
+    function handleNodeClick(event, d) {
+        if (event.defaultPrevented) return;
+        event.stopPropagation();
+        
+        const selection = d3.select(event.currentTarget);
+        selection.transition()
+            .duration(150)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
+            .transition()
+            .duration(150)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+        
+        const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
+
+        if (exampleTypes.includes(d.type)) {
+            toggleExampleForNode(d);
+        } else if (d.isCentral) {
+            focusOnCentralNode(d.clusterId);
+        } else if (d.type === 'add') {
+            fetchMoreNodes();
+        }
+    }
+
+    async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
+        const lowerWord = word.toLowerCase();
+        
+        if (isNewCentral) {
+            if (centralNodes.some(c => c.word === lowerWord)) {
+                focusOnCentralNode(lowerWord);
+                return;
+            }
+
+            const newCenter = positionNewCluster(sourceNode);
+            
+            const centralNodeData = { 
+                word: lowerWord, 
+                id: `central-${lowerWord}`, 
+                isCentral: true, 
+                type: 'central', 
+                clusterId: lowerWord,
+                x: newCenter.x,
+                y: newCenter.y,
+                fx: newCenter.x,
+                fy: newCenter.y,
+                visible: true
+            };
+            
+            setTimeout(() => {
+                if (centralNodeData) {
+                    centralNodeData.fx = null;
+                    centralNodeData.fy = null;
+                    simulation.alpha(0.3).restart();
+                }
+            }, 2000);
+
+            centralNodes.push(centralNodeData);
+            graphClusters.set(lowerWord, { 
+                nodes: [centralNodeData], 
+                links: [], 
+                center: newCenter,
+                currentView: 'meaning' 
+            });
+
+            panToNode(centralNodeData, 1.3);
+        }
+
+        currentActiveCentral = lowerWord;
+        currentView = 'meaning';
+        viewState = { offset: 0, hasMore: true };
+        updateActiveButton();
+        await generateGraphForView(currentView);
+    }
+
+    function panToNode(node, scale = 1.2) {
+        if (!node) return;
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const transform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(scale)
+            .translate(-node.x, -node.y);
+        
+        svg.transition()
+            .duration(1000)
+            .ease(d3.easeCubicInOut)
+            .call(zoomBehavior.transform, transform);
+    }
+    
+    // --- END OF ENHANCED FUNCTIONS ---
 
     const zoomBehavior = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
         graphGroup.attr("transform", event.transform);
@@ -208,154 +668,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return { nodes, links: [...links, ...crossConnections] };
     }
 
-function updateGraph() {
-    const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
-
-    // Filter for only visible nodes and the links connecting them
-    const visibleNodes = allNodes.filter(n => n.visible !== false);
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-    const visibleLinks = allLinks.filter(l => 
-        visibleNodeIds.has(l.source.id || l.source) &&
-        visibleNodeIds.has(l.target.id || l.target)
-    );
-    
-    const { width, height } = graphContainer.getBoundingClientRect();
-    graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
-
-    const textBoxTypes = ['example', 'meaning']; // 'meaning' is also a text box
-
-    // Render Links
-    graphGroup.selectAll(".link")
-        .data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
-        .join(
-            enter => enter.append("line")
-                .attr("class", d => `link ${textBoxTypes.includes(d.target.type) ? 'link-example' : ''}`)
-                .style("opacity", 0)
-                .transition().duration(600).delay(200)
-                .style("opacity", 1),
-            update => update.attr("class", d => `link ${textBoxTypes.includes(d.target.type) ? 'link-example' : ''}`),
-            exit => exit.transition().duration(300)
-                .style("opacity", 0)
-                .remove()
-        );
-
-    // Render Nodes
-    graphGroup.selectAll(".node")
-        .data(visibleNodes, d => d.id)
-        .join(
-            enter => {
-                const nodeGroup = enter.append("g")
-                    .call(d3.drag()
-                        .on("start", dragstarted)
-                        .on("drag", dragged)
-                        .on("end", dragended)
-                        .filter(event => !event.target.classList.contains('interactive-word'))
-                    )
-                    .on("mouseover", handleMouseOver)
-                    .on("mouseout", handleMouseOut)
-                    .on("click", handleNodeClick);
-
-                // Append the correct shape
-                nodeGroup.append(d => (textBoxTypes.includes(d.type)) ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
-                
-                // Add text element
-                nodeGroup.append("text");
-
-                // ⭐ ROBUST ANIMATION FIX ⭐
-                nodeGroup.style("opacity", 0)
-                    .attr("transform", d => {
-                        // Start new peripheral nodes at their cluster's center point
-                        if (!d.isCentral && graphClusters.has(d.clusterId)) {
-                            const clusterCenter = graphClusters.get(d.clusterId).center;
-                            return `translate(${clusterCenter.x}, ${clusterCenter.y}) scale(0.1)`;
-                        }
-                        // If it's a new central node, start it at its own position
-                        return `translate(${d.x || width/2}, ${d.y || height/2}) scale(0.1)`;
-                    })
-                    .transition()
-                    .duration(500)
-                    .ease(d3.easeCubicOut)
-                    .delay((d, i) => i * 80) // Staggered appearance
-                    .style("opacity", 1)
-                    .style("transform", "scale(1)");
-
-                return nodeGroup;
-            },
-            update => update,
-            exit => exit.transition()
-                .duration(200)
-                .ease(d3.easeCircleIn)
-                .attr("transform", d => `translate(${d.x}, ${d.y}) scale(0)`)
-                .remove()
-        )
-        .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
-        .each(function(d) {
-            const selection = d3.select(this);
-            const textElement = selection.select("text");
-
-            // Handle shape-specific attributes AFTER transitions
-            const circle = selection.select("circle");
-            if (circle.node()) {
-                circle.attr("r", d => d.isCentral ? 40 : 15);
-            }
-            
-            if (d.isCentral) {
-                textElement.attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em");
-            } else if (d.type === 'add') {
-                textElement.text('+').attr("class", "sub-text");
-            } else if (textBoxTypes.includes(d.type)) {
-                selection.select("rect").attr("class", "example-bg"); 
-                
-                let fullText = d.text;
-                if (d.explanation) {
-                    fullText += `\n(${d.explanation})`;
-                }
-                
-                createInteractiveText(textElement, fullText, (word) => handleWordSubmitted(word, true, d));
-
-                // Size is now pre-calculated, so we just apply it
-                if (d.width && d.height && d.bbox) {
-                    selection.select("rect")
-                        .attr("width", d.width)
-                        .attr("height", d.height)
-                        .attr("x", d.bbox.x - (20 / 2)) // Use stored bbox and padding
-                        .attr("y", d.bbox.y - (10 / 2))
-                        .style("opacity", 1);
-                }
-            } else {
-                // For regular peripheral nodes (synonyms, etc.)
-                textElement.text(d.text || d.id).attr("dy", -22);
-            }
-        });
-
-    graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? '#ff6b6b' : '#999').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "5,5" : "none");
-
-    simulation.nodes(visibleNodes);
-    simulation.force("link").links(visibleLinks);
-    simulation.force("center").x(width / 2).y(height / 2);
-    simulation.alpha(1).restart();
-    graphGroup.selectAll('.central-node').raise();
-    
-    updateCentralNodeState();
-}
     simulation.on("tick", () => {
         graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
         graphGroup.selectAll('.node').attr("transform", d => `translate(${d.x},${d.y})`);
     });
-
-function panToNode(node, scale = 1.2) {
-    if (!node) return;
-    const { width, height } = graphContainer.getBoundingClientRect();
-    const transform = d3.zoomIdentity
-        .translate(width / 2, height / 2)
-        .scale(scale)
-        .translate(-node.x, -node.y);
-    
-    svg.transition()
-        .duration(750)
-        .ease(d3.easeCubicOut)
-        .call(zoomBehavior.transform, transform);
-}
 
     function detectCrossConnections() {
         crossConnections = [];
@@ -373,308 +689,170 @@ function panToNode(node, scale = 1.2) {
         }
     }
 
-async function toggleExampleForNode(nodeData) {
-    const cluster = graphClusters.get(nodeData.clusterId);
-    if (!cluster) return;
+    async function toggleExampleForNode(nodeData) {
+        const cluster = graphClusters.get(nodeData.clusterId);
+        if (!cluster) return;
 
-    const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
+        const existingExample = cluster.nodes.find(n => n.sourceNodeId === nodeData.id);
 
-    if (existingExample) {
-        // This part for removing an example is unchanged
-        cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
-        cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
-        updateGraph();
-    } else {
-        try {
-            // ⭐ MODIFICATION: This function is now a smart dispatcher.
-            const requestBody = {
-                type: 'generateExample',
-                word: nodeData.text, // The word/phrase from the clicked node
-                register: currentRegister,
-                sourceNodeType: nodeData.type // e.g., 'meaning', 'idioms', 'translation'
-            };
+        if (existingExample) {
+            cluster.nodes = cluster.nodes.filter(n => n.id !== existingExample.id);
+            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
+            updateGraph();
+        } else {
+            try {
+                const requestBody = {
+                    type: 'generateExample',
+                    word: nodeData.text,
+                    register: currentRegister,
+                    sourceNodeType: nodeData.type
+                };
+                if (nodeData.type === 'meaning' || nodeData.type === 'context' || nodeData.type === 'translation') {
+                    requestBody.centralWord = nodeData.clusterId;
+                }
+                if (nodeData.type === 'meaning') requestBody.definition = nodeData.text;
+                if (nodeData.type === 'context') requestBody.context = nodeData.text;
+                if (nodeData.type === 'translation') {
+                    requestBody.translation = nodeData.text;
+                    requestBody.language = nodeData.lang;
+                }
+                
+                const response = await fetch('/.netlify/functions/wordsplainer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
 
-            // Add specific context based on the node type
-            if (nodeData.type === 'meaning' || nodeData.type === 'context' || nodeData.type === 'translation') {
-                requestBody.centralWord = nodeData.clusterId;
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                    throw new Error(errorData.error || 'Server returned an error.');
+                }
+                const data = await response.json();
+                let exampleText = null;
+                if (data.english_example && data.translated_example) {
+                    exampleText = `${data.english_example}\n${data.translated_example}`;
+                } else if (data.example) {
+                    exampleText = data.example;
+                    if (data.explanation) exampleText += `\n\n(${data.explanation})`;
+                }
+
+                if (exampleText) {
+                    const exId = `${nodeData.id}-ex`;
+                    const exNode = {
+                        id: exId, text: exampleText, type: 'example',
+                        sourceNodeId: nodeData.id, clusterId: nodeData.clusterId, visible: true
+                    };
+                    cluster.nodes.push(exNode);
+                    cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
+                    updateGraph();
+                } else {
+                    throw new Error('No valid example received from server');
+                }
+            } catch (error) {
+                console.error("Error getting example:", error);
+                alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
             }
-            if (nodeData.type === 'meaning') {
-                requestBody.definition = nodeData.text;
-            }
-            if (nodeData.type === 'context') {
-                requestBody.context = nodeData.text;
-            }
-            if (nodeData.type === 'translation') {
-                requestBody.translation = nodeData.text;
-                requestBody.language = nodeData.lang; // Use the language code we stored
-            }
-            
-            const response = await fetch('/.netlify/functions/wordsplainer', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+        }
+    }   
+
+    async function generateGraphForView(view, options = {}) {
+        if (!currentActiveCentral) return renderError('No word selected.');
+        
+        const cluster = graphClusters.get(currentActiveCentral);
+        if (!cluster) return renderError('Invalid word cluster.');
+
+        const alreadyLoaded = cluster.nodes.some(n => n.type === view);
+
+        if (alreadyLoaded) {
+            console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
+            cluster.currentView = view;
+            currentView = view;
+            updateActiveButton();
+
+            cluster.nodes.forEach(node => {
+                const isExample = node.type === 'example';
+                if (!isExample) {
+                    node.visible = node.isCentral || node.type === 'add' || node.type === view;
+                } else {
+                    const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
+                    node.visible = sourceNode ? sourceNode.visible : false;
+                }
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-                throw new Error(errorData.error || 'Server returned an error.');
-            }
-
-            const data = await response.json();
-
-            let exampleText = null;
-
-            // Handle the different possible response shapes
-            if (data.english_example && data.translated_example) {
-                // Bilingual example for translations
-                exampleText = `${data.english_example}\n${data.translated_example}`;
-            } else if (data.example) {
-                // Standard example (for meaning, context, idioms, etc.)
-                exampleText = data.example;
-                if (data.explanation) {
-                    // Append explanation if it exists (for idioms)
-                    exampleText += `\n\n(${data.explanation})`;
-                }
-            }
-
-            if (exampleText) {
-                const exId = `${nodeData.id}-ex`;
-                const exNode = {
-                    id: exId,
-                    text: exampleText,
-                    type: 'example',
-                    sourceNodeId: nodeData.id,
-                    clusterId: nodeData.clusterId
-                };
-                cluster.nodes.push(exNode);
-                cluster.links.push({ source: nodeData.id, target: exId, type: 'example' });
-                updateGraph();
-            } else {
-                throw new Error('No valid example received from server');
-            }
-        } catch (error) {
-            console.error("Error getting example:", error);
-            alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
-        }
-    }
-}   
-
-async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-    const lowerWord = word.toLowerCase();
-    
-    if (isNewCentral) {
-        // ... (existing logic to check if node already exists) ...
-        if (centralNodes.some(c => c.word === lowerWord)) {
-            focusOnCentralNode(lowerWord);
+            updateGraph();
             return;
         }
 
-        // ... (existing logic for positioning the new node) ...
-        const { width, height } = graphContainer.getBoundingClientRect();
-        let newCenter;
-        if (sourceNode && typeof sourceNode.x === 'number' && typeof sourceNode.y === 'number') {
-            newCenter = { x: sourceNode.x + 450, y: sourceNode.y };
-        } else {
-            const currentTransform = d3.zoomTransform(svg.node());
-            newCenter = { 
-                x: (width / 2 - currentTransform.x) / currentTransform.k, 
-                y: (height / 2 - currentTransform.y) / currentTransform.k 
-            };
-        }
-
-        const centralNodeData = { 
-            word: lowerWord, 
-            id: `central-${lowerWord}`, 
-            isCentral: true, 
-            type: 'central', 
-            clusterId: lowerWord,
-            x: newCenter.x,
-            y: newCenter.y,
-            fx: newCenter.x,
-            fy: newCenter.y,
-            visible: true // ⭐ Nodes are visible by default when created
-        };
-        
-        setTimeout(() => {
-            const cluster = graphClusters.get(lowerWord);
-    if (cluster) {
-        // Unpin ALL nodes in the new cluster simultaneously
-        cluster.nodes.forEach(node => {
-            node.fx = null;
-            node.fy = null;
-        });
-        // Give the simulation a "kick" to let the forces take over smoothly
-        simulation.alpha(0.3).restart();
-    }
-}, 1500);
-
-        centralNodes.push(centralNodeData);
-        graphClusters.set(lowerWord, { 
-            nodes: [centralNodeData], 
-            links: [], 
-            center: newCenter,
-            currentView: 'meaning' 
-        });
-
-        panToNode(centralNodeData, 1.2);
-    }
-
-    currentActiveCentral = lowerWord;
-    currentView = 'meaning';
-    viewState = { offset: 0, hasMore: true };
-    updateActiveButton();
-    await generateGraphForView(currentView);
-}
-
-       async function generateGraphForView(view, options = {}) {
-    if (!currentActiveCentral) return renderError('No word selected.');
-    
-    const cluster = graphClusters.get(currentActiveCentral);
-    if (!cluster) return renderError('Invalid word cluster.');
-
-    // --- CACHE CHECK --- (Logic for cache hits remains the same)
-    const alreadyLoaded = cluster.nodes.some(n => n.type === view);
-    if (alreadyLoaded) {
-        // ... (your existing cache hit logic is fine, no changes needed here) ...
-        console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
+        console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
         cluster.currentView = view;
-        currentView = view; 
+        currentView = view;
         updateActiveButton();
+        renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
 
-        const nodesToHide = cluster.nodes.filter(n => !n.isCentral && n.type !== 'add' && n.visible === true && n.type !== view);
-    
-        graphGroup.selectAll('.node')
-            .filter(d => nodesToHide.some(n => n.id === d.id))
-            .transition()
-            .duration(400)
-            .delay((d,i) => i * 30)
-            .ease(d3.easeCubicIn)
-            .attr("transform", d => `translate(${cluster.center.x}, ${cluster.center.y}) scale(0)`)
-            .on("end", function() { d3.select(this).remove(); });
+        try {
+            const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
+            if (!data || !data.nodes) throw new Error("No data received from server.");
+            
+            cluster.nodes.forEach(node => {
+                if (!node.isCentral && node.type !== 'add') node.visible = false;
+            });
 
-        cluster.nodes.forEach(node => {
-            node.visible = node.isCentral || node.type === 'add' || node.type === view || (node.type === 'example' && cluster.nodes.find(n => n.id === node.sourceNodeId && n.type === view));
-        });
+            data.nodes.forEach(nodeData => {
+                if (!nodeData || typeof nodeData.text !== 'string') return;
+                const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
+                if (cluster.nodes.some(n => n.id === nodeId)) return;
 
-        updateGraph(); 
-        return;
-    }
-
-    // --- CACHE MISS ---
-    console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
-    cluster.currentView = view;
-    currentView = view;
-    updateActiveButton();
-    renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
-
-    try {
-        const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
-        if (!data || !data.nodes) throw new Error("No data received from server.");
-        
-        cluster.nodes.forEach(node => {
-            if (!node.isCentral && node.type !== 'add') node.visible = false;
-        });
-
-        // ⭐ THE FIX PART 1: Get the parent's exact position AND pinned status ⭐
-        const centralNode = cluster.nodes.find(n => n.isCentral);
-        if (!centralNode) throw new Error("Could not find central node for cluster.");
-
-        const startPos = { x: centralNode.x, y: centralNode.y };
-        const startPin = { fx: centralNode.fx, fy: centralNode.fy }; // Get the pinned coordinates
-
-        data.nodes.forEach(nodeData => {
-            if (!nodeData || typeof nodeData.text !== 'string') return;
-            const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
-            if (cluster.nodes.some(n => n.id === nodeId)) return;
-
-            const newNode = {
-                ...nodeData,
-                id: nodeId,
-                type: view,
-                clusterId: currentActiveCentral,
-                visible: true,
-                lang: options.language,
-                x: startPos.x,
-                y: startPos.y,
-                // Pin the new child node to the same spot as its parent
-                fx: startPin.fx,
-                fy: startPin.fy
-            };
-
-            if (view === 'example' || view === 'meaning') {
-                let fullText = nodeData.text;
-                if (nodeData.explanation) {
-                    fullText += `\n(${nodeData.explanation})`;
-                }
-                const size = getTextBoxSize(fullText, 'node node-example text');
-                newNode.width = size.width;
-                newNode.height = size.height;
-                newNode.bbox = size.bbox;
+                const newNode = {
+                    ...nodeData, id: nodeId, type: view,
+                    clusterId: currentActiveCentral, visible: true, lang: options.language 
+                };
+                cluster.nodes.push(newNode);
+                cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
+            });
+            
+            const addNodeId = `add-${currentActiveCentral}`;
+            let addNode = cluster.nodes.find(n => n.id === addNodeId);
+            if (!addNode) {
+                addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral };
+                cluster.nodes.push(addNode);
+                cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
             }
+            addNode.visible = true;
+            
+            detectCrossConnections();
+            updateGraph();
 
-            cluster.nodes.push(newNode);
-            cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-        });
-        
-        const addNodeId = `add-${currentActiveCentral}`;
-        let addNode = cluster.nodes.find(n => n.id === addNodeId);
-        if (!addNode) {
-            addNode = { 
-                id: addNodeId, 
-                type: 'add', 
-                clusterId: currentActiveCentral,
-                x: startPos.x,
-                y: startPos.y,
-                fx: startPin.fx, // Also pin the '+' button
-                fy: startPin.fy
-            };
-            cluster.nodes.push(addNode);
-            cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
+        } catch (error) {
+            console.error("Error generating graph:", error);
+            renderError(`Error loading ${view}: ${error.message}`);
         }
-        addNode.visible = true;
-        
-        detectCrossConnections();
-        updateGraph();
-
-    } catch (error) {
-        console.error("Error generating graph:", error);
-        renderError(`Error loading ${view}: ${error.message}`);
     }
-}
 
     function promptForInitialWord() {
-    const inputOverlay = document.getElementById('input-overlay');
-    const overlayInput = document.getElementById('overlay-input');
-
-    overlayInput.placeholder = "Type a word and press Enter...";
-    inputOverlay.classList.add('visible');
-    overlayInput.focus();
-    overlayInput.value = '';
-
-    const handleKeyDown = (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            const value = overlayInput.value.trim();
-            if (value) {
-                handleWordSubmitted(value, true);
+        const inputOverlay = document.getElementById('input-overlay');
+        const overlayInput = document.getElementById('overlay-input');
+        overlayInput.placeholder = "Type a word and press Enter...";
+        inputOverlay.classList.add('visible');
+        overlayInput.focus();
+        overlayInput.value = '';
+        const handleKeyDown = (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                const value = overlayInput.value.trim();
+                if (value) { handleWordSubmitted(value, true); }
+                inputOverlay.classList.remove('visible');
+                overlayInput.removeEventListener('keydown', handleKeyDown);
+                overlayInput.removeEventListener('blur', handleBlur);
             }
-            // Cleanup listeners when done
+        };
+        const handleBlur = () => {
             inputOverlay.classList.remove('visible');
             overlayInput.removeEventListener('keydown', handleKeyDown);
             overlayInput.removeEventListener('blur', handleBlur);
-        }
-    };
-
-    const handleBlur = () => {
-        // Cleanup listeners when done
-        inputOverlay.classList.remove('visible');
-        overlayInput.removeEventListener('keydown', handleKeyDown);
-        overlayInput.removeEventListener('blur', handleBlur);
-    };
-
-    overlayInput.addEventListener('keydown', handleKeyDown);
-    overlayInput.addEventListener('blur', handleBlur);
-}
+        };
+        overlayInput.addEventListener('keydown', handleKeyDown);
+        overlayInput.addEventListener('blur', handleBlur);
+    }
           
     function handleDockClick(event) {
         const button = event.target.closest('button');
@@ -697,14 +875,9 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
     function handleZoomControlsClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
-
         switch (button.id) {
-            case 'zoom-in-btn':
-                svg.transition().duration(250).call(zoomBehavior.scaleBy, 1.2);
-                break;
-            case 'zoom-out-btn':
-                svg.transition().duration(250).call(zoomBehavior.scaleBy, 0.8);
-                break;
+            case 'zoom-in-btn': svg.transition().duration(250).call(zoomBehavior.scaleBy, 1.2); break;
+            case 'zoom-out-btn': svg.transition().duration(250).call(zoomBehavior.scaleBy, 0.8); break;
         }
     }
 
@@ -712,142 +885,59 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         stopRegisterButtonAnimation();
         currentRegister = (currentRegister === 'conversational') ? 'academic' : 'conversational';
         registerToggleBtn.classList.toggle('is-academic', currentRegister === 'academic');
-       
         if (currentActiveCentral) {
             console.log(`Register changed to '${currentRegister}'. Re-fetching for '${currentActiveCentral}'.`);
             const cluster = graphClusters.get(currentActiveCentral);
             if (cluster) {
                 cluster.nodes = cluster.nodes.filter(n => n.isCentral || n.type === 'add');
                 const addNode = cluster.nodes.find(n => n.id === `add-${currentActiveCentral}`);
-                cluster.links = addNode 
-                    ? [{ source: `central-${currentActiveCentral}`, target: addNode.id }] 
-                    : [];
+                cluster.links = addNode ? [{ source: `central-${currentActiveCentral}`, target: addNode.id }] : [];
             }
             generateGraphForView(currentView); 
         }
     }
 
     function focusOnCentralNode(clusterId) {
-    const centralNode = centralNodes.find(n => n.word === clusterId || n.clusterId === clusterId);
-    if (centralNode) {
-        currentActiveCentral = clusterId;
-        const cluster = graphClusters.get(clusterId);
-        if (cluster) {
-            currentView = cluster.currentView || 'meaning';
-            updateActiveButton();
-        }
-        panToNode(centralNode, 1.2);
-        updateCentralNodeState();
-        console.log(`Focused on central node: ${clusterId}`);
-    }
-}
-   
-    function handleNodeClick(event, d) {
-    if (event.defaultPrevented) return;
-    event.stopPropagation();
-    
-    const nodeElement = d3.select(event.currentTarget);
-    nodeElement.classed('node-clicked', true);
-    setTimeout(() => nodeElement.classed('node-clicked', false), 100);
-    
-    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
-
-    // If it's a node that provides examples, toggle them.
-    if (exampleTypes.includes(d.type)) {
-        return toggleExampleForNode(d);
-    }
-
-    // If it's the central node, focus on it.
-    if (d.isCentral) {
-        focusOnCentralNode(d.clusterId);
-    }
-    // If it's the '+' button, fetch more.
-    else if (d.type === 'add') {
-        fetchMoreNodes();
-    }
-}
-
-/**
- * Renders text inside a D3 text element, making individual words interactive.
- * @param {d3.Selection} d3TextElement The D3 selection of the <text> element.
- * @param {string} text The full string to render.
- * @param {function(string): void} onWordClick The callback function to execute when a word is clicked.
- */
-
-function createInteractiveText(d3TextElement, text, onWordClick) {
-    d3TextElement.selectAll("tspan").remove(); // Clear previous content
-
-    /// Split text into lines first
-    const lines = text.split('\n');
-    lines.forEach((line, lineIndex) => {
-        // Split each line into words and punctuation, keeping the delimiters
-        const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
-        
-        const lineTspan = d3TextElement.append('tspan')
-            .attr('x', 0) // Centered by the parent text's text-anchor
-            .attr('dy', lineIndex === 0 ? '0.3em' : '1.4em');
-
-        tokens.forEach(token => {
-            const cleanedToken = token.trim().toLowerCase();
-            // Make it clickable only if it's a "notional" word (2+ letters, no numbers/symbols)
-            if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
-                lineTspan.append('tspan')
-                    .attr('class', 'interactive-word')
-                    .text(token)
-                    .on('click', (event) => {
-                        event.stopPropagation(); // VERY IMPORTANT: Prevents the node's main click handler
-                        // Get the raw text, remove punctuation for the API call
-                        const wordToExplore = token.replace(/[.,!?;:"]+/g, '').trim();
-                        if(wordToExplore) {
-                           onWordClick(wordToExplore);
-                        }
-                    });
-            } else {
-                // Append non-clickable parts (spaces, punctuation, short words)
-                lineTspan.append('tspan').text(token);
+        const centralNode = centralNodes.find(n => n.word === clusterId || n.clusterId === clusterId);
+        if (centralNode) {
+            currentActiveCentral = clusterId;
+            const cluster = graphClusters.get(clusterId);
+            if (cluster) {
+                currentView = cluster.currentView || 'meaning';
+                updateActiveButton();
             }
+            panToNode(centralNode, 1.2);
+            updateCentralNodeState();
+            console.log(`Focused on central node: ${clusterId}`);
+        }
+    }
+
+    function createInteractiveText(d3TextElement, text, onWordClick) {
+        d3TextElement.selectAll("tspan").remove();
+        const lines = text.split('\n');
+        lines.forEach((line, lineIndex) => {
+            const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
+            const lineTspan = d3TextElement.append('tspan')
+                .attr('x', 0)
+                .attr('dy', lineIndex === 0 ? '0.3em' : '1.4em');
+            tokens.forEach(token => {
+                const cleanedToken = token.trim().toLowerCase();
+                if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
+                    lineTspan.append('tspan')
+                        .attr('class', 'interactive-word')
+                        .text(token)
+                        .on('click', (event) => {
+                            event.stopPropagation();
+                            const wordToExplore = token.replace(/[.,!?;:"]+/g, '').trim();
+                            if(wordToExplore) onWordClick(wordToExplore);
+                        });
+                } else {
+                    lineTspan.append('tspan').text(token);
+                }
+            });
         });
-    });
-}
+    }
 
-    function handleMouseOver(event, d) {
-    let tooltipText = '';
-    if (d.isCentral) {
-        const cluster = graphClusters.get(d.clusterId);
-        if (cluster) {
-            const isPaginated = cluster.currentView !== 'meaning';
-            if (isPaginated && viewState.hasMore) {
-                tooltipText = `Click '+' to load more ${cluster.currentView}`;
-            } else {
-                tooltipText = `Currently viewing ${cluster.currentView}`;
-            }
-        }
-    } else if (d.type === 'add') {
-        const cluster = graphClusters.get(d.clusterId);
-        if (cluster && viewState.hasMore) {
-            tooltipText = `Load more ${cluster.currentView} for "${d.clusterId}"`;
-        } else {
-            tooltipText = `No more ${cluster?.currentView || ''} to load`;
-        }
-    } 
-       else if (d.text && !d.isCentral && d.type !== 'add' && d.type !== 'example') {
-        tooltipText = `Drag to explore "${d.text}"`;
-    }
-        
-    if (tooltipText) {
-        tooltip.textContent = tooltipText;
-        tooltip.classList.add('visible');
-    }
-    d3.select(event.currentTarget).classed('hover-highlight', true);
-    svg.on('mousemove.tooltip', (e) => { tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
-}
-
-    function handleMouseOut(event) {
-        tooltip.classList.remove('visible');
-        d3.select(event.currentTarget).classed('hover-highlight', false);
-        svg.on('mousemove.tooltip', null);
-    }
-    
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
         svg.attr("width", width).attr("height", height);
@@ -857,29 +947,7 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
             simulation.alpha(0.3).restart();
         } else {
             renderInitialPrompt();
-    }
-}
-
-    function toggleTranslationExamples(translationNode) {
-        const cluster = graphClusters.get(translationNode.clusterId);
-        if (!cluster) return;
-        const examplesShown = cluster.nodes.some(n => n.sourceNodeId === translationNode.id);
-        if (examplesShown) {
-            cluster.nodes = cluster.nodes.filter(n => n.sourceNodeId !== translationNode.id);
-            cluster.links = cluster.links.filter(l => !l.target.sourceNodeId || l.target.sourceNodeId !== translationNode.id);
-        } else {
-            if (translationNode.exampleTranslations) {
-                for (const [eng, trans] of Object.entries(translationNode.exampleTranslations)) {
-                    const langTrans = trans[translationNode.lang] || "N/A";
-                    const exId = `${translationNode.id}-ex-${eng.slice(0, 10)}`;
-                    const exNode = { id: exId, text: `${eng}\n${langTrans}`, type: 'example', sourceNodeId: translationNode.id, clusterId: translationNode.clusterId };
-                    cluster.nodes.push(exNode);
-                    cluster.links.push({ source: translationNode.id, target: exId, type: 'example' });
-                }
-            }
         }
-        detectCrossConnections();
-        updateGraph();
     }
 
     async function fetchMoreNodes() {
@@ -891,14 +959,12 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
         
         try {
             const data = await fetchData(currentActiveCentral, cluster.currentView, viewState.offset, 3);
-
             if (data.nodes.length > 0) {
                 data.nodes.forEach(newNodeData => {
                     if (!newNodeData || typeof newNodeData.text !== 'string') return;
-                    
                     const newNodeId = `${currentActiveCentral}-${newNodeData.text}-${cluster.currentView}`;
                     if (!cluster.nodes.some(n => n.id === newNodeId)) {
-                        const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral };
+                        const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral, visible: true };
                         cluster.nodes.push(newNode);
                         cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNodeId });
                     }
@@ -946,6 +1012,7 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
     }
     
     function saveAsPng() {
+        // ... (saveAsPng function is complex and remains unchanged) ...
         if (centralNodes.length === 0) return alert("Nothing to save yet!");
     
         const svgEl = svg.node();
@@ -968,7 +1035,7 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
                 const styleProps = [
                     'fill', 'stroke', 'stroke-width', 'stroke-dasharray',
                     'font-size', 'font-family', 'font-weight', 'text-anchor',
-                    'opacity', 'fill-opacity', 'stroke-opacity'
+                    'opacity', 'fill-opacity', 'stroke-opacity', 'filter'
                 ];
                 
                 styleProps.forEach(prop => {
@@ -1032,49 +1099,47 @@ function createInteractiveText(d3TextElement, text, onWordClick) {
         image.src = svgDataUrl;
     }
 
+    // --- Drag handlers (kept from original for snap-off feature) ---
     function dragstarted(event, d) {
-    if (!event.active) simulation.alphaTarget(0.3).restart();
-    d.fx = d.x;
-    d.fy = d.y;
-    // Store the starting position for our distance calculation
-    d.startX = d.x;
-    d.startY = d.y;
-}
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+        d.startX = d.x;
+        d.startY = d.y;
+    }
 
     function dragged(event, d) {
-    d.fx = event.x;
-    d.fy = event.y;
-
-    // Give visual feedback if the node is being dragged far enough
-    const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
-    if (!d.isCentral && distance > SNAP_OFF_THRESHOLD) {
-        d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', true);
-    } else {
-        d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
+        d.fx = event.x;
+        d.fy = event.y;
+        const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
+        if (!d.isCentral && distance > SNAP_OFF_THRESHOLD) {
+            d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', true);
+        } else {
+            d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
+        }
     }
-}
 
     function dragended(event, d) {
-    if (!event.active) simulation.alphaTarget(0);
+        if (!event.active) simulation.alphaTarget(0);
+        d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
+        const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
+        if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD) {
+            const cluster = graphClusters.get(d.clusterId);
+            if (cluster) {
+                // Hide the node and its examples before detaching
+                const nodesToRemove = new Set([d.id]);
+                const exampleNode = cluster.nodes.find(n => n.sourceNodeId === d.id);
+                if (exampleNode) nodesToRemove.add(exampleNode.id);
 
-    d3.select(event.sourceEvent.target.parentNode).classed('node-detaching', false);
-    const distance = Math.sqrt(Math.pow(d.fx - d.startX, 2) + Math.pow(d.fy - d.startY, 2));
-
-    if (!d.isCentral && d.text && distance > SNAP_OFF_THRESHOLD) {
-        const cluster = graphClusters.get(d.clusterId);
-        if (cluster) {
-            cluster.nodes = cluster.nodes.filter(n => n.id !== d.id);
-            cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== d.id);
+                cluster.nodes = cluster.nodes.filter(n => !nodesToRemove.has(n.id));
+                cluster.links = cluster.links.filter(l => !nodesToRemove.has(l.target.id || l.target));
+            }
+            handleWordSubmitted(d.text, true, d);
+        } else {
+            d.fx = null;
+            d.fy = null;
         }
-        
-        // ⭐ CHANGE: Pass the snapped-off node 'd' as the source
-        handleWordSubmitted(d.text, true, d);
-
-    } else {
-        d.fx = null;
-        d.fy = null;
     }
-}
 
     // --- Initialization ---
     renderInitialPrompt();

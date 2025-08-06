@@ -6,7 +6,7 @@
     --primary-dark: #1A252F; /* Darker navy for depth */
     --accent-white: #FFFFFF;
     --accent-light: #F8F9FA;
-     --text-link: var(--primary-dark);
+    --text-link: var(--primary-dark);
     
     /* Canvas and backgrounds */
     --canvas-bg: #FFFFFF;
@@ -36,495 +36,159 @@
     --dock-text-color: #2C3E50; 
     --canvas-text-color: #2C3E50;
     --text-muted: #7F8C8D;
+    --text-secondary: #BDC3C7; /* Added for links */
 }
 
-.node.node-detaching circle {
-    stroke: var(--primary-coral);
-    stroke-width: 4px;
-    stroke-dasharray: 8 4;
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        stroke-opacity: 1;
-    }
-    50% {
-        stroke-opacity: 0.5;
-    }
-    100% {
-        stroke-opacity: 1;
-    }
-}
 
 /* --- Canvas Theme Control --- */
-
-/* By default, canvas is LIGHT */
 :root {
-    /* ... (all your existing variables are here, representing the LIGHT canvas theme by default) ... */
     --canvas-bg: #FFFFFF;
-    --text-dark: #2C3E50; /* Text color for nodes on light canvas */
+    --text-dark: #2C3E50; 
 }
 
-/* When dark theme is active, ONLY override canvas-related variables */
 html[data-theme='dark'] {
     --canvas-bg: var(--primary-dark);
     --canvas-text-color: var(--accent-light);
     --text-link: var(--accent-white);
 }
 
-/* --- Input Field Theming --- */
-/* The input field appears on the canvas, so it must also be themed. */
-.svg-input-field { 
-    /* Light theme styles are the default */
-    background-color: var(--canvas-bg); 
-    color: var(--text-dark);
-    border: 2px solid var(--primary-coral); 
-}
-html[data-theme='dark'] .svg-input-field {
-    /* Dark theme overrides */
-    background-color: #2C3E50;
-    color: var(--text-light);
-    border-color: var(--primary-coral);
-}
-html[data-theme='dark'] .svg-input-field:focus {
-     box-shadow: 0 0 0 4px rgba(255, 107, 71, 0.4);
-}
-
-/* --- Input Overlay Styles --- */
+/* --- Input Field Theming & Overlay --- */
 .input-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    pointer-events: none; /* Allows clicks to pass through to the SVG */
-    opacity: 0;
-    visibility: hidden;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; justify-content: center; align-items: center;
+    pointer-events: none; opacity: 0; visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
-
 .input-overlay.visible {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto; /* Makes the overlay and its children clickable */
+    opacity: 1; visibility: visible; pointer-events: auto;
 }
-
 .overlay-input-field {
-    width: 80%;
-    max-width: 500px;
-    box-sizing: border-box;
-    padding: 15px 25px;
-    border: 2px solid var(--primary-coral);
-    border-radius: 12px;
-    background-color: var(--canvas-bg);
-    color: var(--canvas-text-color);
-    font-family: inherit;
-    font-size: 1.3rem;
-    text-align: center;
-    outline: none;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    transform: scale(0.95);
-    transition: all 0.3s ease;
+    width: 80%; max-width: 500px; box-sizing: border-box; padding: 15px 25px;
+    border: 2px solid var(--primary-coral); border-radius: 12px;
+    background-color: var(--canvas-bg); color: var(--canvas-text-color);
+    font-family: inherit; font-size: 1.3rem; text-align: center;
+    outline: none; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    transform: scale(0.95); transition: all 0.3s ease;
 }
-
-.input-overlay.visible .overlay-input-field {
-    transform: scale(1);
-}
-
-/* Make sure the dark theme styles apply here too */
+.input-overlay.visible .overlay-input-field { transform: scale(1); }
 html[data-theme='dark'] .overlay-input-field {
-    background-color: #2C3E50;
-    color: var(--text-light);
-    border-color: var(--primary-coral);
+    background-color: #2C3E50; color: var(--text-light); border-color: var(--primary-coral);
 }
-
 
 /* --- Icon Visibility Control --- */
-/* In light mode (default), show sun, hide moon */
 .sun-icon { display: block; }
 .moon-icon { display: none; }
-
-/* In dark mode, show moon, hide sun */
 html[data-theme='dark'] .sun-icon { display: none; }
 html[data-theme='dark'] .moon-icon { display: block; }
 
-/* --- Global Styles --- */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
+/* --- Global & App Layout Styles --- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
-    background: var(--app-bg);
-    color: var(--text-light);
-    overflow: hidden;
-    height: 100vh;
-    position: relative;
+    background: var(--app-bg); color: var(--text-light); overflow: hidden;
+    height: 100vh; position: relative;
 }
-
-/* Animated background pattern */
 body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-image: 
         radial-gradient(circle at 20% 80%, rgba(255, 107, 71, 0.1) 0%, transparent 50%),
         radial-gradient(circle at 80% 20%, rgba(255, 107, 71, 0.05) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: -1;
+    pointer-events: none; z-index: -1;
 }
-
 #app-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    gap: 20px;
+    width: 100%; height: 100%; display: flex; flex-direction: column; padding: 20px; gap: 20px;
 }
+main#graph-panel { flex-grow: 1; min-height: 0; position: relative; }
 
-/* --- Enhanced Header --- */
-header {
-    flex-shrink: 0;
-    text-align: center;
-    position: relative;
-}
-
+/* --- Header --- */
+header { flex-shrink: 0; text-align: center; position: relative; }
 .title-container {
-    display: inline-flex;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 15px 30px;
-    border-radius: 20px;
-    color: white;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease;
+    display: inline-flex; align-items: center; background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 15px 30px; border-radius: 20px; color: white;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); transition: all 0.3s ease;
 }
-
-.title-container:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-}
-
-.header-logo {
-    height: 45px;
-    margin-right: 20px;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
-}
-
+.title-container:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); }
+.header-logo { height: 45px; margin-right: 20px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3)); }
 header h1 {
-    font-size: 2.2rem;
-    font-weight: 700;
+    font-size: 2.2rem; font-weight: 700;
     background: linear-gradient(135deg, #FFFFFF 0%, #FF6B47 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
-/* --- Enhanced Canvas --- */
-main#graph-panel {
-    flex-grow: 1;
-    min-height: 0;
-    position: relative;
-}
-
+/* --- Graph Canvas --- */
 #graph-container {
-    width: 100%;
-    height: 100%;
-    background: var(--canvas-bg);
-    border-radius: 25px;
-    box-shadow: 
-        0 20px 60px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-    position: relative;
-    border: 1px solid rgba(255, 107, 71, 0.2);
+    width: 100%; height: 100%; background: var(--canvas-bg); border-radius: 25px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    overflow: hidden; position: relative; border: 1px solid rgba(255, 107, 71, 0.2);
+    transition: background-color 0.4s ease; /* Smooth theme transition */
 }
+#wordsplainer-graph-svg { width: 100%; height: 100%; cursor: grab; }
+#wordsplainer-graph-svg:active { cursor: grabbing; }
 
-#zoom-controls .control-btn {
-    pointer-events: auto; 
-    background-color: var(--dock-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    
-}
-
-#zoom-controls .control-btn svg {
-    fill: currentColor;
-    width: 20px;
-    height: 20px;
-}
-
-#wordsplainer-graph-svg {
-    width: 100%;
-    height: 100%;
-    cursor: grab;
-    transition: all 0.2s ease;
-}
-
-#wordsplainer-graph-svg:active { 
-    cursor: grabbing; 
-}
-
-/* --- Enhanced Controls Dock --- */
+/* --- Controls Dock --- */
 #controls-dock {
-    flex-shrink: 0;
-    background: var(--dock-bg);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 107, 71, 0.2);
-    border-radius: 25px;
-    padding: 20px 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 
-        0 10px 40px var(--dock-shadow),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    position: relative;
-    overflow: hidden;
+    flex-shrink: 0; background: var(--dock-bg); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 107, 71, 0.2); border-radius: 25px; padding: 20px 25px;
+    display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 10px 40px var(--dock-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative; overflow: hidden;
 }
-
-#controls-dock::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 107, 71, 0.5), transparent);
-}
-
-.category-buttons, .utility-buttons {
-    display: flex;
-    gap: 12px;
-}
-
-/* --- Enhanced Category Buttons --- */
+.category-buttons, .utility-buttons { display: flex; gap: 12px; }
 .category-btn {
-    background: var(--btn-bg);
-    border: 1px solid var(--btn-border);
-    color: var(--dock-text-color);
-    border-radius: 16px;
-    padding: 12px 8px;
-    cursor: pointer;
+    background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--dock-text-color);
+    border-radius: 16px; padding: 12px 8px; cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    min-width: 100px;
-    position: relative;
-    overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    min-width: 100px; position: relative; overflow: hidden;
 }
-
-.category-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s ease;
-}
-
-.category-btn:hover::before {
-    left: 100%;
-}
-
 .category-btn:hover {
-    background: var(--btn-hover);
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.3);
-    border-color: var(--primary-coral);
+    background: var(--btn-hover); transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.3); border-color: var(--primary-coral);
 }
-
 .category-btn.active {
-    background: var(--btn-active);
-    color: var(--text-light);
-    font-weight: 600;
+    background: var(--btn-active); color: var(--text-light); font-weight: 600;
     transform: translateY(-2px);
-    box-shadow: 
-        0 8px 30px rgba(255, 107, 71, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 30px rgba(255, 107, 71, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
-
 .color-dot-container {
-    width: 45px;
-    height: 45px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 12px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    width: 45px; height: 45px; background: rgba(255, 255, 255, 0.15);
+    border-radius: 12px; display: flex; justify-content: center; align-items: center;
     transition: all 0.3s ease;
 }
-
-.category-btn:hover .color-dot-container {
-    background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.1);
-}
-
+.category-btn:hover .color-dot-container { transform: scale(1.1); }
 .color-dot {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
+    width: 28px; height: 28px; border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); transition: all 0.3s ease;
 }
+.category-btn:hover .color-dot { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+.category-btn span { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
-.category-btn:hover .color-dot {
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
+/* ===== START OF ENHANCED D3 STYLES SECTION ===== */
 
-.category-btn span {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.control-btn svg {
-    width: 20px;
-    height: 20px;
-    /* This is a key trick: it makes the icon color match the button's text color */
-    fill: currentColor; 
-    /* Prevents the icon from being clickable and interfering with the button's event */
-    pointer-events: none; 
-}
-
-#controls-dock .separator {
-    width: 1px;
-    height: 24px;
-    background-color: var(--border-color);
-    margin: 0 8px;
-}
-
-.utility-btn {
-    background: var(--btn-bg);
-    border: 1px solid var(--btn-border);
-    border-radius: 16px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    width: 80px;
-    height: 80px;
-    color: var(--dock-text-color);
-    position: relative;
-    overflow: hidden;
-}
-
-.utility-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s ease;
-}
-
-.utility-btn:hover::before {
-    left: 100%;
-}
-
-.utility-btn:hover {
-    background: var(--btn-hover);
-    transform: translateY(-3px) scale(1.05);
-    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.3);
-    border-color: var(--primary-coral);
-}
-
-.utility-btn:active {
-    transform: translateY(-1px) scale(1.02);
-}
-
-.utility-btn svg {
-    width: 28px;
-    height: 28px;
-    fill: currentColor;
-    transition: all 0.3s ease;
-}
-
-.utility-btn:hover svg {
-    transform: scale(1.1);
-}
-
-.utility-btn span {
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-}
-
-.example-bg {
-    fill: var(--bg-secondary); /* Give it a subtle background color */
-    rx: 8px; /* Rounded corners look nice */
-    pointer-events: none; /* This makes the rectangle ignore mouse events */
-}
-
-/* --- Enhanced D3 Styles --- */
 .status-text { 
     fill: var(--primary-coral); 
     text-anchor: middle; 
     font-size: 1.3rem; 
     font-weight: 500;
 }
-
-.prompt-plus { 
-    fill: var(--primary-coral); 
-    font-size: 4rem; 
-    text-anchor: middle; 
-    font-weight: 300;
-    opacity: 0.8;
-    transition: all 0.3s ease;
-}
-
-g[style*="cursor: pointer"]:hover .prompt-plus {
-    opacity: 1;
-}
-
 .error-text { 
     fill: var(--opposite-color); 
     font-weight: 500;
 }
 
 .link { 
-    stroke: #BDC3C7; 
+    /* Base style, JS will override for specific types */
+    stroke: var(--text-secondary, #BDC3C7); 
     stroke-opacity: 0.6; 
-    stroke-width: 2px; 
-    transition: all 0.3s ease;
+    stroke-width: 1px; 
+    transition: stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease;
 }
 
 .node { 
     cursor: pointer; 
-    transition: all 0.3s ease, transform 0.05s ease-out; /* Add fast transform transition */
-}
-
-.node.node-clicked {
-    transform-origin: center;
-    transform: scale(0.95);
-}
-
-.node:hover {
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+    /* This transition is KEY for smooth JS-driven animations */
+    transition: transform 0.3s ease, filter 0.3s ease;
 }
 
 .node text { 
@@ -534,20 +198,32 @@ g[style*="cursor: pointer"]:hover .prompt-plus {
     dominant-baseline: central; 
     pointer-events: none; 
     fill: var(--canvas-text-color); 
+    transition: fill 0.3s ease;
 }
 
+/* --- Central Node --- */
 .node.central-node circle { 
     fill: var(--primary-coral);
-    stroke: var(--primary-coral);
-    stroke-width: 3px;
+    stroke: rgba(255, 255, 255, 0.5);
+    stroke-width: 2px;
+    transition: all 0.3s ease;
 }
-
 .node.central-node.active-central > circle {
-    filter: drop-shadow(0 0 12px var(--primary-coral));
-    stroke: var(--primary-coral) !important; /* Force highlight */
-    stroke-width: 4px !important;
+    stroke: white;
+    stroke-width: 4px;
 }
 
+/* --- Peripheral Nodes --- */
+.node:not(.central-node):not(.node-example) circle {
+    stroke: rgba(0, 0, 0, 0.1);
+    stroke-width: 1px;
+    transition: stroke 0.3s ease, stroke-width 0.3s ease;
+}
+html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
+    stroke: rgba(255, 255, 255, 0.2);
+}
+
+/* Node Colors */
 .node.node-meaning circle { fill: var(--meaning-color); }
 .node.node-context circle { fill: var(--context-color); }
 .node.node-derivatives circle { fill: var(--derivative-color); }
@@ -557,757 +233,202 @@ g[style*="cursor: pointer"]:hover .prompt-plus {
 .node.node-opposites circle { fill: var(--opposite-color); }
 .node.node-translation circle { fill: var(--translation-color); }
 
-.faded { 
-    opacity: 0.15; 
-    transition: opacity 0.3s ease;
-}
-
-.node.highlighted circle { 
-    stroke: var(--primary-coral); 
-    stroke-width: 4px;
-    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
-}
-
-.node.hover-highlight circle {
+/* --- 'Add More' Node --- */
+.node.node-add circle {
+    fill: var(--primary-dark);
     stroke: var(--primary-coral);
-    stroke-width: 4px;
+    stroke-width: 2px;
+    stroke-dasharray: 4 2;
+    transform-origin: center;
+    transition: all 0.3s ease, transform 0.4s ease;
+}
+.node.node-add:hover circle {
+    transform: rotate(90deg);
+    stroke-dasharray: none;
+    fill: var(--primary-coral);
+}
+.node.node-add text {
+    fill: var(--accent-light);
+    font-size: 24px;
+    font-weight: 300;
 }
 
-.link.highlighted { 
-    stroke: var(--primary-coral); 
-    stroke-opacity: 1; 
-    stroke-width: 4px;
-}
-
-/* At the end of the D3 styles section */
-.node.central-node.loadable {
-    cursor: pointer;
-}
-
-.node.central-node.loadable:hover circle {
-    stroke: var(--collocation-color); /* A nice green to indicate 'go' or 'add' */
-    filter: drop-shadow(0 0 8px var(--collocation-color));
-}
-
-/* CORRECTED SECTION */
-.node:not(.central-node) circle {
-    stroke: none;
-}
-
-/* --- Example Node Styles --- */
-.node.node-example text {
-    font-size: 12px; /* Slightly larger for readability */
-    font-weight: 500; /* Medium weight is nice */
-    font-style: italic;
-    fill: var(--canvas-text-color);
-    text-anchor: middle; /* Center the text block */
-    pointer-events: none; /* Text itself isn't clickable, only tspans inside */
-    transition: fill 0.3s ease;
-}
-
+/* --- Example/Text Box Node --- */
 .node.node-example .example-bg {
     fill: var(--accent-light);
     stroke: #E0E0E0;
     stroke-width: 1.5px;
-    rx: 8px; /* Nicely rounded corners */
-    ry: 8px;
+    rx: 8px; ry: 8px;
     transition: fill 0.3s ease, stroke 0.3s ease;
 }
-
 html[data-theme='dark'] .node.node-example .example-bg {
-    fill: #34495E; /* A darker grey for dark mode */
+    fill: #34495E;
     stroke: #4A6572;
 }
-html[data-theme='dark'] .node.node-example text {
-    fill: var(--accent-light);
-}
 
-.link.link-example {
-    stroke: #D5DBDB;
-    stroke-dasharray: 3 3; /* A clearer dashed line */
-    stroke-width: 1.5px;
-    transition: stroke 0.3s ease;
-}
-
-html[data-theme='dark'] .link.link-example {
-    stroke: #7F8C8D;
-}
-
-/** ⭐ NEW: Styles for Interactive Words **/
+/* --- Interactive Words within Text Boxes --- */
 .interactive-word {
     cursor: pointer;
-    fill: var(--text-link); /* Use a distinct link color */
-    font-weight: 600; /* Make it bold to stand out */
-    text-decoration: none; /* No underline by default */
-    transition: fill 0.2s ease-in-out, text-decoration 0.2s ease-in-out;
-    pointer-events: all; /* Make sure it's clickable */
+    fill: var(--text-link); 
+    font-weight: 600; 
+    text-decoration: none;
+    transition: fill 0.2s ease-in-out;
+    pointer-events: all;
 }
-
 .interactive-word:hover {
-    fill: var(--primary-coral); /* Highlight with main brand color on hover */
+    fill: var(--primary-coral);
     text-decoration: underline;
     text-decoration-thickness: 1.5px;
     text-underline-offset: 2px;
 }
 
-html[data-theme='dark'] .interactive-word {
-    fill: #FFFFFF; /* A slightly brighter blue for dark backgrounds */
-}
-
-html[data-theme='dark'] .interactive-word:hover {
-    fill: var(--primary-coral);
-}
-/* --- Central Node "Load More" Styles --- */
-.node.central-node.loadable {
-    cursor: pointer;
-}
-
-.node.central-node.loadable:hover circle {
+/* --- Detaching Node Animation --- */
+.node.node-detaching circle {
     stroke: var(--primary-coral);
-    filter: drop-shadow(0 0 10px var(--primary-coral));
+    stroke-width: 4px;
+    stroke-dasharray: 8 4;
+    animation: pulse 1.5s infinite;
 }
-
-.node.central-node.no-more circle,
-.node.central-node.non-paginated circle {
-    cursor: default;
-}
-
-/* Make the main word bigger and bolder */
-.node.central-node .node-text {
-    font-size: 18px; 
-    font-weight: 600; 
-    text-anchor: middle; 
-    dominant-baseline: central;
-    fill: var(--canvas-text-color);
-    stroke: var(--node-text-stroke); 
-    stroke-width: 0.5px; 
-    paint-order: stroke;
-}
-
-/* Style the sub-text to look like an icon */
-.node.central-node .sub-text {
-    font-size: 24px;  /* Make the "+" symbol large */
-    font-weight: 300; /* Lighter weight for a modern look */
-    text-anchor: middle;
-    fill: var(--canvas-text-color);
-    stroke: var(--node-text-stroke);
-    stroke-width: 0.4px;
-    paint-order: stroke;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-}
-
-.node.central-node.loadable:hover .sub-text {
-    opacity: 1;
-}
-
-/* When there are no more nodes, use a checkmark */
-.node.central-node.no-more .sub-text {
-    font-size: 18px; /* Checkmark can be a bit smaller */
-    font-weight: 600;
-}
-
-.node.node-pending circle {
-    fill: #888; /* A neutral grey color */
-    stroke: var(--primary-coral);
-    stroke-width: 2px;
-    animation: pulse 1.5s infinite ease-in-out;
-}
-
-.node.node-invalid circle {
-    fill: var(--error-red, #e74c3c); /* A strong red for errors */
-    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-}
-
-/* Animation for the pending state */
 @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+    0% { stroke-opacity: 1; }
+    50% { stroke-opacity: 0.5; }
+    100% { stroke-opacity: 1; }
 }
 
-/* Animation for the invalid state */
-@keyframes shake {
-    10%, 90% { transform: translate3d(-1px, 0, 0); }
-    20%, 80% { transform: translate3d(2px, 0, 0); }
-    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-    40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-
-.svg-input-field { 
-    width: 100%; 
-    height: 100%; 
-    /* --- FIXES --- */
-    box-sizing: border-box; /* Ensures padding is inside the width */
-    padding: 15px 25px;    /* Adds more horizontal padding */
-    /* --- END FIXES --- */
-    border: 2px solid var(--primary-coral); 
-    border-radius: 12px; 
-    background-color: var(--canvas-bg); 
-    color: var(--canvas-text-color); 
-    font-family: inherit; 
-    font-size: 1.3rem; 
-    text-align: center; 
-    outline: none;
-    transition: all 0.3s ease;
-}
-
-.svg-input-field:focus { 
-    outline: 2px solid var(--primary-coral);
-    outline-offset: 2px; /* Adds a small gap between the border and the outline */
-    transform: scale(1.02);
-}
-
-/* --- Definition Panel Styles --- */
-.definition-panel {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60%;
-    max-width: 700px;
-    background: rgba(26, 37, 47, 0.7); /* --primary-dark with transparency */
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 15px 25px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    color: var(--text-light);
-    z-index: 10;
-    text-align: center;
-    font-size: 0.95rem;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
-    transform: translateX(-50%) translateY(20px);
-}
-
-.definition-panel.visible {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(-50%) translateY(0);
-}
-
-/* --- Tooltip Styles --- */
-.graph-tooltip {
-    position: absolute;
-    background: rgba(44, 62, 80, 0.9); /* --primary-navy with transparency */
-    backdrop-filter: blur(5px);
-    color: var(--accent-white);
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    font-size: 0.9rem;
-    font-weight: 500;
-    pointer-events: none; /* Important: allows clicks to pass through to the node */
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 10;
-    text-transform: capitalize;
-}
-
-.graph-tooltip.visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* --- Animations --- */
-@keyframes slideInFromBottom {
-    from {
-        transform: translateY(100px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-@keyframes fadeInScale {
-    from {
-        transform: scale(0.8);
-        opacity: 0;
-    }
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-#controls-dock {
-    animation: slideInFromBottom 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.title-container {
-    animation: fadeInScale 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-#graph-container {
-    animation: fadeInScale 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
-}
-
-/* --- Responsive Design --- */
-@media (max-width: 768px) {
-    #app-wrapper {
-        padding: 10px;
-        gap: 15px;
-    }
-
-    .title-container {
-        padding: 12px 20px;
-    }
-
-    header h1 {
-        font-size: 1.8rem;
-    }
-
-    .header-logo {
-        height: 35px;
-        margin-right: 15px;
-    }
-
-    #controls-dock {
-        flex-direction: column;
-        gap: 15px;
-        padding: 15px;
-    }
-
-    .category-buttons {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .category-btn {
-        min-width: 80px;
-        padding: 10px 6px;
-    }
-
-    .utility-btn {
-        width: 70px;
-        height: 70px;
-    }
-}
-
-/* --- Loading Animation --- */
+/* --- Loading Spinner on Canvas --- */
 .loading-spinner {
     animation: spin 2s linear infinite;
     transform-origin: center;
 }
-
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
 
-/* --- Example Node Styles --- */
-.node.node-example text {
-    font-size: 11px;
-    font-weight: 400;
-    font-style: italic;
-    fill: #555;
-    text-anchor: start; /* Align text to the start of the node */
-}
+/* ===== END OF ENHANCED D3 STYLES SECTION ===== */
 
-/* Use a different shape for examples */
-.node.node-example circle {
-    display: none; /* Hide the circle */
-}
-.node.node-example rect {
-    fill: #F4F6F8; /* A light grey/off-white */
-    stroke: #D5DBDB;
-    stroke-width: 1.5px;
-    rx: 5; /* Rounded corners */
-}
-html[data-theme='dark'] .node.node-example rect {
-    fill: #34495E; /* A darker grey for dark mode */
-    stroke: #7F8C8D;
-}
-html[data-theme='dark'] .node.node-example text {
-    fill: var(--accent-light);
-}
 
-.link.link-example {
-    stroke: #D5DBDB;
-    stroke-dasharray: 2 2; /* Make it a dashed line */
-}
-html[data-theme='dark'] .link.link-example {
-    stroke: #7F8C8D;
-}
-
-html[data-theme='dark'] #canvas-controls .control-btn {
-    background-color: rgba(44, 62, 80, 0.9); /* Use primary-navy with opacity */
-    color: var(--text-light);
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-html[data-theme='dark'] #canvas-controls .control-btn:hover {
-    background-color: rgba(255, 107, 71, 0.2); /* Subtle coral background */
-    border-color: var(--primary-coral);
-    color: var(--text-light); /* Keep text visible */
-}
-
-/* Ensure SVG icons remain visible in dark mode */
-html[data-theme='dark'] #zoom-controls .control-btn svg {
-    fill: var(--text-light);
-}
-
-/* Make node labels look clickable */
-.node text {
-    cursor: pointer;
-}
-.node.node-example text {
-    cursor: default; /* Except for example sentences */
-}
-
-/* --- Translation Controls Styles --- */
-.translation-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.language-selector {
-    background: var(--btn-bg);
-    border: 1px solid var(--btn-border);
-    color: var(--dock-text-color);
-    border-radius: 12px;
-    padding: 10px 15px;
-    font-family: inherit;
+/* --- Tooltip Styles --- */
+.graph-tooltip {
+    position: absolute;
+    background: var(--primary-dark);
+    color: var(--accent-white);
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--primary-coral);
     font-size: 0.9rem;
     font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
+    pointer-events: none;
     opacity: 0;
-    visibility: hidden;
-    transform: scale(0.9);
-}
-
-/* Show the selector only when the translation button is active */
-.translation-controls .category-btn.active + .language-selector {
-    opacity: 1;
-    visibility: visible;
-    transform: scale(1);
-}
-
-.language-selector:hover {
-    background: var(--btn-hover);
-    border-color: var(--primary-coral);
-}
-
-/* --- Language Modal Styles --- */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(44, 62, 80, 0.7); /* Use primary navy with transparency */
-    backdrop-filter: blur(10px);
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    /* The new JS handles the transform, so we add a transition for it */
+    transition: opacity 0.2s ease, transform 0.2s ease;
     z-index: 100;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    white-space: pre; /* Allows tooltips with line breaks */
 }
 
-.modal-overlay.visible {
+.graph-tooltip.visible {
     opacity: 1;
-    visibility: visible;
+    /* The JS will set the transform to translateY(-10px) on hover */
 }
 
+/* --- Utility Buttons & Others --- */
+.utility-btn {
+    background: var(--btn-bg); border: 1px solid var(--btn-border);
+    border-radius: 16px; cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; width: 80px; height: 80px; color: var(--dock-text-color);
+    position: relative; overflow: hidden;
+}
+.utility-btn:hover {
+    background: var(--btn-hover); transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.3); border-color: var(--primary-coral);
+}
+.utility-btn svg { width: 28px; height: 28px; fill: currentColor; transition: all 0.3s ease; }
+.utility-btn span { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px; }
+
+/* --- Language Modal --- */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(44, 62, 80, 0.7); backdrop-filter: blur(10px);
+    display: flex; justify-content: center; align-items: center; z-index: 100;
+    opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.modal-overlay.visible { opacity: 1; visibility: visible; }
 .modal-content {
-    background: var(--dock-bg);
-    color: var(--dock-text-color);
-    padding: 30px 40px;
-    border-radius: 20px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
-    width: 90%;
-    max-width: 400px;
-    text-align: center;
-    position: relative;
-    transform: scale(0.95);
-    transition: transform 0.3s ease;
+    background: var(--dock-bg); color: var(--dock-text-color); padding: 30px 40px;
+    border-radius: 20px; box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
+    width: 90%; max-width: 400px; text-align: center; position: relative;
+    transform: scale(0.95); transition: transform 0.3s ease;
 }
-
-.modal-overlay.visible .modal-content {
-    transform: scale(1);
-}
-
-.modal-content h2 {
-    margin-bottom: 25px;
-    font-size: 1.5rem;
-}
-
+.modal-overlay.visible .modal-content { transform: scale(1); }
+.modal-content h2 { margin-bottom: 25px; font-size: 1.5rem; }
 .modal-close-btn {
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    background: none;
-    border: none;
-    font-size: 2.5rem;
-    line-height: 1;
-    cursor: pointer;
-    color: var(--text-muted);
+    position: absolute; top: 10px; right: 15px; background: none; border: none;
+    font-size: 2.5rem; line-height: 1; cursor: pointer; color: var(--text-muted);
     transition: all 0.2s ease;
 }
-
-.modal-close-btn:hover {
-    color: var(--primary-coral);
-    transform: rotate(90deg);
-}
-
-.language-list {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-    max-height: 50vh;
-    overflow-y: auto;
-}
-
+.modal-close-btn:hover { color: var(--primary-coral); transform: rotate(90deg); }
+.language-list { list-style-type: none; padding: 0; margin: 0; max-height: 50vh; overflow-y: auto; }
 .language-list li {
-    padding: 15px 20px;
-    margin-bottom: 10px;
-    background: var(--btn-bg);
-    border-radius: 12px;
-    border: 1px solid var(--btn-border);
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s ease;
+    padding: 15px 20px; margin-bottom: 10px; background: var(--btn-bg);
+    border-radius: 12px; border: 1px solid var(--btn-border);
+    cursor: pointer; font-weight: 600; transition: all 0.2s ease;
 }
-
 .language-list li:hover {
-    background: var(--primary-coral);
-    color: white;
-    transform: translateY(-2px);
+    background: var(--primary-coral); color: white; transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(255, 107, 71, 0.3);
 }
 
-.example-translation {
-    font-style: normal;
-    font-weight: 600;
-    fill: var(--primary-coral);
-}
-
-[data-theme="dark"] .node-example text {
-    text-shadow: none;
-    -webkit-text-stroke: 0;
-
-    fill: var(--text-primary);
-}
-
-[data-theme="dark"] .node-example .example-translation {
-      fill: var(--primary-coral);
-}
-
-/* ========================================================= */
-/* ==  FIX: Comprehensive Dark Mode Text Readability      == */
-/* ========================================================= */
-
-/*
-  This block targets ALL text elements within the graph when
-  dark mode is active to apply a baseline fix.
-*/
-[data-theme="dark"] #wordsplainer-graph-svg text,
-[data-theme="dark"] #wordsplainer-graph-svg tspan {
-    /* 1. Remove the outline that makes the text look hollow or fuzzy. */
-    -webkit-text-stroke: 0;
-    text-shadow: none;
-}
-
-
-/* --- Specific Fixes for Each Text Type --- */
-
-/* 1. For Peripheral Node Labels (e.g., "el plan") */
-[data-theme="dark"] .node:not(.central-node):not(.node-example) text {
-    /* 2. Give the label a solid, readable color. */
-    fill: #FFFFFF;
-}
-
-/* 2. For the Main Central Node Text */
-[data-theme="dark"] .central-node .node-text {
-    /* 2. Use pure white for maximum contrast on the central node. */
-    fill: #FFFFFF;
-}
-
-/* 3. For Example Nodes (the rectangular ones) */
-[data-theme="dark"] .node-example text {
-    /* 2. Set the color for the primary (English) text line. */
-    fill: #FFFFFF;
-}
-
-/* 4. For the Translated Text Line within Example Nodes */
-[data-theme="dark"] .node-example .example-translation {
-    /* 2. Restore the distinct coral color for the translation. */
-    fill: var(--primary-coral);
-}
-
-.interactive-word {
-    cursor: pointer;
-    /* This now automatically switches between dark navy and pure white! */
-    fill: var(--text-link); 
-    font-weight: 600; 
-    
-    /* Suggestion: Add a subtle underline by default for better accessibility. */
-    text-decoration: underline;
-    text-decoration-style: dotted;
-    text-decoration-thickness: 1.5px;
-    text-underline-offset: 3px;
-    
-    transition: fill 0.2s ease-in-out, text-decoration-style 0.2s ease-in-out;
-    pointer-events: all;
-}
-
-.interactive-word:hover {
-    /* The hover effect remains a vibrant, consistent coral in both themes. */
-    fill: var(--primary-coral);
-    /* Make the underline solid on hover for extra feedback. */
-    text-decoration-style: solid;
-}
-
+/* --- Canvas Controls (Zoom, Register) --- */
 #canvas-controls {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    /* This gap now correctly applies between the register button and the zoom controls container */
-    gap: 10px;  
+    position: absolute; top: 15px; right: 15px; z-index: 10;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 10px;  
 }
-
-/* This rule is now the ONLY one for #zoom-controls. It is no longer absolutely positioned. */
-#zoom-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 8px; /* This creates the space between the zoom-in and zoom-out buttons */
-}
-
+#zoom-controls { display: flex; flex-direction: column; gap: 8px; }
 #canvas-controls .control-btn {
-    pointer-events: auto;
-    background-color: var(--dock-bg);
-    color: var(--dock-text-color);
-    border: 1px solid var(--btn-border);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    height: 38px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    overflow: hidden;
+    pointer-events: auto; background-color: var(--dock-bg); color: var(--dock-text-color);
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: 38px; cursor: pointer;
+    transition: all 0.2s ease; display: flex; justify-content: center;
+    align-items: center; position: relative; overflow: hidden;
 }
-
-#canvas-controls .control-btn:hover {
-    background-color: var(--btn-hover);
-    border-color: var(--primary-coral);
-}
-
+#canvas-controls .control-btn:hover { background-color: var(--btn-hover); border-color: var(--primary-coral); }
 #register-toggle-btn {
-    position: relative; 
-    overflow: hidden; /* Important for clean animations */
-    width: 38px;
+    position: relative; overflow: hidden; width: 38px;
     transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-/* Base style for both states (Conversational and Academic) */
 .register-state {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: absolute; width: 100%; height: 100%; left: 0; top: 0;
+    display: flex; justify-content: center; align-items: center;
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
-
-/* Style for the text part (hidden by default) */
-.register-state .register-text {
-    opacity: 0;
-    position: absolute;
-    font-weight: 600;
-    font-size: 0.8rem;
-}
-
-/* Style for the icon part (visible by default) */
-.register-state .register-icon {
-    transition: opacity 0.2s ease;
-}
-
-/* --- Initial State (Conversational is active) --- */
-
-/* Show conversational, hide academic */
+.register-state .register-text { opacity: 0; position: absolute; font-weight: 600; font-size: 0.8rem; }
 .conversational-state { opacity: 1; transform: translateY(0); }
 .academic-state { opacity: 0; transform: translateY(20px); }
-
-/* --- Toggled State (.is-academic class on button) --- */
-
-/* Hide conversational, show academic */
 #register-toggle-btn.is-academic .conversational-state { opacity: 0; transform: translateY(-20px); }
 #register-toggle-btn.is-academic .academic-state { opacity: 1; transform: translateY(0); }
-
-/* --- Hover Behavior --- */
-
-#register-toggle-btn:hover {
-    /* ⭐ FIX 1C: Expand the button on hover to make space for the text. */
-    width: 145px;
-}
-
-/* On hover, hide the icon and show the text */
-#register-toggle-btn:hover .register-icon {
-    opacity: 0;
-}
-#register-toggle-btn:hover .register-text {
-    opacity: 1;
-}
-
-/* Specific size for the smaller, square zoom buttons */
-#zoom-controls .control-btn {
-    width: 38px;
-}
-
-#zoom-controls .control-btn svg {
-    fill: currentColor;
-    width: 20px;
-    height: 20px;
-}
-
-/* Animation styles for register toggle text (no changes needed) */
-.register-text {
-    position: absolute;
-    width: 100%;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.academic-text { opacity: 0; transform: translateY(-50%) translateY(10px); }
-.conversational-text { opacity: 1; transform: translateY(-50%) translateY(0); }
-#register-toggle-btn.is-academic .conversational-text { opacity: 0; transform: translateY(-50%) translateY(-10px); }
-#register-toggle-btn.is-academic .academic-text { opacity: 1; transform: translateY(-50%) translateY(0); }
-
+#register-toggle-btn:hover { width: 145px; }
+#register-toggle-btn:hover .register-icon { opacity: 0; }
+#register-toggle-btn:hover .register-text { opacity: 1; }
+#zoom-controls .control-btn { width: 38px; }
+#zoom-controls .control-btn svg { fill: currentColor; width: 20px; height: 20px; }
+#register-toggle-btn.needs-attention { animation: pulse-glow 2.5s infinite ease-in-out; }
 @keyframes pulse-glow {
-    0% {
-        /* Start with the button's normal shadow */
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    50% {
-        /* At the peak of the animation, add a prominent coral glow */
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1), 0 0 15px rgba(255, 107, 71, 0.7);
-    }
-    100% {
-        /* Return to the normal shadow to complete the loop */
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
+    0% { box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    50% { box-shadow: 0 2px 5px rgba(0,0,0,0.1), 0 0 15px rgba(255, 107, 71, 0.7); }
+    100% { box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 }
 
-#register-toggle-btn.needs-attention {
-    animation: pulse-glow 2.5s infinite ease-in-out;
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+    #app-wrapper { padding: 10px; gap: 15px; }
+    .title-container { padding: 12px 20px; }
+    header h1 { font-size: 1.8rem; }
+    .header-logo { height: 35px; margin-right: 15px; }
+    #controls-dock { flex-direction: column; gap: 15px; padding: 15px; }
+    .category-buttons { flex-wrap: wrap; justify-content: center; }
+    .category-btn { min-width: 80px; padding: 10px 6px; }
+    .utility-btn { width: 70px; height: 70px; }
 }
