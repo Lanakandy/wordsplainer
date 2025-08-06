@@ -652,7 +652,21 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
         // 3. If a word is currently active, re-fetch its data with the new register
         if (currentActiveCentral) {
             console.log(`Register changed to '${currentRegister}'. Re-fetching for '${currentActiveCentral}'.`);
-            // This will re-trigger the data fetch with the new `currentRegister` value
+
+            // ⭐ FIX: Clear the old peripheral nodes for the current view to force a re-fetch.
+            const cluster = graphClusters.get(currentActiveCentral);
+            if (cluster) {
+                // Keep only the central node and the 'add' button, remove all other nodes.
+                cluster.nodes = cluster.nodes.filter(n => n.isCentral || n.type === 'add');
+                
+                // Rebuild links array. If 'add' node exists, link to it. Otherwise, no links.
+                const addNode = cluster.nodes.find(n => n.id === `add-${currentActiveCentral}`);
+                cluster.links = addNode 
+                    ? [{ source: `central-${currentActiveCentral}`, target: addNode.id }] 
+                    : [];
+            }
+            
+            // This call will now always result in a CACHE MISS and trigger the data fetch.
             generateGraphForView(currentView); 
         }
     }
