@@ -905,32 +905,20 @@ html[data-theme='dark'] .interactive-word:hover {
 }
 
 /* Use a different shape for examples */
-.node.node-example circle,
-.node.node-meaning circle,
-.node.node-context circle,
-.node.node-idioms circle {
+.node.node-example circle {
     display: none; /* Hide the circle */
 }
-.node.node-example rect,
-.node.node-meaning rect,
-.node.node-context rect,
-.node.node-idioms rect {
+.node.node-example rect {
     fill: #F4F6F8; /* A light grey/off-white */
     stroke: #D5DBDB;
     stroke-width: 1.5px;
     rx: 5; /* Rounded corners */
 }
-html[data-theme='dark'] .node.node-example rect,
-html[data-theme='dark'] .node.node-meaning rect,
-html[data-theme='dark'] .node.node-context rect,
-html[data-theme='dark'] .node.node-idioms rect {
+html[data-theme='dark'] .node.node-example rect {
     fill: #34495E; /* A darker grey for dark mode */
     stroke: #7F8C8D;
 }
-html[data-theme='dark'] .node.node-example text,
-html[data-theme='dark'] .node.node-meaning text,
-html[data-theme='dark'] .node.node-context text,
-html[data-theme='dark'] .node.node-idioms text {
+html[data-theme='dark'] .node.node-example text {
     fill: var(--accent-light);
 }
 
