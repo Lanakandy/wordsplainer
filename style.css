@@ -1287,3 +1287,22 @@ html[data-theme='dark'] #zoom-controls .control-btn svg {
 .conversational-text { opacity: 1; transform: translateY(-50%) translateY(0); }
 #register-toggle-btn.is-academic .conversational-text { opacity: 0; transform: translateY(-50%) translateY(-10px); }
 #register-toggle-btn.is-academic .academic-text { opacity: 1; transform: translateY(-50%) translateY(0); }
+
+@keyframes pulse-glow {
+    0% {
+        /* Start with the button's normal shadow */
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    50% {
+        /* At the peak of the animation, add a prominent coral glow */
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1), 0 0 15px rgba(255, 107, 71, 0.7);
+    }
+    100% {
+        /* Return to the normal shadow to complete the loop */
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+}
+
+#register-toggle-btn.needs-attention {
+    animation: pulse-glow 2.5s infinite ease-in-out;
+}

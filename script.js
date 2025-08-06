@@ -18,20 +18,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const registerToggleBtn = document.getElementById('register-toggle-btn');
     
     if (registerToggleBtn) {
+        registerToggleBtn.classList.add('needs-attention');
+    }
+
+    if (registerToggleBtn) {
         registerToggleBtn.addEventListener('click', () => {
-            // This toggles the .is-academic class on the button itself
             registerToggleBtn.classList.toggle('is-academic');
 
-            // You can get the current state to use in your logic
             const isAcademic = registerToggleBtn.classList.contains('is-academic');
             
             console.log('Register is now:', isAcademic ? 'Academic' : 'Conversational');
             
-            // TODO: Add your logic here to update the graph based on the new register.
-            // For example, you might call a function like:
-            // updateGraphForRegister(isAcademic);
-        });
+            });
     }    
+
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
@@ -49,7 +49,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRegister = 'conversational';    
     let viewState = { offset: 0, hasMore: true };
 
-    // --- Central API fetching function ---
+   function stopRegisterButtonAnimation() {
+        if (registerToggleBtn) {
+            registerToggleBtn.classList.remove('needs-attention');
+        }
+    }    
+
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
     try {
         console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}`);
@@ -643,30 +648,20 @@ async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null)
     }
 
     function handleRegisterToggle() {
-        // 1. Flip the state
+        stopRegisterButtonAnimation();
         currentRegister = (currentRegister === 'conversational') ? 'academic' : 'conversational';
-        
-        // 2. Update the button's class for styling
         registerToggleBtn.classList.toggle('is-academic', currentRegister === 'academic');
-        
-        // 3. If a word is currently active, re-fetch its data with the new register
+       
         if (currentActiveCentral) {
             console.log(`Register changed to '${currentRegister}'. Re-fetching for '${currentActiveCentral}'.`);
-
-            // ⭐ FIX: Clear the old peripheral nodes for the current view to force a re-fetch.
             const cluster = graphClusters.get(currentActiveCentral);
             if (cluster) {
-                // Keep only the central node and the 'add' button, remove all other nodes.
                 cluster.nodes = cluster.nodes.filter(n => n.isCentral || n.type === 'add');
-                
-                // Rebuild links array. If 'add' node exists, link to it. Otherwise, no links.
                 const addNode = cluster.nodes.find(n => n.id === `add-${currentActiveCentral}`);
                 cluster.links = addNode 
                     ? [{ source: `central-${currentActiveCentral}`, target: addNode.id }] 
                     : [];
             }
-            
-            // This call will now always result in a CACHE MISS and trigger the data fetch.
             generateGraphForView(currentView); 
         }
     }
