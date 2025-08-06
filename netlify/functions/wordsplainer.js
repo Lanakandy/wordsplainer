@@ -13,7 +13,7 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert English language tutor creating educational materials. Your tone is encouraging and clear. The user is a language learner.`;
+    const baseInstruction = `You are an expert English language tutor creating non-trivial engaging educational materials. The user is a language learner.`;
 
     // ⭐ FIX 1: Make the register instruction more general and robust.
     const registerInstruction = register === 'academic' 
@@ -30,9 +30,8 @@ function getLLMPrompt(type, register, word, options = {}) {
     let systemPrompt;
 
     switch(type) {
-        // ... (cases 'meaning' through 'opposites' are unchanged, but they will now benefit from the new prompt structure)
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the word. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide engaging definitions for the main meanings of the word. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
@@ -44,12 +43,12 @@ function getLLMPrompt(type, register, word, options = {}) {
             taskInstruction = `Provide words that often appear together with the target word.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
         case 'idioms':
-            taskInstruction = `Provide idioms or set phrases that use the word.\nJSON format: {"nodes": [{"text": "idiom"}]}`;
+            taskInstruction = `Provide idioms that use the word.\nJSON format: {"nodes": [{"text": "idiom"}]}`;
             break;
         case 'synonyms':
         case 'opposites':
             const wordType = type === 'synonyms' ? 'synonyms' : 'antonyms (opposites)';
-            taskInstruction = `Provide common ${wordType}.\nJSON format: {"nodes": [{"text": "synonym/antonym"}]}`;
+            taskInstruction = `Provide common ${wordType}.\nJSON format: {"nodes": [{"text": "the generated word here"}]}`;
             break;
         case 'translation':
             taskInstruction = `Provide the main translations for the word into the target language.\nJSON format: {"nodes": [{"text": "translation"}]}`;
@@ -62,16 +61,16 @@ function getLLMPrompt(type, register, word, options = {}) {
                 taskInstruction = `The user clicked on an idiom. Create a single, high-quality example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
                 userPrompt = `Idiom to use and explain: "${word}"`;
             } else if (sourceNodeType === 'meaning' && centralWord && definition) {
-                taskInstruction = `The user is exploring the word "${centralWord}" and clicked on this specific definition: "${definition}". Create a single, high-quality example sentence that uses "${centralWord}" to clearly illustrate this exact meaning.\nJSON format: {"example": "The generated sentence."}`;
+                taskInstruction = `The user is exploring the word "${centralWord}" and clicked on this specific definition: "${definition}". Create a single, high-quality engaging example sentence that uses "${centralWord}" to clearly illustrate this exact meaning.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word: "${centralWord}", Definition to illustrate: "${definition}"`;
             } else if (centralWord && context) {
-                taskInstruction = `The user is exploring the word "${centralWord}" and has clicked on the context "${context}". Create a single, high-quality example sentence that uses the word "${centralWord}" in a way that is specific to the field of "${context}".\nJSON format: {"example": "The generated sentence."}`;
+                taskInstruction = `The user is exploring the word "${centralWord}" and has clicked on the context "${context}". Create a single, high-quality engaging example sentence that uses the word "${centralWord}" in a way that is specific to the field of "${context}".\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word: "${centralWord}", Context: "${context}"`;
             } else if (sourceNodeType === 'translation' && centralWord && translation && language) {
-                taskInstruction = `The user is exploring the English word "${centralWord}". They clicked on its translation into ${language}: "${translation}". Create a single, high-quality English example sentence using "${centralWord}". Then, provide its direct and natural translation into ${language}.\nJSON format: {"english_example": "The English sentence.", "translated_example": "The sentence in the target language."}`;
+                taskInstruction = `The user is exploring the English word "${centralWord}". They clicked on its translation into ${language}: "${translation}". Create a single, high-quality engaging English example sentence using "${centralWord}". Then, provide its direct and natural translation into ${language}.\nJSON format: {"english_example": "The English sentence.", "translated_example": "The sentence in the target language."}`;
                 userPrompt = `English Word: "${centralWord}", Target Language: "${language}", Translation: "${translation}"`;
             } else {
-                taskInstruction = `Create a single, high-quality, educational example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
+                taskInstruction = `Create a single, high-quality, engaging example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
             // ⭐ FIX 3: Assemble the prompt for 'generateExample' using the new robust structure.
@@ -87,8 +86,6 @@ function getLLMPrompt(type, register, word, options = {}) {
     return { systemPrompt, userPrompt };
 }
 
-
-// ... The rest of the file (callOpenAIModel and the handler) is unchanged ...
 async function callOpenAIModel(systemPrompt, userPrompt) {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
