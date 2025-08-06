@@ -2,7 +2,6 @@
 
 const fetch = require('node-fetch');
 
-// ⭐ MODIFICATION: The options object is now fully comprehensive.
 function getLLMPrompt(type, register, word, options = {}) {
     const { 
         language = null, 
@@ -23,11 +22,11 @@ function getLLMPrompt(type, register, word, options = {}) {
     const limitInstruction = `Provide up to ${limit} distinct items.`;
 
     let taskInstruction;
-    let userPrompt;
+    // ⭐ FIX: Re-initialize userPrompt with a default value. This was accidentally removed.
+    let userPrompt = `Word: "${word}"`;
     let systemPrompt;
 
     switch(type) {
-        // ... (cases 'meaning' through 'opposites' are unchanged) ...
         case 'meaning':
             taskInstruction = `Provide definitions for the main meanings of the word. For each, include its part of speech.
             JSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
@@ -54,15 +53,13 @@ function getLLMPrompt(type, register, word, options = {}) {
             taskInstruction = `Provide common ${wordType}.
             JSON format: {"nodes": [{"text": "synonym/antonym"}]}`;
             break;
-
-        // ⭐ MODIFICATION: The 'translation' case is now only for listing translations.
         case 'translation':
             taskInstruction = `Provide the main translations for the word into the target language.
             JSON format: {"nodes": [{"text": "translation"}]}`;
+            // This correctly overrides the default userPrompt
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
             break;
         
-        // ⭐ MODIFICATION: 'generateExample' is now the central hub for all example types.
         case 'generateExample':
             // Case 1: Example for an idiom.
             if (sourceNodeType === 'idioms') {
@@ -106,7 +103,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 }
 
 
-// ... callOpenAIModel function is unchanged ...
+// ... The rest of the file (callOpenAIModel and the handler) is unchanged ...
 async function callOpenAIModel(systemPrompt, userPrompt) {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
@@ -153,7 +150,7 @@ async function callOpenAIModel(systemPrompt, userPrompt) {
 }
 
 
-// ⭐ MODIFICATION: The handler now extracts and passes all possible new parameters.
+// Main Netlify handler function
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
