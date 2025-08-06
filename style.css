@@ -264,17 +264,46 @@ html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
     fill: var(--accent-white);
 }
 
-/* --- Example/Text Box Node --- */
-.node.node-example .example-bg {
-    fill: var(--accent-light);
-    stroke: #E0E0E0;
-    stroke-width: 1.5px;
-    rx: 8px; ry: 8px;
-    transition: fill 0.3s ease, stroke 0.3s ease;
+/* --- ENHANCED: Text Node Container Styles --- */
+.node .node-html-wrapper {
+    /* This ensures the foreignObject doesn't clip shadows or borders */
+    overflow: visible;
 }
-html[data-theme='dark'] .node.node-example .example-bg {
-    fill: #34495E;
-    stroke: #4A6572;
+
+.node .node-html-content {
+    /* Styling for the div inside the foreignObject */
+    background-color: var(--accent-light);
+    color: var(--canvas-text-color);
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    height: 100%; /* Important: makes the div fill the foreignObject */
+    box-sizing: border-box;
+    /* This enables text wrapping */
+    word-wrap: break-word;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dark Mode Variants */
+html[data-theme='dark'] .node .node-html-content {
+    background-color: #34495E;
+    color: var(--accent-light);
+    border-color: #4A6572;
+}
+
+/* Make sure interactive words inside these new containers are styled correctly */
+.node .node-html-content .interactive-word {
+    color: var(--text-link);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+}
+.node .node-html-content .interactive-word:hover {
+    color: var(--primary-coral);
+    text-decoration-style: solid;
 }
 
 /* --- Interactive Words within Text Boxes --- */

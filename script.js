@@ -200,54 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-    // Enhanced cluster positioning to prevent overlaps
-    function positionNewCluster(sourceNode) {
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const existingCenters = Array.from(graphClusters.values()).map(c => c.center);
-        
-        let attempts = 0;
-        let newCenter;
-        const minDistance = 400; // Minimum distance between cluster centers
-
-        let idealStartPoint;
-        if (sourceNode && typeof sourceNode.x === 'number') {
-            idealStartPoint = { x: sourceNode.x, y: sourceNode.y };
-        } else {
-            const currentTransform = d3.zoomTransform(svg.node());
-            idealStartPoint = {
-                x: (width / 2 - currentTransform.x) / currentTransform.k,
-                y: (height / 2 - currentTransform.y) / currentTransform.k
-            };
-        }
-        
-        do {
-            const angle = (attempts > 0) ? (attempts * 45) * (Math.PI / 180) : 0;
-            const distance = sourceNode 
-                ? 450 + (attempts * 60)
-                : attempts * 150;
-
-            newCenter = {
-                x: idealStartPoint.x + Math.cos(angle) * distance,
-                y: idealStartPoint.y + Math.sin(angle) * distance
-            };
-            
-            const tooClose = existingCenters.some(center => {
-                const dist = Math.sqrt(
-                    Math.pow(newCenter.x - center.x, 2) + 
-                    Math.pow(newCenter.y - center.y, 2)
-                );
-                return dist < minDistance;
-            });
-            
-            if (!tooClose) break;
-            attempts++;
-            
-        } while (attempts < 12);
-        
-        return newCenter;
-    }
-
-    /**
+     /**
      * Counts the number of "notional" (meaningful) words in a string.
      * This helps differentiate single words from phrases.
      * @param {string} text The text to analyze.
@@ -372,107 +325,94 @@ document.addEventListener('DOMContentLoaded', () => {
             );
 
         // Enhanced node content rendering
-        nodeGroups.each(function(d) {
-            const selection = d3.select(this);
-            const textElement = selection.select("text");
+        // Enhanced node content rendering
+nodeGroups.each(function(d) {
+    const selection = d3.select(this);
+    const textElement = selection.select("text");
+
+    // --- Define which nodes need HTML wrapping ---
+    const needsWrapping = textBoxTypes.includes(d.type) || countNotionalWords(d.text) > 1;
+
+    // Clear previous shapes before re-rendering
+    selection.select("circle").remove();
+    selection.select("rect").remove();
+    selection.select("foreignObject").remove();
+
+    if (d.isCentral) {
+        selection.insert("circle", "text") // insert() keeps text on top
+            .attr("r", 45)
+            .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+        
+        textElement
+            .attr("class", "node-text")
+            .text(d.word || d.id)
+            .attr("dy", "0.3em")
+            .style("font-weight", "bold")
+            .style("font-size", "16px");
             
-            if (d.isCentral) {
-                selection.select("circle")
-                    .attr("r", 45)
-                    .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-                
-                textElement
-                    .attr("class", "node-text")
-                    .text(d.word || d.id)
-                    .attr("dy", "0.3em")
-                    .style("font-weight", "bold")
-                    .style("font-size", "16px");
-                    
-            } else if (d.type === 'add') {
-                selection.select("circle")
-                    .attr("r", 20)
-                    .style("transition", "all 0.3s ease");
-                    
-                textElement
-                    .text('+')
-                    .style("font-size", "20px")
-                    .style("font-weight", "300")
-                    .style("fill", "white")
-                    .attr("dy", "0.3em");
-                    
-            } else if (textBoxTypes.includes(d.type)) {
-                selection.select("rect")
-                    .attr("class", "example-bg")
-                    .style("rx", "8")
-                    .style("ry", "8")
-                    .style("filter", "drop-shadow(0 2px 8px rgba(0,0,0,0.1))");
-                
-                let fullText = d.text;
-                if (d.explanation) {
-                    fullText += `\n(${d.explanation})`;
-                }
+    } else if (d.type === 'add') {
+        selection.insert("circle", "text")
+            .attr("r", 20);
+            
+        textElement
+            .text('+')
+            .style("font-size", "20px")
+            .style("font-weight", "300")
+            .style("fill", "var(--primary-coral)");
+            
+    } else if (needsWrapping) {
+        // --- NEW LOGIC: RENDER WITH HTML WRAPPING ---
+        const nodeWidth = 220; // Set a fixed width for wrapped text nodes
+        textElement.remove(); // Remove the SVG text element, we'll use HTML
 
-                if (d.type === 'meaning' && d.examples && d.examples.length > 0) {
-                    const exampleLines = d.examples.map(ex => `\n  •  ${ex}`).join('');
-                    fullText += exampleLines;
-                }
+        const foreignObject = selection.append("foreignObject")
+            .attr("class", "node-html-wrapper")
+            .attr("width", nodeWidth)
+            .style("opacity", 0); // Start invisible
+
+        const div = foreignObject.append("xhtml:div")
+            .attr("class", "node-html-content");
+            
+        let fullText = d.text;
+        if(d.type === 'meaning' && d.examples && d.examples.length > 0) {
+            fullText += d.examples.map(ex => `\n\n• ${ex}`).join('');
+        }
+        
+        // Use createInteractiveText to populate the div
+        createInteractiveText(div, fullText, (word) => handleWordSubmitted(word, true, d));
+
+        // Use a timeout to let the browser render the HTML, then get its height
+        setTimeout(() => {
+            if (div.node()) {
+                const divHeight = div.node().scrollHeight;
+                d.width = nodeWidth;
+                d.height = divHeight;
+
+                foreignObject
+                    .attr("height", divHeight)
+                    .attr("x", -d.width / 2)
+                    .attr("y", -d.height / 2)
+                    .transition().duration(400)
+                    .style("opacity", 1);
                 
-                createInteractiveText(textElement, fullText, (word) => handleWordSubmitted(word, true, d));
-
-                setTimeout(() => {
-                    const bbox = textElement.node()?.getBBox();
-                    if (bbox && bbox.width > 0) {
-                        const padding = { x: 24, y: 14 };
-                        d.width = bbox.width + padding.x;
-                        d.height = bbox.height + padding.y;
-
-                        selection.select("rect")
-                            .attr("width", 0)
-                            .attr("height", 0)
-                            .attr("x", bbox.x)
-                            .attr("y", bbox.y)
-                            .transition()
-                            .duration(400)
-                            .ease(d3.easeBackOut.overshoot(1.1))
-                            .attr("width", d.width)
-                            .attr("height", d.height)
-                            .attr("x", bbox.x - (padding.x / 2))
-                            .attr("y", bbox.y - (padding.y / 2))
-                            .style("opacity", 1);
-                        
-                        simulation.alpha(0.2).restart();
-                    }
-                }, 100);
-                
-            } else {
-                // Regular peripheral nodes (synonyms, collocations, etc.)
-                selection.select("circle")
-                    .attr("r", 18)
-                    .style("transition", "all 0.2s ease");
-                
-                const notionalWordCount = countNotionalWords(d.text);
-
-                // Apply the new interaction rule
-                if (notionalWordCount > 1) {
-                    // --- MULTI-WORD NODE ---
-                    // It's a phrase, so make individual words clickable.
-                    createInteractiveText(textElement, d.text, (word) => handleWordSubmitted(word, true, d));
-                    // Disable the "drag" cursor for the node itself.
-                    selection.style("cursor", "default");
-
-                } else {
-                    // --- SINGLE-WORD NODE ---
-                    // It's a single word, so render it as plain text and keep it draggable.
-                    textElement
-                        .text(d.text || d.id)
-                        .attr("dy", "0.3em")
-                        .style("font-size", "12px");
-                    // Ensure the "drag" cursor is active.
-                    selection.style("cursor", "pointer");
-                }
+                simulation.alpha(0.1).restart(); // Nudge simulation with new size
             }
-        }); // <-- CORRECTED: Properly close the .each() call
+        }, 50);
 
+        selection.style("cursor", "default"); // These nodes are not draggable
+
+    } else {
+        // --- SINGLE-WORD PERIPHERAL NODES (Unchanged) ---
+        selection.insert("circle", "text")
+            .attr("r", 18);
+            
+        textElement
+            .text(d.text || d.id)
+            .attr("dy", "0.3em")
+            .style("font-size", "12px");
+        selection.style("cursor", "pointer"); // These are draggable
+    }
+});
         graphGroup.selectAll(".link")
             .style("stroke", d => {
                 if (d.type === 'cross-cluster') return 'var(--accent-orange)';
@@ -601,54 +541,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-        const lowerWord = word.toLowerCase();
-        
-        if (isNewCentral) {
-            if (centralNodes.some(c => c.word === lowerWord)) {
-                focusOnCentralNode(lowerWord);
-                return;
-            }
-
-            const newCenter = positionNewCluster(sourceNode);
-            
-            const centralNodeData = { 
-                word: lowerWord, 
-                id: `central-${lowerWord}`, 
-                isCentral: true, 
-                type: 'central', 
-                clusterId: lowerWord,
-                x: newCenter.x,
-                y: newCenter.y,
-                fx: newCenter.x,
-                fy: newCenter.y,
-                visible: true
-            };
-            
-            setTimeout(() => {
-                if (centralNodeData) {
-                    centralNodeData.fx = null;
-                    centralNodeData.fy = null;
-                    simulation.alpha(0.3).restart();
-                }
-            }, 2000);
-
-            centralNodes.push(centralNodeData);
-            graphClusters.set(lowerWord, { 
-                nodes: [centralNodeData], 
-                links: [], 
-                center: newCenter,
-                currentView: 'meaning' 
-            });
-
-            panToNode(centralNodeData, 1.3);
+    const lowerWord = word.toLowerCase();
+    
+    if (isNewCentral) {
+        if (centralNodes.some(c => c.word === lowerWord)) {
+            const existingNode = centralNodes.find(n => n.word === lowerWord);
+            if(existingNode) panToNode(existingNode, 1.3);
+            return;
         }
 
-        currentActiveCentral = lowerWord;
-        currentView = 'meaning';
-        viewState = { offset: 0, hasMore: true };
-        updateActiveButton();
-        await generateGraphForView(currentView);
+        // --- NEW LAYOUT LOGIC ---
+        const centralNodeData = { 
+            word: lowerWord, id: `central-${lowerWord}`, 
+            isCentral: true, type: 'central', clusterId: lowerWord,
+            visible: true
+            // x/y/fx/fy will be set by repositionAllClusters
+        };
+        
+        centralNodes.push(centralNodeData);
+        graphClusters.set(lowerWord, { 
+            nodes: [centralNodeData], 
+            links: [], 
+            // The center will also be set by repositionAllClusters
+            center: { x: 0, y: 0 }, 
+            currentView: 'meaning' 
+        });
+
+        // Reposition ALL clusters, including the new one
+        repositionAllClusters();
+        
+        // Smoothly pan the camera to the new node, which is now perfectly centered
+        panToNode(centralNodeData, 1.3);
+
     }
+
+    currentActiveCentral = lowerWord;
+    currentView = 'meaning';
+    viewState = { offset: 0, hasMore: true };
+    updateActiveButton();
+    await generateGraphForView(currentView);
+}
 
     function panToNode(node, scale = 1.2) {
         if (!node) return;
@@ -958,31 +890,77 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function createInteractiveText(d3TextElement, text, onWordClick) {
-        d3TextElement.selectAll("tspan").remove();
-        const lines = text.split('\n');
-        lines.forEach((line, lineIndex) => {
-            const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
-            const lineTspan = d3TextElement.append('tspan')
-                .attr('x', 0)
-                .attr('dy', lineIndex === 0 ? '0.3em' : '1.4em');
-            tokens.forEach(token => {
-                const cleanedToken = token.trim().toLowerCase();
-                if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
-                    lineTspan.append('tspan')
-                        .attr('class', 'interactive-word')
-                        .text(token)
-                        .on('click', (event) => {
-                            event.stopPropagation();
-                            const wordToExplore = token.replace(/[.,!?;:"]+/g, '').trim();
-                            if(wordToExplore) onWordClick(wordToExplore);
-                        });
-                } else {
-                    lineTspan.append('tspan').text(token);
-                }
-            });
+    function createInteractiveText(d3Element, text, onWordClick) {
+    // Works with both SVG <text> and HTML <div> selections
+    const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
+    d3Element.html(""); // Clear previous content
+
+    const lines = text.split('\n');
+    lines.forEach((line, lineIndex) => {
+        if (lineIndex > 0 && !isSvg) {
+            d3Element.append("br");
+        }
+        
+        const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
+        
+        const lineContainer = isSvg ? 
+            d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : 
+            d3Element;
+
+        tokens.forEach(token => {
+            const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"]+/g, '');
+            if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
+                lineContainer.append('span')
+                    .attr('class', 'interactive-word')
+                    .text(token)
+                    .on('click', (event) => {
+                        event.stopPropagation();
+                        if(token) onWordClick(token);
+                    });
+            } else {
+                lineContainer.append('span').text(token);
+            }
         });
-    }
+    });
+}
+
+const CLUSTER_SPACING = 850; // Horizontal distance between cluster centers
+
+/**
+ * Arranges all clusters in a horizontal "film strip" timeline.
+ * The most recent cluster is centered in the current view.
+ */
+function repositionAllClusters() {
+    if (centralNodes.length === 0) return;
+
+    const { width, height } = graphContainer.getBoundingClientRect();
+    const currentTransform = d3.zoomTransform(svg.node());
+
+    // Calculate the center of the viewport in SVG coordinates
+    const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
+    const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
+
+    const lastNodeIndex = centralNodes.length - 1;
+
+    centralNodes.forEach((node, i) => {
+        const cluster = graphClusters.get(node.clusterId);
+        if (cluster) {
+            // Calculate the target X position relative to the last node
+            const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
+
+            // Set the fixed position for the central node
+            node.fx = targetX;
+            node.fy = viewCenterY;
+
+            // Update the cluster's center for the force simulation
+            cluster.center.x = targetX;
+            cluster.center.y = viewCenterY;
+        }
+    });
+
+    // Give the simulation a strong kick to rearrange peripheral nodes around their new centers
+    simulation.alpha(0.6).restart();
+}
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
