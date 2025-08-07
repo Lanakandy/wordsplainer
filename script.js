@@ -1012,50 +1012,47 @@ nodeGroups.each(function(d) {
         return;
     }
 
-    // --- 1. CALCULATE THE BOUNDING BOX OF THE ENTIRE "FILM STRIP" ---
+    // --- 1. ACCURATE BOUNDING BOX CALCULATION ---
     const allNodes = getConsolidatedGraphData().nodes;
     if (allNodes.length === 0) return;
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     
+    // This new logic calculates the box based on the full visual extent of each node,
+    // not just its center point, which fixes the clipping issue.
     allNodes.forEach(d => {
-        // Use the node's actual position from the simulation
-        if (d.x < minX) minX = d.x;
-        if (d.x > maxX) maxX = d.x;
-        if (d.y < minY) minY = d.y;
-        if (d.y > maxY) maxY = d.y;
+        const nodeWidth = d.width || (d.isCentral ? 90 : 40); // Use stored width, or estimate
+        const nodeHeight = d.height || (d.isCentral ? 90 : 40);
+        minX = Math.min(minX, d.x - nodeWidth / 2);
+        maxX = Math.max(maxX, d.x + nodeWidth / 2);
+        minY = Math.min(minY, d.y - nodeHeight / 2);
+        maxY = Math.max(maxY, d.y + nodeHeight / 2);
     });
 
-    // Add padding to avoid cutting off node edges
-    const padding = 150; 
+    const padding = 100; // Generous padding for aesthetics
     const exportWidth = (maxX - minX) + 2 * padding;
     const exportHeight = (maxY - minY) + 2 * padding;
 
     // --- 2. CREATE A TEMPORARY SVG IN MEMORY ---
-    // We use d3.create to make an SVG element without adding it to the page
     const tempSvg = d3.create('svg')
         .attr('xmlns', 'http://www.w3.org/2000/svg')
         .attr('width', exportWidth)
         .attr('height', exportHeight)
         .attr('viewBox', `0 0 ${exportWidth} ${exportHeight}`);
 
-    // Set the theme on the SVG itself so our embedded CSS will work
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    tempSvg.attr('data-theme', currentTheme);
+    tempSvg.attr('data-theme', currentTheme); // This now works with our updated CSS
 
-    // Get the correct background color from CSS variables
     const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
     tempSvg.append('rect')
         .attr('width', '100%')
         .attr('height', '100%')
         .attr('fill', bgColor);
         
-    // This group will hold all our graph content and handle the positioning
     const tempGroup = tempSvg.append('g')
         .attr('transform', `translate(${-minX + padding}, ${-minY + padding})`);
 
     // --- 3. EMBED ALL STYLES ---
-    // This ensures all CSS rules, including those for text, links, and themes, are included
     const style = tempSvg.append('style');
     let cssText = "";
     for (const sheet of document.styleSheets) {
@@ -1069,8 +1066,7 @@ nodeGroups.each(function(d) {
     }
     style.text(cssText);
 
-    // --- 4. CLONE THE LIVE GRAPH CONTENT INTO THE TEMPORARY SVG ---
-    // We deep-clone every visible link and node from the live graph
+    // --- 4. CLONE THE LIVE GRAPH CONTENT ---
     graphGroup.selectAll('.link').each(function() {
         tempGroup.node().appendChild(this.cloneNode(true));
     });
@@ -1078,7 +1074,7 @@ nodeGroups.each(function(d) {
         tempGroup.node().appendChild(this.cloneNode(true));
     });
 
-    // --- 5. SERIALIZE AND RENDER THE FINAL IMAGE ---
+    // --- 5. SERIALIZE AND RENDER ---
     const svgString = new XMLSerializer().serializeToString(tempSvg.node());
     const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
 
@@ -1092,10 +1088,9 @@ nodeGroups.each(function(d) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, 0, 0);
 
-        // Trigger download
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png', 1.0);
-        a.download = `Wordsplainer-infographic.png`; // Changed name to reflect content
+        a.download = `Wordsplainer-infographic.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

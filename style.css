@@ -46,7 +46,7 @@
     --text-dark: #2C3E50; 
 }
 
-html[data-theme='dark'] {
+[data-theme='dark'] {
     --canvas-bg: var(--primary-dark);
     --canvas-text-color: var(--accent-light);
     --text-link: var(--accent-white);
@@ -71,15 +71,15 @@ html[data-theme='dark'] {
     transform: scale(0.95); transition: all 0.3s ease;
 }
 .input-overlay.visible .overlay-input-field { transform: scale(1); }
-html[data-theme='dark'] .overlay-input-field {
+[data-theme='dark'] .overlay-input-field {
     background-color: #2C3E50; color: var(--text-light); border-color: var(--primary-coral);
 }
 
 /* --- Icon Visibility Control --- */
 .sun-icon { display: block; }
 .moon-icon { display: none; }
-html[data-theme='dark'] .sun-icon { display: none; }
-html[data-theme='dark'] .moon-icon { display: block; }
+[data-theme='dark'] .sun-icon { display: none; }
+[data-theme='dark'] .moon-icon { display: block; }
 
 /* --- Global & App Layout Styles --- */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -219,7 +219,7 @@ header h1 {
     stroke-width: 1px;
     transition: stroke 0.3s ease, stroke-width 0.3s ease;
 }
-html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
+[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
     stroke: rgba(255, 255, 255, 0.2);
 }
 
@@ -310,7 +310,7 @@ html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
 }
 
 /* Dark mode text color for the transparent container */
-html[data-theme='dark'] .node .node-html-content {
+[data-theme='dark'] .node .node-html-content {
     color: var(--accent-light);
 }
 
@@ -323,7 +323,7 @@ html[data-theme='dark'] .node .node-html-content {
 }
 
 /* Dark mode for the solid example boxes */
-html[data-theme='dark'] .node-example .node-html-content {
+[data-theme='dark'] .node-example .node-html-content {
     background-color: #34495E;
     border-color: #4A6572;
 }
@@ -448,7 +448,7 @@ html[data-theme='dark'] .node-example .node-html-content {
     transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-html[data-theme='dark'] #canvas-controls .control-btn:hover {
+[data-theme='dark'] #canvas-controls .control-btn:hover {
     color: var(--text-light); /* Or simply 'white' */
 }
 .register-state {
