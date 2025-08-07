@@ -543,34 +543,48 @@ nodeGroups.each(function(d) {
             return;
         }
 
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const currentTransform = d3.zoomTransform(svg.node());
-        const initialX = (width / 2 - currentTransform.x) / currentTransform.k;
-        const initialY = (height / 2 - currentTransform.y) / currentTransform.k;
+        const CLUSTER_SPACING = 850; // Define spacing locally
+        let newCenter;
+
+        if (centralNodes.length > 0) {
+            // --- POSITIONING A SUBSEQUENT NODE ---
+            // Get the last node in our "film strip" to use as an anchor.
+            const lastNode = centralNodes[centralNodes.length - 1];
+            newCenter = {
+                x: lastNode.x + CLUSTER_SPACING,
+                y: lastNode.y // Keep the same Y-level for a horizontal strip
+            };
+        } else {
+            // --- POSITIONING THE VERY FIRST NODE ---
+            // Place it in the center of the current viewport.
+            const { width, height } = graphContainer.getBoundingClientRect();
+            const currentTransform = d3.zoomTransform(svg.node());
+            newCenter = {
+                x: (width / 2 - currentTransform.x) / currentTransform.k,
+                y: (height / 2 - currentTransform.y) / currentTransform.k
+            };
+        }
         
         const centralNodeData = { 
             word: lowerWord, id: `central-${lowerWord}`, 
             isCentral: true, type: 'central', clusterId: lowerWord,
             visible: true,
-            x: initialX, y: initialY
+            // Assign the calculated coordinates immediately
+            x: newCenter.x, y: newCenter.y,
+            // Also fix the position so it's stable
+            fx: newCenter.x, fy: newCenter.y
         };
         
         centralNodes.push(centralNodeData);
         graphClusters.set(lowerWord, { 
             nodes: [centralNodeData], 
             links: [], 
-            center: { x: initialX, y: initialY }, 
+            center: { x: newCenter.x, y: newCenter.y }, 
             currentView: 'meaning' 
         });
 
-        // ⭐ FIX: Get the new cluster's target coordinates directly.
-        const newClusterCenter = repositionAllClusters();
-        
-        // ⭐ FIX: Pan the camera to the explicit coordinates, not the node object.
-        // This solves the timing issue completely.
-        if (newClusterCenter) {
-            panToNode(newClusterCenter, 1.3);
-        }
+        // Pan the camera to the newly created node.
+        panToNode(centralNodeData, 1.3);
     }
 
     currentActiveCentral = lowerWord;
@@ -924,49 +938,6 @@ nodeGroups.each(function(d) {
             }
         });
     });
-}
-
-const CLUSTER_SPACING = 850; // Horizontal distance between cluster centers
-
-/**
- * Arranges all clusters in a horizontal "film strip" timeline.
- * The most recent cluster is centered in the current view.
- */
-function repositionAllClusters() {
-    if (centralNodes.length === 0) return null;
-
-    const { width, height } = graphContainer.getBoundingClientRect();
-    const currentTransform = d3.zoomTransform(svg.node());
-
-    const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
-    const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
-
-    const lastNodeIndex = centralNodes.length - 1;
-    let lastNodeCenter = null;
-
-    centralNodes.forEach((node, i) => {
-        const cluster = graphClusters.get(node.clusterId);
-        if (cluster) {
-            const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
-            const targetY = viewCenterY;
-
-            node.fx = targetX;
-            node.fy = targetY;
-
-            cluster.center.x = targetX;
-            cluster.center.y = targetY;
-
-            // ⭐ FIX: Store the coordinates of the last (newest) node.
-            if (i === lastNodeIndex) {
-                lastNodeCenter = { x: targetX, y: targetY };
-            }
-        }
-    });
-
-    simulation.alpha(0.6).restart();
-    
-    // ⭐ FIX: Return the calculated center of the newest cluster.
-    return lastNodeCenter;
 }
 
     function handleResize() {
