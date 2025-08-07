@@ -873,7 +873,7 @@ nodeGroups.each(function(d) {
     }
 
     // ⭐ NEW: The core "film strip" layout function
-    const CLUSTER_SPACING = 900; // Horizontal distance between graph centers
+    const CLUSTER_SPACING = 700; // Horizontal distance between graph centers
 
     function repositionAllClusters() {
         if (centralNodes.length === 0) return null;
