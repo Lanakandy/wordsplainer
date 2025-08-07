@@ -1012,28 +1012,47 @@ nodeGroups.each(function(d) {
         return;
     }
 
-    // The element we want to capture is the container of the SVG
     const captureElement = document.getElementById('graph-container');
+    
+    // Find the central node's circle to modify its style
+    const centralNodeCircle = d3.select(captureElement).select('.central-node > circle');
 
-    // Get the computed background color from CSS variables to ensure it's correct
+    // Get the correct background color from the live page's computed styles
     const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
+    
+    // --- PRE-CAPTURE PREPARATION ---
+    // The `filter` property (for the glow) is known to cause rendering bugs in html2canvas.
+    // We get its current value and then temporarily remove it for a clean capture.
+    const originalFilter = centralNodeCircle.style('filter');
+    centralNodeCircle.style('filter', 'none');
 
     // Use html2canvas to render the element
     html2canvas(captureElement, {
-        logging: false, // Turn off console logging from the library
-        backgroundColor: bgColor, // Explicitly set the background color
-        scale: 2 // Render at 2x resolution for a high-quality image
+        logging: false, // Turn off console logging
+        backgroundColor: bgColor, // Ensure correct background
+        scale: 2, // Render at 2x resolution for high quality
+        
+        // This is the crucial option to help render SVG text boxes correctly.
+        foreignObjectRendering: true, 
+
     }).then(canvas => {
-        // The rest of the code is for triggering the download
+        // Trigger the download of the captured image
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png', 1.0);
         a.download = `Wordsplainer-${currentActiveCentral || 'graph'}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+
     }).catch(err => {
         console.error("html2canvas failed:", err);
         alert("Sorry, could not save the image. An error occurred.");
+
+    }).finally(() => {
+        // --- POST-CAPTURE CLEANUP ---
+        // This block ALWAYS runs, even if the capture fails.
+        // We restore the glow to the live graph so it looks correct again.
+        centralNodeCircle.style('filter', originalFilter);
     });
 }
     // ⭐ MODIFIED: Drag handlers to respect the pinned central nodes
