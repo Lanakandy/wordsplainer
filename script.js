@@ -543,7 +543,6 @@ nodeGroups.each(function(d) {
             return;
         }
 
-        // ⭐ FIX: Calculate the initial position BEFORE creating the node data.
         const { width, height } = graphContainer.getBoundingClientRect();
         const currentTransform = d3.zoomTransform(svg.node());
         const initialX = (width / 2 - currentTransform.x) / currentTransform.k;
@@ -553,10 +552,7 @@ nodeGroups.each(function(d) {
             word: lowerWord, id: `central-${lowerWord}`, 
             isCentral: true, type: 'central', clusterId: lowerWord,
             visible: true,
-            // ⭐ FIX: Assign the valid initial coordinates immediately.
-            x: initialX,
-            y: initialY
-            // fx and fy will be set by repositionAllClusters, but x/y must exist now.
+            x: initialX, y: initialY
         };
         
         centralNodes.push(centralNodeData);
@@ -567,11 +563,14 @@ nodeGroups.each(function(d) {
             currentView: 'meaning' 
         });
 
-        // Reposition ALL clusters, which will now correctly set the fx/fy values.
-        repositionAllClusters();
+        // ⭐ FIX: Get the new cluster's target coordinates directly.
+        const newClusterCenter = repositionAllClusters();
         
-        // This pan will now work correctly as the node has a valid position from the start.
-        panToNode(centralNodeData, 1.3);
+        // ⭐ FIX: Pan the camera to the explicit coordinates, not the node object.
+        // This solves the timing issue completely.
+        if (newClusterCenter) {
+            panToNode(newClusterCenter, 1.3);
+        }
     }
 
     currentActiveCentral = lowerWord;
@@ -581,19 +580,23 @@ nodeGroups.each(function(d) {
     await generateGraphForView(currentView);
 }
 
-    function panToNode(node, scale = 1.2) {
-        if (!node) return;
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const transform = d3.zoomIdentity
-            .translate(width / 2, height / 2)
-            .scale(scale)
-            .translate(-node.x, -node.y);
-        
-        svg.transition()
-            .duration(1000)
-            .ease(d3.easeCubicInOut)
-            .call(zoomBehavior.transform, transform);
-    }
+    function panToNode(target, scale = 1.2) {
+    // ⭐ FIX: Check if the target is valid before proceeding.
+    if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') return;
+    
+    const { width, height } = graphContainer.getBoundingClientRect();
+    
+    // This works whether target is a node {id:..., x:..., y:...} or just coordinates {x:..., y:...}
+    const transform = d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale)
+        .translate(-target.x, -target.y);
+    
+    svg.transition()
+        .duration(1000)
+        .ease(d3.easeCubicInOut)
+        .call(zoomBehavior.transform, transform);
+}
     
     // --- END OF ENHANCED FUNCTIONS ---
 
@@ -930,35 +933,40 @@ const CLUSTER_SPACING = 850; // Horizontal distance between cluster centers
  * The most recent cluster is centered in the current view.
  */
 function repositionAllClusters() {
-    if (centralNodes.length === 0) return;
+    if (centralNodes.length === 0) return null;
 
     const { width, height } = graphContainer.getBoundingClientRect();
     const currentTransform = d3.zoomTransform(svg.node());
 
-    // Calculate the center of the viewport in SVG coordinates
     const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
     const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
 
     const lastNodeIndex = centralNodes.length - 1;
+    let lastNodeCenter = null;
 
     centralNodes.forEach((node, i) => {
         const cluster = graphClusters.get(node.clusterId);
         if (cluster) {
-            // Calculate the target X position relative to the last node
             const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
+            const targetY = viewCenterY;
 
-            // Set the fixed position for the central node
             node.fx = targetX;
-            node.fy = viewCenterY;
+            node.fy = targetY;
 
-            // Update the cluster's center for the force simulation
             cluster.center.x = targetX;
-            cluster.center.y = viewCenterY;
+            cluster.center.y = targetY;
+
+            // ⭐ FIX: Store the coordinates of the last (newest) node.
+            if (i === lastNodeIndex) {
+                lastNodeCenter = { x: targetX, y: targetY };
+            }
         }
     });
 
-    // Give the simulation a strong kick to rearrange peripheral nodes around their new centers
     simulation.alpha(0.6).restart();
+    
+    // ⭐ FIX: Return the calculated center of the newest cluster.
+    return lastNodeCenter;
 }
 
     function handleResize() {
