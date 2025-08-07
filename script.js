@@ -95,72 +95,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- START OF ENHANCED FUNCTIONS (from enhanced_graph_functions.js) ---
 
-    // Enhanced clustering with better spatial distribution
+    // ⭐ NEW: Simplified and more predictable clustering force
     function forceCluster() {
-    // This strength value can be tweaked, but 0.15 is a good start.
-    const strength = 0.15;
+        const strength = 0.2; // A bit stronger to keep things tight
 
-    return function(alpha) {
-        const allNodes = getConsolidatedGraphData().nodes;
-        
-        for (let node of allNodes) {
-            if (node.clusterId && graphClusters.has(node.clusterId)) {
-                const cluster = graphClusters.get(node.clusterId);
-                const target = cluster.center;
-                
-                if (node.isCentral) {
-                    // This part is unchanged: it helps keep the central node stable at its fixed position.
-                    const strengthFactor = 3.0;
-                    node.vx += (target.x - node.x) * strength * alpha * strengthFactor;
-                    node.vy += (target.y - node.y) * strength * alpha * strengthFactor;
-
-                } else {
-                    // ⭐ NEW, SIMPLIFIED LOGIC FOR PERIPHERAL NODES ⭐
-
-                    // Get only the *visible* peripheral nodes for layout calculation.
-                    const peripheralNodes = cluster.nodes.filter(n => !n.isCentral && n.visible !== false);
-                    const nodeIndex = peripheralNodes.indexOf(node);
-                    const totalNodes = peripheralNodes.length;
-                    
-                    if (totalNodes > 0) {
-                        // 1. A smaller, more appropriate radius for the film-strip layout.
-                        // This is the most critical change.
-                        const radius = 260; 
-
-                        // 2. Simple, even distribution in a single circle. No more complex layers.
-                        const angleStep = (2 * Math.PI) / totalNodes;
-                        const angle = nodeIndex * angleStep;
-                        
-                        // 3. Calculate the ideal position on the circle.
-                        const idealX = target.x + Math.cos(angle) * radius;
-                        const idealY = target.y + Math.sin(angle) * radius;
-                        
-                        // 4. Apply a stronger force to make nodes snap to their positions decisively.
-                        const strengthFactor = 0.9;
-                        node.vx += (idealX - node.x) * strength * alpha * strengthFactor;
-                        node.vy += (idealY - node.y) * strength * alpha * strengthFactor;
-                    }
+        return function(alpha) {
+            const allNodes = getConsolidatedGraphData().nodes;
+            
+            for (let node of allNodes) {
+                if (node.isCentral || !node.clusterId || !graphClusters.has(node.clusterId)) {
+                    continue; // Skip central nodes (they are pinned) and orphans
                 }
+
+                const cluster = graphClusters.get(node.clusterId);
+                const target = cluster.center; // The pinned center of the graph
+
+                // Gently pull peripheral nodes towards the cluster's center
+                node.vx += (target.x - node.x) * strength * alpha;
+                node.vy += (target.y - node.y) * strength * alpha;
             }
-        }
-    };
-}
+        };
+    }
 
     // Enhanced collision detection with adaptive radii
 function getCollisionRadius(d) {
     if (d.isCentral) {
-        return 50;
+        return 60; // Larger radius for the central node to push others away
     }
-    // For composite nodes (circle + text) or example boxes, calculate radius from their bounding box
     if (d.width && d.height) {
-        // Use half the diagonal as an excellent approximation for a bounding circle
-        return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 10; // +10 for padding
+        // Use half the diagonal for example boxes
+        return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 15; // +padding
     }
     if (d.type === 'add') {
         return 25;
     }
-    // Default for regular single-word peripheral nodes
-    return 30;
+    // Default for regular peripheral nodes
+    return 45; // Increased radius to prevent text overlap
 }
 
     // Enhanced simulation with better forces
@@ -168,45 +138,20 @@ function getCollisionRadius(d) {
         .force("link", d3.forceLink()
             .id(d => d.id)
             .distance(d => {
-                if (d.type === 'cross-cluster') return 250;
-                if (d.target.type === 'example') return 120;
-                if (d.source.isCentral) return 160;
-                return 100;
+                if (d.target.type === 'example') return 100;
+                return 150; // A good default distance from the center
             })
-            .strength(d => {
-                if (d.type === 'cross-cluster') return 0.3;
-                if (d.target.type === 'example') return 0.8;
-                return 0.6;
-            })
+            .strength(0.7)
         )
         .force("charge", d3.forceManyBody()
-            .strength(d => {
-                if (d.isCentral) return -800;
-                if (d.type === 'example') return -300;
-                return -200;
-            })
-            .distanceMax(400)
+            .strength(d => d.isCentral ? -1500 : -400) // Stronger repulsion from center
+            .distanceMax(500)
         )
         .force("collision", d3.forceCollide()
             .radius(getCollisionRadius)
-            .strength(0.8)
-            .iterations(3)
+            .strength(0.9) // Strong collision to prevent overlap
         )
-        .force("cluster", forceCluster())
-        .force("center", d3.forceCenter())
-        .force("boundary", () => {
-            // Keep nodes within viewport boundaries
-            const { width, height } = graphContainer.getBoundingClientRect();
-            const margin = 100;
-            
-            const allNodes = getConsolidatedGraphData().nodes;
-            allNodes.forEach(node => {
-                if (node.x < margin) node.x = margin;
-                if (node.x > width - margin) node.x = width - margin;
-                if (node.y < margin) node.y = margin;
-                if (node.y > height - margin) node.y = height - margin;
-            });
-        });
+        .force("cluster", forceCluster()); // Our new, simpler cluster force
 
      /**
      * Counts the number of "notional" (meaningful) words in a string.
@@ -426,7 +371,6 @@ nodeGroups.each(function(d) {
 
         simulation.nodes(visibleNodes);
         simulation.force("link").links(visibleLinks);
-        simulation.force("center").x(width / 2).y(height / 2);
         simulation.alpha(1).restart();
         
         graphGroup.selectAll('.central-node').raise();
@@ -532,85 +476,71 @@ nodeGroups.each(function(d) {
             fetchMoreNodes();
         }
     }
-
-    async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-    const lowerWord = word.toLowerCase();
     
-    if (isNewCentral) {
-        if (centralNodes.some(c => c.word === lowerWord)) {
-            const existingNode = centralNodes.find(n => n.word === lowerWord);
-            if(existingNode) panToNode(existingNode, 1.3);
-            return;
+    // ⭐ MODIFIED: `handleWordSubmitted` to orchestrate the new layout and camera pan
+    async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
+        const lowerWord = word.toLowerCase();
+        
+        // Prevent duplicate central nodes
+        if (isNewCentral) {
+            if (centralNodes.some(c => c.word === lowerWord)) {
+                const existingNode = centralNodes.find(n => n.word === lowerWord);
+                if(existingNode) focusOnCentralNode(existingNode.clusterId);
+                return;
+            }
+
+            // Create new central node data WITHOUT setting position yet
+            const centralNodeData = { 
+                word: lowerWord, id: `central-${lowerWord}`, 
+                isCentral: true, type: 'central', clusterId: lowerWord,
+                visible: true
+            };
+            
+            centralNodes.push(centralNodeData);
+            graphClusters.set(lowerWord, { 
+                nodes: [centralNodeData], 
+                links: [], 
+                center: { x: 0, y: 0 }, // Placeholder center
+                currentView: 'meaning' 
+            });
+
+            // Call the layout function to position all clusters
+            const newClusterCenter = repositionAllClusters();
+            
+            // Pan the camera to the precisely calculated center of the new graph
+            if (newClusterCenter) {
+                panToNode(newClusterCenter, 1.2);
+            }
         }
 
-        const CLUSTER_SPACING = 850; // Define spacing locally
-        let newCenter;
-
-        if (centralNodes.length > 0) {
-            // --- POSITIONING A SUBSEQUENT NODE ---
-            // Get the last node in our "film strip" to use as an anchor.
-            const lastNode = centralNodes[centralNodes.length - 1];
-            newCenter = {
-                x: lastNode.x + CLUSTER_SPACING,
-                y: lastNode.y // Keep the same Y-level for a horizontal strip
-            };
-        } else {
-            // --- POSITIONING THE VERY FIRST NODE ---
-            // Place it in the center of the current viewport.
-            const { width, height } = graphContainer.getBoundingClientRect();
-            const currentTransform = d3.zoomTransform(svg.node());
-            newCenter = {
-                x: (width / 2 - currentTransform.x) / currentTransform.k,
-                y: (height / 2 - currentTransform.y) / currentTransform.k
-            };
-        }
-        
-        const centralNodeData = { 
-            word: lowerWord, id: `central-${lowerWord}`, 
-            isCentral: true, type: 'central', clusterId: lowerWord,
-            visible: true,
-            // Assign the calculated coordinates immediately
-            x: newCenter.x, y: newCenter.y,
-            // Also fix the position so it's stable
-            fx: newCenter.x, fy: newCenter.y
-        };
-        
-        centralNodes.push(centralNodeData);
-        graphClusters.set(lowerWord, { 
-            nodes: [centralNodeData], 
-            links: [], 
-            center: { x: newCenter.x, y: newCenter.y }, 
-            currentView: 'meaning' 
-        });
-
-        // Pan the camera to the newly created node.
-        panToNode(centralNodeData, 1.3);
+        currentActiveCentral = lowerWord;
+        currentView = 'meaning';
+        viewState = { offset: 0, hasMore: true };
+        updateActiveButton();
+        await generateGraphForView(currentView);
     }
 
-    currentActiveCentral = lowerWord;
-    currentView = 'meaning';
-    viewState = { offset: 0, hasMore: true };
-    updateActiveButton();
-    await generateGraphForView(currentView);
-}
-
+    // ⭐ MODIFIED: `panToNode` to be more robust
     function panToNode(target, scale = 1.2) {
-    // ⭐ FIX: Check if the target is valid before proceeding.
-    if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') return;
-    
-    const { width, height } = graphContainer.getBoundingClientRect();
-    
-    // This works whether target is a node {id:..., x:..., y:...} or just coordinates {x:..., y:...}
-    const transform = d3.zoomIdentity
-        .translate(width / 2, height / 2)
-        .scale(scale)
-        .translate(-target.x, -target.y);
-    
-    svg.transition()
-        .duration(1000)
-        .ease(d3.easeCubicInOut)
-        .call(zoomBehavior.transform, transform);
-}
+        // Check if the target is a valid node or a coordinate object
+        if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
+            console.error("panToNode called with invalid target:", target);
+            return;
+        }
+        
+        const { width, height } = graphContainer.getBoundingClientRect();
+        
+        // This transform centers the view on the target's data-space coordinates
+        const transform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(scale)
+            .translate(-target.x, -target.y);
+        
+        svg.transition()
+            .duration(1000)
+            .ease(d3.easeCubicInOut)
+            .call(zoomBehavior.transform, transform);
+    }
     
     // --- END OF ENHANCED FUNCTIONS ---
 
@@ -899,54 +829,99 @@ nodeGroups.each(function(d) {
             if (cluster) {
                 currentView = cluster.currentView || 'meaning';
                 updateActiveButton();
+                panToNode(cluster.center, 1.2);
             }
-            panToNode(centralNode, 1.2);
             updateCentralNodeState();
             console.log(`Focused on central node: ${clusterId}`);
         }
     }
 
     function createInteractiveText(d3Element, text, onWordClick) {
-    // Works with both SVG <text> and HTML <div> selections
-    const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
-    d3Element.html(""); // Clear previous content
+        const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
+        d3Element.html("");
 
-    const lines = text.split('\n');
-    lines.forEach((line, lineIndex) => {
-        if (lineIndex > 0 && !isSvg) {
-            d3Element.append("br");
-        }
-        
-        const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
-        
-        const lineContainer = isSvg ? 
-            d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : 
-            d3Element;
+        const lines = text.split('\n');
+        lines.forEach((line, lineIndex) => {
+            if (lineIndex > 0 && !isSvg) {
+                d3Element.append("br");
+            }
+            
+            const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
+            
+            const lineContainer = isSvg ? 
+                d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : 
+                d3Element;
 
-        tokens.forEach(token => {
-            const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"]+/g, '');
-            if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
-                lineContainer.append('span')
-                    .attr('class', 'interactive-word')
-                    .text(token)
-                    .on('click', (event) => {
-                        event.stopPropagation();
-                        if(token) onWordClick(token);
-                    });
-            } else {
-                lineContainer.append('span').text(token);
+            tokens.forEach(token => {
+                const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"]+/g, '');
+                if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
+                    lineContainer.append('span')
+                        .attr('class', 'interactive-word')
+                        .text(token)
+                        .on('click', (event) => {
+                            event.stopPropagation();
+                            if(token) onWordClick(token);
+                        });
+                } else {
+                    lineContainer.append('span').text(token);
+                }
+            });
+        });
+    }
+
+    // ⭐ NEW: The core "film strip" layout function
+    const CLUSTER_SPACING = 900; // Horizontal distance between graph centers
+
+    function repositionAllClusters() {
+        if (centralNodes.length === 0) return null;
+
+        const { width, height } = graphContainer.getBoundingClientRect();
+        
+        // Find the data-space coordinates of the screen's center
+        const currentTransform = d3.zoomTransform(svg.node());
+        const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
+        const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
+
+        const lastNodeIndex = centralNodes.length - 1;
+        let lastNodeCenter = null;
+
+        // Arrange all clusters in a horizontal line
+        centralNodes.forEach((node, i) => {
+            const cluster = graphClusters.get(node.clusterId);
+            if (cluster) {
+                // Calculate position relative to the last node
+                // The last node (newest) will be at the view's center
+                const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
+                const targetY = viewCenterY;
+
+                // Pin the central node to this calculated position
+                node.fx = targetX;
+                node.fy = targetY;
+                
+                // Update the cluster's center property for child nodes to follow
+                cluster.center.x = targetX;
+                cluster.center.y = targetY;
+
+                // Store the coordinates of the newest graph's center
+                if (i === lastNodeIndex) {
+                    lastNodeCenter = { x: targetX, y: targetY };
+                }
             }
         });
-    });
-}
+
+        // Nudge the simulation to apply the new positions
+        simulation.alpha(0.5).restart();
+        
+        // Return the center of the newest cluster so we can pan to it
+        return lastNodeCenter;
+    }
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
         svg.attr("width", width).attr("height", height);
         
         if (centralNodes.length > 0) {
-            simulation.force("center").x(width / 2).y(height / 2);
-            simulation.alpha(0.3).restart();
+            repositionAllClusters(); // Re-calculate layout on resize
         } else {
             renderInitialPrompt();
         }
@@ -1100,24 +1075,30 @@ nodeGroups.each(function(d) {
         image.src = svgDataUrl;
     }
 
-    // --- SIMPLIFIED Drag Handlers ---
-function dragstarted(event, d) {
-    if (!event.active) simulation.alphaTarget(0.3).restart();
-    d.fx = d.x;
-    d.fy = d.y;
-}
+    // ⭐ MODIFIED: Drag handlers to respect the pinned central nodes
+    function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        // For peripheral nodes, we allow dragging. For central, we use their fixed fx,fy.
+        d.fx = d.isCentral ? d.fx : d.x;
+        d.fy = d.isCentral ? d.fy : d.y;
+    }
 
-function dragged(event, d) {
-    d.fx = event.x;
-    d.fy = event.y;
-}
+    function dragged(event, d) {
+        // Only update fx/fy for non-central nodes
+        if (!d.isCentral) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+    }
 
-function dragended(event, d) {
-    if (!event.active) simulation.alphaTarget(0);
-    // Unfix the node's position, letting the simulation place it back
-    d.fx = null;
-    d.fy = null;
-}
+    function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        // We only un-fix peripheral nodes. Central nodes remain pinned to the film strip.
+        if (!d.isCentral) {
+            d.fx = null;
+            d.fy = null;
+        }
+    }
 
     // --- Initialization ---
     renderInitialPrompt();
