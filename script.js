@@ -1012,48 +1012,99 @@ nodeGroups.each(function(d) {
         return;
     }
 
-    const captureElement = document.getElementById('graph-container');
-    
-    // Find the central node's circle to modify its style
-    const centralNodeCircle = d3.select(captureElement).select('.central-node > circle');
+    // --- 1. CALCULATE THE BOUNDING BOX OF THE ENTIRE "FILM STRIP" ---
+    const allNodes = getConsolidatedGraphData().nodes;
+    if (allNodes.length === 0) return;
 
-    // Get the correct background color from the live page's computed styles
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    allNodes.forEach(d => {
+        // Use the node's actual position from the simulation
+        if (d.x < minX) minX = d.x;
+        if (d.x > maxX) maxX = d.x;
+        if (d.y < minY) minY = d.y;
+        if (d.y > maxY) maxY = d.y;
+    });
+
+    // Add padding to avoid cutting off node edges
+    const padding = 150; 
+    const exportWidth = (maxX - minX) + 2 * padding;
+    const exportHeight = (maxY - minY) + 2 * padding;
+
+    // --- 2. CREATE A TEMPORARY SVG IN MEMORY ---
+    // We use d3.create to make an SVG element without adding it to the page
+    const tempSvg = d3.create('svg')
+        .attr('xmlns', 'http://www.w3.org/2000/svg')
+        .attr('width', exportWidth)
+        .attr('height', exportHeight)
+        .attr('viewBox', `0 0 ${exportWidth} ${exportHeight}`);
+
+    // Set the theme on the SVG itself so our embedded CSS will work
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    tempSvg.attr('data-theme', currentTheme);
+
+    // Get the correct background color from CSS variables
     const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
-    
-    // --- PRE-CAPTURE PREPARATION ---
-    // The `filter` property (for the glow) is known to cause rendering bugs in html2canvas.
-    // We get its current value and then temporarily remove it for a clean capture.
-    const originalFilter = centralNodeCircle.style('filter');
-    centralNodeCircle.style('filter', 'none');
-
-    // Use html2canvas to render the element
-    html2canvas(captureElement, {
-        logging: false, // Turn off console logging
-        backgroundColor: bgColor, // Ensure correct background
-        scale: 2, // Render at 2x resolution for high quality
+    tempSvg.append('rect')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('fill', bgColor);
         
-        // This is the crucial option to help render SVG text boxes correctly.
-        foreignObjectRendering: true, 
+    // This group will hold all our graph content and handle the positioning
+    const tempGroup = tempSvg.append('g')
+        .attr('transform', `translate(${-minX + padding}, ${-minY + padding})`);
 
-    }).then(canvas => {
-        // Trigger the download of the captured image
+    // --- 3. EMBED ALL STYLES ---
+    // This ensures all CSS rules, including those for text, links, and themes, are included
+    const style = tempSvg.append('style');
+    let cssText = "";
+    for (const sheet of document.styleSheets) {
+        try {
+            if (sheet.cssRules) {
+                for (const rule of sheet.cssRules) {
+                    cssText += rule.cssText + '\n';
+                }
+            }
+        } catch (e) { console.warn("Cannot read CSS rules from stylesheet: " + e); }
+    }
+    style.text(cssText);
+
+    // --- 4. CLONE THE LIVE GRAPH CONTENT INTO THE TEMPORARY SVG ---
+    // We deep-clone every visible link and node from the live graph
+    graphGroup.selectAll('.link').each(function() {
+        tempGroup.node().appendChild(this.cloneNode(true));
+    });
+    graphGroup.selectAll('.node').each(function() {
+        tempGroup.node().appendChild(this.cloneNode(true));
+    });
+
+    // --- 5. SERIALIZE AND RENDER THE FINAL IMAGE ---
+    const svgString = new XMLSerializer().serializeToString(tempSvg.node());
+    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+
+    const image = new Image();
+    image.src = svgDataUrl;
+    
+    image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = exportWidth;
+        canvas.height = exportHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+
+        // Trigger download
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png', 1.0);
-        a.download = `Wordsplainer-${currentActiveCentral || 'graph'}.png`;
+        a.download = `Wordsplainer-infographic.png`; // Changed name to reflect content
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+    };
 
-    }).catch(err => {
-        console.error("html2canvas failed:", err);
-        alert("Sorry, could not save the image. An error occurred.");
-
-    }).finally(() => {
-        // --- POST-CAPTURE CLEANUP ---
-        // This block ALWAYS runs, even if the capture fails.
-        // We restore the glow to the live graph so it looks correct again.
-        centralNodeCircle.style('filter', originalFilter);
-    });
+    image.onerror = (e) => {
+        console.error('Failed to load SVG into image:', e);
+        alert('An error occurred while creating the image. Please check the console.');
+    };
 }
     // ⭐ MODIFIED: Drag handlers to respect the pinned central nodes
     function dragstarted(event, d) {
