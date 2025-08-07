@@ -37,13 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const SNAP_OFF_THRESHOLD = 120;
 
     // --- Enhanced State Management ---
+    let clusterIdCounter = 0; // NEW: A counter to create unique graph IDs
     let centralNodes = [];
     let graphClusters = new Map();
     let crossConnections = [];
     let explorationHistory = [];
-    let currentActiveCentral = null;
+    let currentActiveCentralWord = null; // RENAMED from currentActiveCentral
+    let currentActiveClusterId = null; // NEW: To track the specific active graph instance
     let clusterColors = d3.scaleOrdinal(d3.schemeCategory10);
-    
     let currentView = 'meaning';
     let currentRegister = 'conversational';    
     let viewState = { offset: 0, hasMore: true };
@@ -289,13 +290,23 @@ nodeGroups.each(function(d) {
             .attr("r", 45)
             .style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
         
+        // Display the word
         selection.append("text")
             .attr("class", "node-text")
-            .text(d.word || d.id)
-            .attr("dy", "0.3em")
+            .text(d.word) // Just the word
             .style("font-weight", "bold")
-            .style("font-size", "16px");
-            
+            .style("font-size", "16px")
+            .attr("dy", "-0.2em"); // Move word text up slightly
+
+        // NEW: Display the view (Meaning, Forms, etc.) below the word
+        selection.append("text")
+            .attr("class", "node-text-small")
+            .text(d.view)
+            .style("font-size", "10px")
+            .style("text-transform", "uppercase")
+            .style("opacity", 0.8)
+            .attr("dy", "1em"); // Move view text down
+
     } else if (d.type === 'add') {
         selection.append("circle").attr("r", 20);
         selection.append("text")
@@ -480,77 +491,92 @@ nodeGroups.each(function(d) {
        }
     }
     
-    // ⭐ MODIFIED: `handleWordSubmitted` to orchestrate the new layout and camera pan
-    async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-        const lowerWord = word.toLowerCase();
-        
-        // Prevent duplicate central nodes
-        if (isNewCentral) {
-            if (centralNodes.some(c => c.word === lowerWord)) {
-                const existingNode = centralNodes.find(n => n.word === lowerWord);
-                if(existingNode) focusOnCentralNode(existingNode.clusterId);
-                return;
-            }
+    async function createNewGraph(word, view, options = {}) {
+    stopRegisterButtonAnimation();
 
-            // Create new central node data WITHOUT setting position yet
-            const centralNodeData = { 
-                word: lowerWord, id: `central-${lowerWord}`, 
-                isCentral: true, type: 'central', clusterId: lowerWord,
-                visible: true
-            };
-            
-            centralNodes.push(centralNodeData);
-            graphClusters.set(lowerWord, { 
-                nodes: [centralNodeData], 
-                links: [], 
-                center: { x: 0, y: 0 }, // Placeholder center
-                currentView: 'meaning' 
-            });
+    // --- 1. CREATE A UNIQUE IDENTITY FOR THE NEW GRAPH ---
+    clusterIdCounter++;
+    const clusterId = clusterIdCounter;
+    currentActiveCentralWord = word;
+    currentActiveClusterId = clusterId;
+    currentView = view; // Update global view state
+    viewState = { offset: 0, hasMore: true }; // Reset pagination
 
-            // Call the layout function to position all clusters
-            const newClusterCenter = repositionAllClusters();
-            
-            // Pan the camera to the precisely calculated center of the new graph
-            if (newClusterCenter) {
-                panToNode(newClusterCenter, 1.2);
-            }
-        }
+    // --- 2. CREATE THE NEW CENTRAL NODE AND CLUSTER ---
+    const centralNodeData = {
+        word: word,
+        view: view, // Store the aspect being explored
+        id: `central-${clusterId}`,
+        isCentral: true,
+        type: 'central',
+        clusterId: clusterId,
+        visible: true
+    };
 
-        currentActiveCentral = lowerWord;
-        currentView = 'meaning';
-        viewState = { offset: 0, hasMore: true };
-        updateActiveButton();
-        await generateGraphForView(currentView);
+    centralNodes.push(centralNodeData);
+    graphClusters.set(clusterId, {
+        nodes: [centralNodeData],
+        links: [],
+        center: { x: 0, y: 0 },
+        currentView: view
+    });
+
+    // --- 3. POSITION THE NEW GRAPH AND PAN THE CAMERA ---
+    const newClusterCenter = repositionAllClusters();
+    if (newClusterCenter) {
+        panToNode(newClusterCenter, 1.2);
     }
+    updateActiveButton();
+    updateGraph(); // Render the central node immediately
 
-    // ⭐ MODIFIED: `panToNode` to be more robust
-    function panToNode(target, scale = 1.2) {
-        // Check if the target is a valid node or a coordinate object
-        if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
-            console.error("panToNode called with invalid target:", target);
+    // --- 4. FETCH AND POPULATE DATA FOR THE VIEW ---
+    renderLoading(`Loading ${view} for "${word}"...`); // Show loading text
+
+    try {
+        // For 'meaning', we only need 1 result, for others, we get more.
+        const limit = view === 'meaning' ? 1 : 5;
+        const data = await fetchData(word, view, 0, limit, options.language);
+
+        graphGroup.selectAll(".status-text").remove(); // Remove loading text
+
+        if (!data || !data.nodes || data.nodes.length === 0) {
+            // Even if no data, we keep the central node.
+            console.warn(`No data received for ${word} - ${view}`);
             return;
         }
         
-        const { width, height } = graphContainer.getBoundingClientRect();
-        
-        // This transform centers the view on the target's data-space coordinates
-        const transform = d3.zoomIdentity
-            .translate(width / 2, height / 2)
-            .scale(scale)
-            .translate(-target.x, -target.y);
-        
-        svg.transition()
-            .duration(1000)
-            .ease(d3.easeCubicInOut)
-            .call(zoomBehavior.transform, transform);
-    }
-    
-    // --- END OF ENHANCED FUNCTIONS ---
+        const cluster = graphClusters.get(clusterId);
+        if (!cluster) return; // Safety check
 
-    const zoomBehavior = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
-        graphGroup.attr("transform", event.transform);
-    });
-    svg.call(zoomBehavior);
+        data.nodes.forEach(nodeData => {
+            if (!nodeData || typeof nodeData.text !== 'string') return;
+            const nodeId = `${clusterId}-${nodeData.text.slice(0, 10)}-${view}`;
+            
+            const newNode = {
+                ...nodeData,
+                id: nodeId,
+                type: view,
+                clusterId: clusterId,
+                visible: true,
+                lang: options.language
+            };
+            cluster.nodes.push(newNode);
+            cluster.links.push({ source: centralNodeData.id, target: newNode.id });
+        });
+        
+        // Add the '+' button for this new cluster
+        const addNode = { id: `add-${clusterId}`, type: 'add', clusterId: clusterId, visible: true };
+        cluster.nodes.push(addNode);
+        cluster.links.push({ source: centralNodeData.id, target: addNode.id });
+
+        detectCrossConnections();
+        updateGraph();
+
+    } catch (error) {
+        console.error(`Error creating graph for ${word} - ${view}:`, error);
+        renderError(`Error: ${error.message}`);
+    }
+}
 
     function renderInitialPrompt() {
         simulation.stop();
@@ -682,122 +708,63 @@ nodeGroups.each(function(d) {
         }
     }   
 
-    async function generateGraphForView(view, options = {}) {
-        if (!currentActiveCentral) return renderError('No word selected.');
-        
-        const cluster = graphClusters.get(currentActiveCentral);
-        if (!cluster) return renderError('Invalid word cluster.');
-
-        const alreadyLoaded = cluster.nodes.some(n => n.type === view);
-
-        if (alreadyLoaded) {
-            console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
-            cluster.currentView = view;
-            currentView = view;
-            updateActiveButton();
-
-            cluster.nodes.forEach(node => {
-                const isExample = node.type === 'example';
-                if (!isExample) {
-                    node.visible = node.isCentral || node.type === 'add' || node.type === view;
-                } else {
-                    const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
-                    node.visible = sourceNode ? sourceNode.visible : false;
-                }
-            });
-
-            updateGraph();
-            return;
-        }
-
-        console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
-        cluster.currentView = view;
-        currentView = view;
-        updateActiveButton();
-        renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
-
-        try {
-            const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
-            if (!data || !data.nodes) throw new Error("No data received from server.");
-            
-            cluster.nodes.forEach(node => {
-                if (!node.isCentral && node.type !== 'add') node.visible = false;
-            });
-
-            data.nodes.forEach(nodeData => {
-                if (!nodeData || typeof nodeData.text !== 'string') return;
-                const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
-                if (cluster.nodes.some(n => n.id === nodeId)) return;
-
-                const newNode = {
-                    ...nodeData, id: nodeId, type: view,
-                    clusterId: currentActiveCentral, visible: true, lang: options.language 
-                };
-                cluster.nodes.push(newNode);
-                cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-            });
-            
-            const addNodeId = `add-${currentActiveCentral}`;
-            let addNode = cluster.nodes.find(n => n.id === addNodeId);
-            if (!addNode) {
-                addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral };
-                cluster.nodes.push(addNode);
-                cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
-            }
-            addNode.visible = true;
-            
-            detectCrossConnections();
-            updateGraph();
-
-        } catch (error) {
-            console.error("Error generating graph:", error);
-            renderError(`Error loading ${view}: ${error.message}`);
-        }
-    }
-
     function promptForInitialWord() {
-        const inputOverlay = document.getElementById('input-overlay');
-        const overlayInput = document.getElementById('overlay-input');
-        overlayInput.placeholder = "Type a word and press Enter...";
-        inputOverlay.classList.add('visible');
-        overlayInput.focus();
-        overlayInput.value = '';
-        const handleKeyDown = (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                const value = overlayInput.value.trim();
-                if (value) { handleWordSubmitted(value, true); }
-                inputOverlay.classList.remove('visible');
-                overlayInput.removeEventListener('keydown', handleKeyDown);
-                overlayInput.removeEventListener('blur', handleBlur);
+    const inputOverlay = document.getElementById('input-overlay');
+    const overlayInput = document.getElementById('overlay-input');
+    overlayInput.placeholder = "Type a word and press Enter...";
+    inputOverlay.classList.add('visible');
+    overlayInput.focus();
+    overlayInput.value = '';
+    const handleKeyDown = (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            const value = overlayInput.value.trim();
+            if (value) {
+                // Call the new master function directly
+                createNewGraph(value, 'meaning'); 
             }
-        };
-        const handleBlur = () => {
             inputOverlay.classList.remove('visible');
             overlayInput.removeEventListener('keydown', handleKeyDown);
             overlayInput.removeEventListener('blur', handleBlur);
-        };
-        overlayInput.addEventListener('keydown', handleKeyDown);
-        overlayInput.addEventListener('blur', handleBlur);
-    }
+        }
+    };
+    const handleBlur = () => {
+        inputOverlay.classList.remove('visible');
+        overlayInput.removeEventListener('keydown', handleKeyDown);
+        overlayInput.removeEventListener('blur', handleBlur);
+    };
+    overlayInput.addEventListener('keydown', handleKeyDown);
+    overlayInput.addEventListener('blur', handleBlur);
+}
           
     function handleDockClick(event) {
-        const button = event.target.closest('button');
-        if (!button) return;
-        const dataType = button.dataset.type;
-        if (dataType) {
-            if (!currentActiveCentral) return alert("Please add a word first by clicking the '+' icon.");
-            if (dataType === 'translation') return languageModal.classList.add('visible');
-            if (graphClusters.get(currentActiveCentral).currentView !== dataType) generateGraphForView(dataType);
+    const button = event.target.closest('button');
+    if (!button) return;
+    const dataType = button.dataset.type;
+    
+    if (dataType) {
+        if (!currentActiveCentralWord) {
+            alert("Please add a word first by clicking the '+' icon.");
+            return;
+        }
+        
+        // This is the core change: we ALWAYS create a new graph.
+        if (dataType === 'translation') {
+            languageModal.classList.add('visible');
         } else {
-            switch (button.id) {
-                case 'clear-btn': renderInitialPrompt(); break;
-                case 'save-btn': saveAsPng(); break;
-                case 'fullscreen-btn': toggleFullScreen(); break;
-                case 'theme-toggle-btn': toggleTheme(); break;
-            }
+            createNewGraph(currentActiveCentralWord, dataType);
+        }
+
+    } else {
+        // Utility buttons remain the same
+        switch (button.id) {
+            case 'clear-btn': renderInitialPrompt(); break;
+            case 'save-btn': saveAsPng(); break;
+            case 'fullscreen-btn': toggleFullScreen(); break;
+            case 'theme-toggle-btn': toggleTheme(); break;
         }
     }
+}
 
     function handleZoomControlsClick(event) {
         const button = event.target.closest('button');
@@ -825,19 +792,18 @@ nodeGroups.each(function(d) {
     }
 
     function focusOnCentralNode(clusterId) {
-        const centralNode = centralNodes.find(n => n.word === clusterId || n.clusterId === clusterId);
-        if (centralNode) {
-            currentActiveCentral = clusterId;
-            const cluster = graphClusters.get(clusterId);
-            if (cluster) {
-                currentView = cluster.currentView || 'meaning';
-                updateActiveButton();
-                panToNode(cluster.center, 1.2);
-            }
-            updateCentralNodeState();
-            console.log(`Focused on central node: ${clusterId}`);
-        }
+    const cluster = graphClusters.get(clusterId);
+    if (cluster && cluster.nodes[0].isCentral) {
+        const centralNode = cluster.nodes[0];
+        currentActiveCentralWord = centralNode.word;
+        currentActiveClusterId = clusterId;
+        currentView = cluster.currentView;
+        
+        updateActiveButton();
+        panToNode(cluster.center, 1.2);
+        console.log(`Focused on graph instance: ${clusterId} (${centralNode.word} - ${centralNode.view})`);
     }
+}
 
     function createInteractiveText(d3Element, text, onWordClick) {
         const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
@@ -931,55 +897,44 @@ nodeGroups.each(function(d) {
     }
 
     async function fetchMoreNodes() {
-        const cluster = graphClusters.get(currentActiveCentral);
-        // Exit if no cluster or no more data is available
-        if (!currentActiveCentral || !cluster || !viewState.hasMore) return;
-        
-        // Find the specific 'add' node element for this cluster
-        const addNodeElement = graphGroup.selectAll('.node-add').filter(node_d => node_d.clusterId === currentActiveCentral);
-        
-        // If it's already loading, do nothing.
-        if (addNodeElement.classed('is-loading')) return;
+    // Use the unique cluster ID to get the correct graph
+    const cluster = graphClusters.get(currentActiveClusterId);
+    if (!currentActiveClusterId || !cluster || !viewState.hasMore) return;
     
-        // Set the loading state ON
-        addNodeElement.classed('is-loading', true);
-        
-        try {
-            const data = await fetchData(currentActiveCentral, cluster.currentView, viewState.offset, 3);
-            if (data.nodes.length > 0) {
-                data.nodes.forEach(newNodeData => {
-                    if (!newNodeData || typeof newNodeData.text !== 'string') return;
-                    const newNodeId = `${currentActiveCentral}-${newNodeData.text.slice(0, 10)}-${cluster.currentView}`; // Use slice to avoid overly long IDs
-                    if (!cluster.nodes.some(n => n.id === newNodeId)) {
-                        const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral, visible: true };
-                        cluster.nodes.push(newNode);
-                        cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNodeId });
-                    }
-                });
-                viewState.offset += data.nodes.length;
-                viewState.hasMore = data.hasMore; // This is key
-                detectCrossConnections();
-                updateGraph();
-            } else {
-                viewState.hasMore = false;
-            }
-        } catch (error) {
-            console.error("Failed to fetch more nodes:", error);
-            // We can show an error on the tooltip
-            tooltip.textContent = "Error loading.";
-            tooltip.classList.add('visible');
-            setTimeout(() => tooltip.classList.remove('visible'), 2000);
-        } finally {
-            // Set the loading state OFF
-            addNodeElement.classed('is-loading', false);
-            
-            // If there are no more nodes, permanently disable the button
-            if (!viewState.hasMore) {
-                addNodeElement.classed('is-disabled', true);
-            }
-            updateCentralNodeState(); // Call the function here
+    // Target the specific '+' button for this cluster
+    const addNodeElement = graphGroup.selectAll('.node-add').filter(d => d.clusterId === currentActiveClusterId);
+    if (addNodeElement.classed('is-loading')) return;
+    addNodeElement.classed('is-loading', true);
+    
+    try {
+        // Fetch data using the stored word and view for this cluster
+        const data = await fetchData(cluster.nodes[0].word, cluster.currentView, viewState.offset, 3);
+        if (data.nodes.length > 0) {
+            data.nodes.forEach(newNodeData => {
+                if (!newNodeData || typeof newNodeData.text !== 'string') return;
+                const newNodeId = `${currentActiveClusterId}-${newNodeData.text.slice(0, 10)}-${cluster.currentView}`;
+                if (!cluster.nodes.some(n => n.id === newNodeId)) {
+                    const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveClusterId, visible: true };
+                    cluster.nodes.push(newNode);
+                    cluster.links.push({ source: `central-${currentActiveClusterId}`, target: newNodeId });
+                }
+            });
+            viewState.offset += data.nodes.length;
+            viewState.hasMore = data.hasMore;
+            detectCrossConnections();
+            updateGraph();
+        } else {
+            viewState.hasMore = false;
         }
-    } // <-- FIX: This brace closes the fetchMoreNodes function.
+    } catch (error) {
+        console.error("Failed to fetch more nodes:", error);
+    } finally {
+        addNodeElement.classed('is-loading', false);
+        if (!viewState.hasMore) {
+            addNodeElement.classed('is-disabled', true);
+        }
+    }
+}
     
     // FIX: All subsequent functions are now in the correct scope.
     function updateCentralNodeState() {
