@@ -1012,92 +1012,29 @@ nodeGroups.each(function(d) {
         return;
     }
 
-    const svgEl = svg.node();
-    const { width, height } = svgEl.getBoundingClientRect();
+    // The element we want to capture is the container of the SVG
+    const captureElement = document.getElementById('graph-container');
 
-    // 1. DEEP CLONE THE SVG
-    // This creates a copy we can modify without affecting the live graph.
-    const clonedSvgEl = svgEl.cloneNode(true);
-    const d3clonedSvg = d3.select(clonedSvgEl);
+    // Get the computed background color from CSS variables to ensure it's correct
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
 
-    // 2. CREATE A <style> ELEMENT WITH ALL NECESSARY CSS
-    // This is the core of the fix. We are embedding the styles directly.
-    const styleEl = document.createElement('style');
-    const cssRules = [];
-
-    // Iterate through all stylesheets on the page
-    for (const sheet of document.styleSheets) {
-        try {
-            if (sheet.cssRules) {
-                // Add each relevant rule to our list
-                for (const rule of sheet.cssRules) {
-                    cssRules.push(rule.cssText);
-                }
-            }
-        } catch (e) {
-            console.warn("Could not read CSS rules from stylesheet:", e);
-        }
-    }
-    styleEl.textContent = cssRules.join('\n');
-    
-    // 3. EMBED THE STYLES
-    // We insert our new <style> block into the <defs> section of the SVG.
-    // If <defs> doesn't exist, we create it.
-    let defs = d3clonedSvg.select('defs');
-    if (defs.empty()) {
-        defs = d3clonedSvg.insert('defs', ':first-child');
-    }
-    defs.node().appendChild(styleEl);
-
-    // 4. "BAKE IN" THE CURRENT THEME
-    // The cloned SVG doesn't know about `html[data-theme]`. We give the SVG's
-    // root element the theme attribute directly so the CSS rules apply correctly.
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    d3clonedSvg.attr('data-theme', currentTheme);
-
-    // 5. SERIALIZE AND CREATE THE IMAGE
-    const svgString = new XMLSerializer().serializeToString(clonedSvgEl);
-    
-    // We must use `btoa` for non-ASCII characters and complex SVG data
-    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
-
-    const image = new Image();
-
-    image.onload = () => {
-        const canvas = document.createElement('canvas');
-        // Increase resolution for a high-quality PNG
-        const scale = 2; 
-        canvas.width = width * scale;
-        canvas.height = height * scale;
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        // Get the correct background color from the live page's computed styles
-        const rootStyles = getComputedStyle(document.documentElement);
-        const bgColor = rootStyles.getPropertyValue('--canvas-bg').trim();
-        
-        // Draw the background and then the SVG image
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-        // Trigger download
+    // Use html2canvas to render the element
+    html2canvas(captureElement, {
+        logging: false, // Turn off console logging from the library
+        backgroundColor: bgColor, // Explicitly set the background color
+        scale: 2 // Render at 2x resolution for a high-quality image
+    }).then(canvas => {
+        // The rest of the code is for triggering the download
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png', 1.0);
         a.download = `Wordsplainer-${currentActiveCentral || 'graph'}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-    };
-
-    image.onerror = (e) => {
-        console.error('Failed to load SVG into image:', e);
-        console.error('SVG Data URL:', svgDataUrl);
-        alert('An error occurred while creating the image. Please check the console for details.');
-    };
-
-    image.src = svgDataUrl;
+    }).catch(err => {
+        console.error("html2canvas failed:", err);
+        alert("Sorry, could not save the image. An error occurred.");
+    });
 }
     // ⭐ MODIFIED: Drag handlers to respect the pinned central nodes
     function dragstarted(event, d) {
