@@ -252,16 +252,45 @@ html[data-theme='dark'] .node:not(.central-node):not(.node-example) circle {
     transition: fill 0.3s ease;
 }
 
-/* Define a clean, self-contained hover effect */
 .node.node-add:hover circle {
+    /* We keep the fill/stroke changes here for simplicity */
     fill: var(--primary-coral);
-    stroke-dasharray: none; /* Make the stroke solid */
-    transform: rotate(90deg);
+    stroke-dasharray: none; 
 }
 
 .node.node-add:hover text {
-    /* Change text to white for contrast when the circle fills in */
     fill: var(--accent-white);
+}
+
+/* NEW: Add a loading state for the '+' button */
+.node.node-add.is-loading circle {
+    stroke-dasharray: none;
+    animation: spin 1.5s linear infinite;
+    transform-origin: center; /* Important for rotation */
+}
+
+/* NEW: Hide the '+' text when the button is loading */
+.node.node-add.is-loading text {
+    display: none;
+}
+
+/* NEW: Style for when there are no more items to load */
+.node.node-add.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.node.node-add.is-disabled circle,
+.node.node-add.is-disabled:hover circle {
+    fill: transparent;
+    stroke: var(--text-muted);
+    stroke-dasharray: none;
+    animation: none;
+}
+
+.node.node-add.is-disabled text,
+.node.node-add.is-disabled:hover text {
+    fill: var(--text-muted);
 }
 
 /* --- ENHANCED: Text Node Container Styles --- */

@@ -405,13 +405,13 @@ nodeGroups.each(function(d) {
             const cluster = graphClusters.get(d.clusterId);
             tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
         } else if (d.type === 'add') {
-            const cluster = graphClusters.get(d.clusterId);
-            tooltipText = viewState.hasMore ? 
-                `Load more ${cluster?.currentView || 'items'}` : 
-                'No more items to load';
+            const is_disabled = d3.select(event.currentTarget).classed('is-disabled');
+            tooltipText = is_disabled ? 
+                'No more items to load' :
+                `Load more ${graphClusters.get(d.clusterId)?.currentView || 'items'}`;
         } else if (d.text && !d.isCentral && d.type !== 'example' && d.type !== 'add') {
-    tooltipText = `Click circle for an example\nClick text to explore`;
-}
+            tooltipText = `Click circle for an example\nClick text to explore`;
+        }
             
         if (tooltipText) {
             tooltip.textContent = tooltipText;
@@ -473,8 +473,11 @@ nodeGroups.each(function(d) {
         } else if (d.isCentral) {
             focusOnCentralNode(d.clusterId);
         } else if (d.type === 'add') {
+            if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
+                return;
+            }
             fetchMoreNodes();
-        }
+       }
     }
     
     // ⭐ MODIFIED: `handleWordSubmitted` to orchestrate the new layout and camera pan
@@ -929,17 +932,24 @@ nodeGroups.each(function(d) {
 
     async function fetchMoreNodes() {
         const cluster = graphClusters.get(currentActiveCentral);
+        // Exit if no cluster or no more data is available
         if (!currentActiveCentral || !cluster || !viewState.hasMore) return;
         
-        const centralNodeElement = graphGroup.selectAll('.central-node').filter(d => d.clusterId === currentActiveCentral);
-        centralNodeElement.classed('loading', true);
+        // Find the specific 'add' node element for this cluster
+        const addNodeElement = graphGroup.selectAll('.node-add').filter(node_d => node_d.clusterId === currentActiveCentral);
+        
+        // If it's already loading, do nothing.
+        if (addNodeElement.classed('is-loading')) return;
+    
+        // Set the loading state ON
+        addNodeElement.classed('is-loading', true);
         
         try {
             const data = await fetchData(currentActiveCentral, cluster.currentView, viewState.offset, 3);
             if (data.nodes.length > 0) {
                 data.nodes.forEach(newNodeData => {
                     if (!newNodeData || typeof newNodeData.text !== 'string') return;
-                    const newNodeId = `${currentActiveCentral}-${newNodeData.text}-${cluster.currentView}`;
+                    const newNodeId = `${currentActiveCentral}-${newNodeData.text.slice(0, 10)}-${cluster.currentView}`; // Use slice to avoid overly long IDs
                     if (!cluster.nodes.some(n => n.id === newNodeId)) {
                         const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral, visible: true };
                         cluster.nodes.push(newNode);
@@ -947,7 +957,7 @@ nodeGroups.each(function(d) {
                     }
                 });
                 viewState.offset += data.nodes.length;
-                viewState.hasMore = data.hasMore;
+                viewState.hasMore = data.hasMore; // This is key
                 detectCrossConnections();
                 updateGraph();
             } else {
@@ -955,15 +965,23 @@ nodeGroups.each(function(d) {
             }
         } catch (error) {
             console.error("Failed to fetch more nodes:", error);
-            tooltip.textContent = "Error loading more.";
+            // We can show an error on the tooltip
+            tooltip.textContent = "Error loading.";
             tooltip.classList.add('visible');
             setTimeout(() => tooltip.classList.remove('visible'), 2000);
         } finally {
-            centralNodeElement.classed('loading', false);
-            updateCentralNodeState();
+            // Set the loading state OFF
+            addNodeElement.classed('is-loading', false);
+            
+            // If there are no more nodes, permanently disable the button
+            if (!viewState.hasMore) {
+                addNodeElement.classed('is-disabled', true);
+            }
+            updateCentralNodeState(); // Call the function here
         }
-    }
+    } // <-- FIX: This brace closes the fetchMoreNodes function.
     
+    // FIX: All subsequent functions are now in the correct scope.
     function updateCentralNodeState() {
         if (!currentActiveCentral) return;
         const centralNodeElement = graphGroup.selectAll('.central-node').filter(d => d.clusterId === currentActiveCentral);
