@@ -97,44 +97,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Enhanced clustering with better spatial distribution
     function forceCluster() {
-        let strength = 0.15;
-        return function(alpha) {
-            const allNodes = getConsolidatedGraphData().nodes;
-            
-            for (let node of allNodes) {
-                if (node.clusterId && graphClusters.has(node.clusterId)) {
-                    const cluster = graphClusters.get(node.clusterId);
-                    const target = cluster.center;
+    // This strength value can be tweaked, but 0.15 is a good start.
+    const strength = 0.15;
+
+    return function(alpha) {
+        const allNodes = getConsolidatedGraphData().nodes;
+        
+        for (let node of allNodes) {
+            if (node.clusterId && graphClusters.has(node.clusterId)) {
+                const cluster = graphClusters.get(node.clusterId);
+                const target = cluster.center;
+                
+                if (node.isCentral) {
+                    // This part is unchanged: it helps keep the central node stable at its fixed position.
+                    const strengthFactor = 3.0;
+                    node.vx += (target.x - node.x) * strength * alpha * strengthFactor;
+                    node.vy += (target.y - node.y) * strength * alpha * strengthFactor;
+
+                } else {
+                    // ⭐ NEW, SIMPLIFIED LOGIC FOR PERIPHERAL NODES ⭐
+
+                    // Get only the *visible* peripheral nodes for layout calculation.
+                    const peripheralNodes = cluster.nodes.filter(n => !n.isCentral && n.visible !== false);
+                    const nodeIndex = peripheralNodes.indexOf(node);
+                    const totalNodes = peripheralNodes.length;
                     
-                    if (node.isCentral) {
-                        // Central nodes stay at cluster center with strong force
-                        const strengthFactor = 3.0;
-                        node.vx += (target.x - node.x) * strength * alpha * strengthFactor;
-                        node.vy += (target.y - node.y) * strength * alpha * strengthFactor;
-                    } else {
-                        // Peripheral nodes arrange in concentric circles around center
-                        const clusterNodes = cluster.nodes.filter(n => !n.isCentral && n.visible !== false);
-                        const nodeIndex = clusterNodes.indexOf(node);
-                        const totalNodes = clusterNodes.length;
+                    if (totalNodes > 0) {
+                        // 1. A smaller, more appropriate radius for the film-strip layout.
+                        // This is the most critical change.
+                        const radius = 260; 
+
+                        // 2. Simple, even distribution in a single circle. No more complex layers.
+                        const angleStep = (2 * Math.PI) / totalNodes;
+                        const angle = nodeIndex * angleStep;
                         
-                        if (totalNodes > 0) {
-                            // Calculate ideal position in circular arrangement
-                            const radius = Math.min(180 + (Math.floor(nodeIndex / 8) * 60), 300);
-                            const angleStep = (2 * Math.PI) / Math.min(8, totalNodes);
-                            const angle = (nodeIndex % 8) * angleStep + (Math.floor(nodeIndex / 8) * 0.5);
-                            
-                            const idealX = target.x + Math.cos(angle) * radius;
-                            const idealY = target.y + Math.sin(angle) * radius;
-                            
-                            const strengthFactor = 0.4;
-                            node.vx += (idealX - node.x) * strength * alpha * strengthFactor;
-                            node.vy += (idealY - node.y) * strength * alpha * strengthFactor;
-                        }
+                        // 3. Calculate the ideal position on the circle.
+                        const idealX = target.x + Math.cos(angle) * radius;
+                        const idealY = target.y + Math.sin(angle) * radius;
+                        
+                        // 4. Apply a stronger force to make nodes snap to their positions decisively.
+                        const strengthFactor = 0.9;
+                        node.vx += (idealX - node.x) * strength * alpha * strengthFactor;
+                        node.vy += (idealY - node.y) * strength * alpha * strengthFactor;
                     }
                 }
             }
-        };
-    }
+        }
+    };
+}
 
     // Enhanced collision detection with adaptive radii
 function getCollisionRadius(d) {
