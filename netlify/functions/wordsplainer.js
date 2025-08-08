@@ -17,7 +17,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, current conversational colloquial language that native speakers would use in modern settings and natural situations.`;
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, conversational colloquial language that native speakers would use in modern settings and natural situations.`;
     
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -87,12 +87,12 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
+        "openai/gpt-oss-20b:free",
         "google/gemini-2.0-flash-exp:free",
         "google/gemma-3-12b-it:free",
         "google/gemini-flash-1.5-8b",
-        "mistralai/mistral-small-3.2-24b-instruct:free",
-        "openai/gpt-3.5-turbo"
-    ];
+        "mistralai/mistral-small-3.2-24b-instruct:free"
+      ];
 
     for (const model of modelsToTry) {
         console.log(`Attempting API call with model: ${model}`);
