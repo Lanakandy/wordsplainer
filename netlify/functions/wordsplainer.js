@@ -71,7 +71,7 @@ function getLLMPrompt(type, register, word, options = {}) {
                 taskInstruction = `Create a single, high-quality, engaging example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            // ⭐ FIX 3: Assemble the prompt for 'generateExample' using the new robust structure.
+            // Assemble the prompt for 'generateExample' using the new robust structure.
             systemPrompt = [baseInstruction, registerInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
@@ -79,7 +79,7 @@ function getLLMPrompt(type, register, word, options = {}) {
             throw new Error(`Unknown type: ${type}`);
     }
 
-    // ⭐ FIX 4: Assemble the final system prompt with the format instruction at the end.
+    // Assemble the final system prompt with the format instruction at the end.
     systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
@@ -142,39 +142,40 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("The AI model could not provide a response. Please try a different word or try again later.");
 }
 
-// The main handler now uses the new fallback function.
+// ⭐ FIX: This function has been corrected to call getLLMPrompt correctly.
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
-        const { word, type, offset = 0, limit = 5, language, register = 'conversational' } = JSON.parse(event.body);
+        const body = JSON.parse(event.body);
+        const { word, type, register = 'conversational' } = body;
         
-        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, language, limit);
+        // Pass the entire parsed body as the 'options' object.
+        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, body);
         
-        // Use the new function with built-in retries and fallbacks
+        // Use the function with built-in retries and fallbacks
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
         let responseData;
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
-            // Default to an empty array if the API somehow returns null/undefined
             const allNodes = apiResponse.nodes || [];
+            // Correctly use the limit from the original request for hasMore logic
+            const requestLimit = body.limit || 5; 
             responseData = {
                 nodes: allNodes,
-                hasMore: allNodes.length === limit && allNodes.length > 0, // hasMore is false if no nodes were returned
+                hasMore: allNodes.length === requestLimit && allNodes.length > 0,
                 total: null
             };
         }
 
-        // Always return 200 OK, even with empty data, to prevent client-side error state
         return { statusCode: 200, body: JSON.stringify(responseData) };
 
     } catch (error) {
         console.error("Function Error:", error);
-        // This catch block now only triggers for critical errors (e.g., if all models fail)
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
