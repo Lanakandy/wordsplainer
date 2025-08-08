@@ -43,15 +43,12 @@ function getLLMPrompt(type, register, word, options = {}) {
         case 'idioms':
             taskInstruction = `Provide idioms or set phrases. CRITICAL: Every single idiom you provide MUST contain the exact target word. Do not provide general proverbs. For example, for the word 'hand', a good idiom is "get out of hand".\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
-        
-        // ⭐ FIX: Separated and strengthened the prompts for synonyms and opposites.
         case 'synonyms':
             taskInstruction = `Provide common synonyms for the target word. For example, for the word 'happy', you could provide 'joyful' or 'pleased'. The response should be single words. Do not provide definitions.\nJSON format: {"nodes": [{"text": "the synonym here"}]}`;
             break;
         case 'opposites':
             taskInstruction = `Provide common antonyms (opposites) for the target word. For example, for the word 'hot', you could provide 'cold' or 'cool'. The response should be single words. Do not provide definitions.\nJSON format: {"nodes": [{"text": "the antonym here"}]}`;
-            break;
-            
+            break;        
         case 'translation':
             taskInstruction = `Provide the main translations for the word into the target language.\nJSON format: {"nodes": [{"text": "translation"}]}`;
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
@@ -90,7 +87,10 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "google/gemma-3n-e2b-it:free",
+        "google/gemini-2.0-flash-exp:free",
+        "google/gemma-2-9b-it",
+        "google/gemma-3-12b-it:free",
+        "google/gemini-flash-1.5-8b",
         "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-3.5-turbo"
     ];
