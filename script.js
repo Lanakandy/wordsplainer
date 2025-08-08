@@ -930,58 +930,66 @@ nodeGroups.each(function(d) {
         }
     }
 
+    // ⭐ FIX: This function now prevents adding duplicate nodes.
     async function fetchMoreNodes() {
         const cluster = graphClusters.get(currentActiveCentral);
-        // Exit if no cluster or no more data is available
         if (!currentActiveCentral || !cluster || !viewState.hasMore) return;
         
-        // Find the specific 'add' node element for this cluster
         const addNodeElement = graphGroup.selectAll('.node-add').filter(node_d => node_d.clusterId === currentActiveCentral);
-        
-        // If it's already loading, do nothing.
         if (addNodeElement.classed('is-loading')) return;
     
-        // Set the loading state ON
         addNodeElement.classed('is-loading', true);
         
         try {
             const data = await fetchData(currentActiveCentral, cluster.currentView, viewState.offset, 3);
             if (data.nodes.length > 0) {
+                let addedNodeCount = 0;
                 data.nodes.forEach(newNodeData => {
                     if (!newNodeData || typeof newNodeData.text !== 'string') return;
-                    const newNodeId = `${currentActiveCentral}-${newNodeData.text.slice(0, 10)}-${cluster.currentView}`; // Use slice to avoid overly long IDs
-                    if (!cluster.nodes.some(n => n.id === newNodeId)) {
+
+                    // CHECK FOR DUPLICATES: See if a node with this text already exists in the cluster.
+                    const isDuplicate = cluster.nodes.some(existingNode => 
+                        existingNode.text && existingNode.text.toLowerCase() === newNodeData.text.toLowerCase()
+                    );
+
+                    // If it's not a duplicate, add it to the graph.
+                    if (!isDuplicate) {
+                        const newNodeId = `${currentActiveCentral}-${newNodeData.text.slice(0, 10)}-${cluster.currentView}`;
                         const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral, visible: true };
                         cluster.nodes.push(newNode);
                         cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNodeId });
+                        addedNodeCount++;
+                    } else {
+                        console.log(`Skipping duplicate node: "${newNodeData.text}"`);
                     }
                 });
+
+                // Only update the graph if we actually added new nodes
+                if (addedNodeCount > 0) {
+                    detectCrossConnections();
+                    updateGraph();
+                }
+
+                // The offset for the *next* fetch should be incremented by the number of items we received, not just the ones we added.
                 viewState.offset += data.nodes.length;
-                viewState.hasMore = data.hasMore; // This is key
-                detectCrossConnections();
-                updateGraph();
+                viewState.hasMore = data.hasMore;
             } else {
                 viewState.hasMore = false;
             }
         } catch (error) {
             console.error("Failed to fetch more nodes:", error);
-            // We can show an error on the tooltip
             tooltip.textContent = "Error loading.";
             tooltip.classList.add('visible');
             setTimeout(() => tooltip.classList.remove('visible'), 2000);
         } finally {
-            // Set the loading state OFF
             addNodeElement.classed('is-loading', false);
-            
-            // If there are no more nodes, permanently disable the button
             if (!viewState.hasMore) {
                 addNodeElement.classed('is-disabled', true);
             }
-            updateCentralNodeState(); // Call the function here
+            updateCentralNodeState();
         }
-    } // <-- FIX: This brace closes the fetchMoreNodes function.
+    }
     
-    // FIX: All subsequent functions are now in the correct scope.
     function updateCentralNodeState() {
         if (!currentActiveCentral) return;
         const centralNodeElement = graphGroup.selectAll('.central-node').filter(d => d.clusterId === currentActiveCentral);
@@ -1018,10 +1026,8 @@ nodeGroups.each(function(d) {
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     
-    // This new logic calculates the box based on the full visual extent of each node,
-    // not just its center point, which fixes the clipping issue.
     allNodes.forEach(d => {
-        const nodeWidth = d.width || (d.isCentral ? 90 : 40); // Use stored width, or estimate
+        const nodeWidth = d.width || (d.isCentral ? 90 : 40);
         const nodeHeight = d.height || (d.isCentral ? 90 : 40);
         minX = Math.min(minX, d.x - nodeWidth / 2);
         maxX = Math.max(maxX, d.x + nodeWidth / 2);
@@ -1029,7 +1035,7 @@ nodeGroups.each(function(d) {
         maxY = Math.max(maxY, d.y + nodeHeight / 2);
     });
 
-    const padding = 100; // Generous padding for aesthetics
+    const padding = 100;
     const exportWidth = (maxX - minX) + 2 * padding;
     const exportHeight = (maxY - minY) + 2 * padding;
 
@@ -1041,7 +1047,7 @@ nodeGroups.each(function(d) {
         .attr('viewBox', `0 0 ${exportWidth} ${exportHeight}`);
 
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    tempSvg.attr('data-theme', currentTheme); // This now works with our updated CSS
+    tempSvg.attr('data-theme', currentTheme);
 
     const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
     tempSvg.append('rect')
@@ -1049,12 +1055,11 @@ nodeGroups.each(function(d) {
         .attr('height', '100%')
         .attr('fill', bgColor);
         
-    // --- NEW: ADD THE CREDIT TEXT AT THE BOTTOM ---
     const creditTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
     tempSvg.append('text')
-        .attr('x', exportWidth / 2) // Center horizontally
-        .attr('y', exportHeight - 20) // Position near the bottom with 20px margin
-        .attr('text-anchor', 'middle') // Anchor for horizontal centering
+        .attr('x', exportWidth / 2)
+        .attr('y', exportHeight - 20)
+        .attr('text-anchor', 'middle')
         .attr('font-family', 'Inter, sans-serif')
         .attr('font-size', '14px')
         .attr('fill', creditTextColor)
@@ -1115,13 +1120,11 @@ nodeGroups.each(function(d) {
     // ⭐ MODIFIED: Drag handlers to respect the pinned central nodes
     function dragstarted(event, d) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
-        // For peripheral nodes, we allow dragging. For central, we use their fixed fx,fy.
         d.fx = d.isCentral ? d.fx : d.x;
         d.fy = d.isCentral ? d.fy : d.y;
     }
 
     function dragged(event, d) {
-        // Only update fx/fy for non-central nodes
         if (!d.isCentral) {
             d.fx = event.x;
             d.fy = event.y;
@@ -1130,7 +1133,6 @@ nodeGroups.each(function(d) {
 
     function dragended(event, d) {
         if (!event.active) simulation.alphaTarget(0);
-        // We only un-fix peripheral nodes. Central nodes remain pinned to the film strip.
         if (!d.isCentral) {
             d.fx = null;
             d.fy = null;
