@@ -85,16 +85,16 @@ function getLLMPrompt(type, register, word, options = {}) {
 }
 
 async function callOpenAIModel(systemPrompt, userPrompt) {
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-    if (!OPENAI_API_KEY) throw new Error('OpenAI API key is not configured.');
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
-    const model = "gpt-3.5-turbo";
+    const model = "openai/gpt-oss-20b:free";
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
