@@ -17,7 +17,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers use in conversation.`;
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, colloquial language that would be heard in conversations.`;
     
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -142,7 +142,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("The AI model could not provide a response. Please try a different word or try again later.");
 }
 
-// ⭐ FIX: This function has been corrected to call getLLMPrompt correctly.
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
@@ -152,18 +151,29 @@ exports.handler = async function(event) {
         const body = JSON.parse(event.body);
         const { word, type, register = 'conversational' } = body;
         
-        // Pass the entire parsed body as the 'options' object.
         const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, body);
         
-        // Use the function with built-in retries and fallbacks
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
         let responseData;
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
-            const allNodes = apiResponse.nodes || [];
-            // Correctly use the limit from the original request for hasMore logic
+            // ⭐ FIX: Normalize and clean the node data from the API
+            let allNodes = apiResponse.nodes || [];
+            const typesToNormalize = ['synonyms', 'opposites', 'derivatives']; // Add other types if needed
+
+            if (typesToNormalize.includes(type)) {
+                allNodes = allNodes
+                    .map(node => ({
+                        ...node,
+                        // Ensure all text is lowercase for consistency
+                        text: node.text.toLowerCase() 
+                    }))
+                    // Remove any node that is identical to the original word
+                    .filter(node => node.text !== word.toLowerCase());
+            }
+            
             const requestLimit = body.limit || 5; 
             responseData = {
                 nodes: allNodes,
