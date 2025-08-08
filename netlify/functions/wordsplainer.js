@@ -84,96 +84,97 @@ function getLLMPrompt(type, register, word, options = {}) {
     return { systemPrompt, userPrompt };
 }
 
-async function callOpenRouterModel(systemPrompt, userPrompt) {
+async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
-    const model = "openai/gpt-oss-20b:free";
+    // Define a list of models to try in order of preference.
+    const modelsToTry = [
+        "mistralai/mistral-small-3.2-24b-instruct:free",
+        "mistralai/mistral-7b-instruct:free", // A good, reliable free fallback
+        "openai/gpt-3.5-turbo" // A cheap, very reliable paid option if free ones fail
+    ];
 
-    try {
+    for (const model of modelsToTry) {
+        console.log(`Attempting API call with model: ${model}`);
+        try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
-            headers: {
-                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model,
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ]
-            })
-        });
+                headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: model,
+                    response_format: { type: "json_object" },
+                    messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
+                })
+            });
 
         if (!response.ok) {
-            const errorBody = await response.text();
-            console.warn(`OpenAI API call failed with status ${response.status}: ${errorBody}`);
-            throw new Error(`API error: ${response.status}`);
+                const errorBody = await response.text();
+                console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`);
+                continue; // Try the next model
+            }
+
+            const data = await response.json();
+
+            // Check for a valid, non-empty response
+            if (data.choices && data.choices.length > 0 && data.choices[0].message?.content) {
+                console.log(`Successfully received response from: ${model}`);
+                const messageContent = data.choices[0].message.content;
+                
+                try {
+                    const parsedContent = JSON.parse(messageContent);
+                    return parsedContent; // Success! Return the result.
+                } catch (parseError) {
+                    console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`);
+                    continue; // Invalid JSON, try next model
+                }
+            } else {
+                console.warn(`Model '${model}' returned no choices. Trying next model.`);
+            }
+
+        } catch (error) {
+            console.error(`An unexpected network error occurred with model '${model}':`, error);
         }
-
-        const data = await response.json();
-        const messageContent = data.choices?.[0]?.message?.content;
-
-        if (!messageContent) throw new Error("No content returned by OpenAI.");
-
-        try {
-            return JSON.parse(messageContent);
-        } catch (parseError) {
-            throw new Error("OpenAI returned unparseable JSON.");
-        }
-
-    } catch (error) {
-        console.error("OpenAI API call failed:", error);
-        throw error;
     }
+
+    // If all models in the list have failed.
+    console.error("All AI models failed to provide a valid response.");
+    throw new Error("The AI model could not provide a response. Please try a different word or try again later.");
 }
 
-
+// The main handler now uses the new fallback function.
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
-        const { word, type, offset = 0, limit = 5, language, register = 'conversational', centralWord, context, sourceNodeType, definition, translation } = JSON.parse(event.body);
-        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, { language, limit, centralWord, context, sourceNodeType, definition, translation });
-        const apiResponse = await callOpenAIModel(systemPrompt, userPrompt);
-
+        const { word, type, offset = 0, limit = 5, language, register = 'conversational' } = JSON.parse(event.body);
+        
+        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, language, limit);
+        
+        // Use the new function with built-in retries and fallbacks
+        const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+        
         let responseData;
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
-            const rawNodes = apiResponse.nodes || [];
-
-            const seen = new Set();
-            const uniqueNodes = rawNodes.filter(node => {
-                // Ensure the node and its text are valid before processing
-                if (!node || typeof node.text !== 'string') {
-                    return false;
-                }
-                const normalizedText = node.text.toLowerCase().trim();
-                if (seen.has(normalizedText)) {
-                    return false; // This is a duplicate, so filter it out
-                } else {
-                    seen.add(normalizedText);
-                    return true; // This is a unique item, keep it
-                }
-            });
-
+            // Default to an empty array if the API somehow returns null/undefined
+            const allNodes = apiResponse.nodes || [];
             responseData = {
-                nodes: uniqueNodes,
-                // The 'hasMore' logic is based on the original count from the LLM.
-                // If it sent back the max number we requested, more might exist.
-                hasMore: rawNodes.length === limit && rawNodes.length > 0,
+                nodes: allNodes,
+                hasMore: allNodes.length === limit && allNodes.length > 0, // hasMore is false if no nodes were returned
                 total: null
             };
         }
 
+        // Always return 200 OK, even with empty data, to prevent client-side error state
         return { statusCode: 200, body: JSON.stringify(responseData) };
 
     } catch (error) {
         console.error("Function Error:", error);
+        // This catch block now only triggers for critical errors (e.g., if all models fail)
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
