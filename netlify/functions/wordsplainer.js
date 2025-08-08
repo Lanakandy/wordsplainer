@@ -37,11 +37,13 @@ function getLLMPrompt(type, register, word, options = {}) {
         case 'derivatives':
             taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.\nJSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
+        // ⭐ FIX 2: Strengthened Collocations prompt
         case 'collocations':
-            taskInstruction = `Provide common collocations with the target word. Include frequent noun, verb, adjective, adverb, and preposition pairings that naturally occur with it.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
+            taskInstruction = `Provide common collocations with the target word. CRITICAL: Each collocation phrase MUST contain the target word. For example, for the word "hand", you could provide "on the one hand" or "heavy hand". Include frequent noun, verb, adjective, and adverb pairings.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
+        // ⭐ FIX 2: Strengthened Idioms prompt
         case 'idioms':
-            taskInstruction = `Provide idioms or set phrases that use the target word. All idiom phrases should have the target word in them.\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
+            taskInstruction = `Provide idioms or set phrases. CRITICAL: Every single idiom you provide MUST contain the exact target word. Do not provide general proverbs. For example, for the word 'hand', a good idiom is "get out of hand".\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
         case 'synonyms':
         case 'opposites':
@@ -54,7 +56,6 @@ function getLLMPrompt(type, register, word, options = {}) {
             break;
         
         case 'generateExample':
-            // This case handles its own more complex logic, which is fine.
             if (sourceNodeType === 'idioms') {
                 taskInstruction = `The user clicked on an idiom. Create a single, high-quality example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
                 userPrompt = `Idiom to use and explain: "${word}"`;
@@ -71,7 +72,6 @@ function getLLMPrompt(type, register, word, options = {}) {
                 taskInstruction = `Create a single, high-quality, engaging example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            // Assemble the prompt for 'generateExample' using the new robust structure.
             systemPrompt = [baseInstruction, registerInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
@@ -79,7 +79,6 @@ function getLLMPrompt(type, register, word, options = {}) {
             throw new Error(`Unknown type: ${type}`);
     }
 
-    // Assemble the final system prompt with the format instruction at the end.
     systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
@@ -88,11 +87,10 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
-    // Define a list of models to try in order of preference.
     const modelsToTry = [
+        "mistralai/mistral-7b-instruct:free",
         "mistralai/mistral-small-3.2-24b-instruct:free",
-        "mistralai/mistral-7b-instruct:free", // A good, reliable free fallback
-        "openai/gpt-3.5-turbo" // A cheap, very reliable paid option if free ones fail
+        "openai/gpt-3.5-turbo"
     ];
 
     for (const model of modelsToTry) {
@@ -111,22 +109,21 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         if (!response.ok) {
                 const errorBody = await response.text();
                 console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`);
-                continue; // Try the next model
+                continue;
             }
 
             const data = await response.json();
 
-            // Check for a valid, non-empty response
             if (data.choices && data.choices.length > 0 && data.choices[0].message?.content) {
                 console.log(`Successfully received response from: ${model}`);
                 const messageContent = data.choices[0].message.content;
                 
                 try {
                     const parsedContent = JSON.parse(messageContent);
-                    return parsedContent; // Success! Return the result.
+                    return parsedContent;
                 } catch (parseError) {
                     console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`);
-                    continue; // Invalid JSON, try next model
+                    continue;
                 }
             } else {
                 console.warn(`Model '${model}' returned no choices. Trying next model.`);
@@ -137,7 +134,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         }
     }
 
-    // If all models in the list have failed.
     console.error("All AI models failed to provide a valid response.");
     throw new Error("The AI model could not provide a response. Please try a different word or try again later.");
 }
@@ -159,18 +155,18 @@ exports.handler = async function(event) {
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
-            // ⭐ FIX: Normalize and clean the node data from the API
             let allNodes = apiResponse.nodes || [];
-            const typesToNormalize = ['synonyms', 'opposites', 'derivatives']; // Add other types if needed
+            const typesToNormalize = ['synonyms', 'opposites', 'derivatives'];
 
             if (typesToNormalize.includes(type)) {
+                // ⭐ FIX 1: Add a defensive check to prevent crashes on bad API data.
                 allNodes = allNodes
+                    // First, filter out any malformed nodes (null, or text is not a string).
+                    .filter(node => node && typeof node.text === 'string')
                     .map(node => ({
                         ...node,
-                        // Ensure all text is lowercase for consistency
                         text: node.text.toLowerCase() 
                     }))
-                    // Remove any node that is identical to the original word
                     .filter(node => node.text !== word.toLowerCase());
             }
             
