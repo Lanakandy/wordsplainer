@@ -37,11 +37,9 @@ function getLLMPrompt(type, register, word, options = {}) {
         case 'derivatives':
             taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.\nJSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
-        // ⭐ FIX 2: Strengthened Collocations prompt
         case 'collocations':
             taskInstruction = `Provide common collocations with the target word. CRITICAL: Each collocation phrase MUST contain the target word. For example, for the word "hand", you could provide "on the one hand" or "heavy hand". Include frequent noun, verb, adjective, and adverb pairings.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
-        // ⭐ FIX 2: Strengthened Idioms prompt
         case 'idioms':
             taskInstruction = `Provide idioms or set phrases. CRITICAL: Every single idiom you provide MUST contain the exact target word. Do not provide general proverbs. For example, for the word 'hand', a good idiom is "get out of hand".\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
@@ -87,8 +85,9 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
+    // ⭐ FIX: Added the missing comma in the array.
     const modelsToTry = [
-        "deepseek/deepseek-r1:free"
+        "deepseek/deepseek-r1:free",
         "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-3.5-turbo"
     ];
@@ -159,9 +158,7 @@ exports.handler = async function(event) {
             const typesToNormalize = ['synonyms', 'opposites', 'derivatives'];
 
             if (typesToNormalize.includes(type)) {
-                // ⭐ FIX 1: Add a defensive check to prevent crashes on bad API data.
                 allNodes = allNodes
-                    // First, filter out any malformed nodes (null, or text is not a string).
                     .filter(node => node && typeof node.text === 'string')
                     .map(node => ({
                         ...node,
