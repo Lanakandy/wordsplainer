@@ -13,11 +13,11 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert linguist creating engaging explanations of English vocabulary.`;
+    const baseInstruction = `You are an expert linguist creating engaging explanations of English vocabulary in modern settings.`;
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, conversational colloquial language that native speakers would use.`;
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, current conversational colloquial language that native speakers would use in modern settings and natural situations.`;
     
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -88,7 +88,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 
     const modelsToTry = [
         "google/gemini-2.0-flash-exp:free",
-        "google/gemma-2-9b-it",
         "google/gemma-3-12b-it:free",
         "google/gemini-flash-1.5-8b",
         "mistralai/mistral-small-3.2-24b-instruct:free",
