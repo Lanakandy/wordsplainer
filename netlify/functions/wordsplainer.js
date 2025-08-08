@@ -88,7 +88,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "cognitivecomputations/dolphin3.0-r1-mistral-24b"
+        "deepseek/deepseek-r1:free"
         "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-3.5-turbo"
     ];
