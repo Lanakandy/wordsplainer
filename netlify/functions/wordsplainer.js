@@ -13,7 +13,7 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert linguist providing creative and engaging explanations of English vocabulary in modern settings for language learners.`;
+    const baseInstruction = `You are an expert linguist providing creative explanations of English vocabulary in modern settings for language learners.`;
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
@@ -29,7 +29,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide non-trivial engaging definitions for the main meanings of the word. Use similes to explain complex concepts where appropriate. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide non-trivial snappy definitions for the main meanings of the word. Use similes to explain complex concepts. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
@@ -87,6 +87,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
+        "google/gemini-flash-1.5-8b",
         "google/gemini-2.0-flash-exp:free",
         "google/gemma-3-12b-it:free",
         "openai/gpt-oss-20b:free",
