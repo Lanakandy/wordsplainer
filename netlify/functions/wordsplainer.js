@@ -57,7 +57,7 @@ function getLLMPrompt(type, register, word, options = {}) {
         
         case 'generateExample':
             if (sourceNodeType === 'idioms') {
-                taskInstruction = `The user clicked on an idiom. Create a single, high-quality example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
+                taskInstruction = `The user clicked on an idiom. Create a single, high-quality engaging example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
                 userPrompt = `Idiom to use and explain: "${word}"`;
             } else if (sourceNodeType === 'meaning' && centralWord && definition) {
                 taskInstruction = `The user is exploring the word "${centralWord}" and clicked on this specific definition: "${definition}". Create a single, high-quality engaging example sentence that uses "${centralWord}" to clearly illustrate this exact meaning.\nJSON format: {"example": "The generated sentence."}`;
@@ -88,7 +88,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "mistralai/mistral-7b-instruct:free",
+        "cognitivecomputations/dolphin3.0-r1-mistral-24b"
         "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-3.5-turbo"
     ];
