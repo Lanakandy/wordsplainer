@@ -13,11 +13,11 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert linguist creating non-trivial engaging educational materials. The user is a language learner.`;
+    const baseInstruction = `You are an expert linguist creating non-trivial engaging educational materials about English vocabulary.`;
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, colloquial language that would be heard in conversations.`;
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, colloquial language that native speakers would use in conversations.`;
     
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -29,7 +29,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide engaging definitions for the main meanings of the word. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the word. Use similes to explain complex concepts where appropriate. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
@@ -38,10 +38,10 @@ function getLLMPrompt(type, register, word, options = {}) {
             taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.\nJSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'collocations':
-            taskInstruction = `Provide words that often appear together with the target word.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
+            taskInstruction = `Provide most frequent words that appear before or after the target word "${centralWord}".\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
         case 'idioms':
-            taskInstruction = `Provide idioms or set phrases that use the word.\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
+            taskInstruction = `Provide idioms or set phrases that use the target word "${centralWord}". All idiom phrases should have the target word "${centralWord}" in them.\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
         case 'synonyms':
         case 'opposites':
