@@ -1049,6 +1049,17 @@ nodeGroups.each(function(d) {
         .attr('height', '100%')
         .attr('fill', bgColor);
         
+    // --- NEW: ADD THE CREDIT TEXT AT THE BOTTOM ---
+    const creditTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
+    tempSvg.append('text')
+        .attr('x', exportWidth / 2) // Center horizontally
+        .attr('y', exportHeight - 20) // Position near the bottom with 20px margin
+        .attr('text-anchor', 'middle') // Anchor for horizontal centering
+        .attr('font-family', 'Inter, sans-serif')
+        .attr('font-size', '14px')
+        .attr('fill', creditTextColor)
+        .text('Wordsplainer, www.eltcation.com');
+
     const tempGroup = tempSvg.append('g')
         .attr('transform', `translate(${-minX + padding}, ${-minY + padding})`);
 
