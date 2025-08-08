@@ -17,7 +17,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural, conversational colloquial language that native speakers would use in modern settings.`;
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in a modern conversation.`;
     
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -29,7 +29,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the target word. Definitions should be clear, snappy and creative. Use similes to explain complex concepts. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the target word. Definitions should be clear, brief and engaging. Use similes to explain complex concepts. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
@@ -87,13 +87,11 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "microsoft/phi-3.5-mini-128k-instruct",
-        "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-oss-20b:free",
         "google/gemini-2.0-flash-exp:free",
+        "mistralai/mistral-small-3.2-24b-instruct:free",
         "google/gemma-3-12b-it:free",
-        "mistralai/ministral-8b"
-              
+                      
       ];
 
     for (const model of modelsToTry) {
