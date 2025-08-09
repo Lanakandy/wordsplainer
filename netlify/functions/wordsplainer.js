@@ -29,7 +29,7 @@ function getLLMPrompt(type, register, word, options = {}) {
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the target word. Definitions should be clear and engaging. Use similes to explain complex concepts. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide witty definitions for the main meanings of the target word. Definitions should be clear and engaging. Use similes to explain complex concepts. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
