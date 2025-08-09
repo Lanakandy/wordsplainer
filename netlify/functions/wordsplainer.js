@@ -13,12 +13,16 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert linguist providing unique non-trivial witty explanations of English vocabulary.`;
+    const baseInstruction = `You are an expert linguist providing unique engaging explanations of English vocabulary.`;
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in a modern conversation.`;
+        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language.`;
     
+    const proficiencyInstruction = proficiency === 'low'
+        ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
+        : `The user's proficiency is HIGH. All definitions and examples should be nuanced, witty and use vocabulary that native speakers would use in a modern conversation.`;
+
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
     const limitInstruction = `Provide up to ${limit} distinct items.`;
