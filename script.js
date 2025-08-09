@@ -11,7 +11,7 @@ applyTheme(savedTheme);
 
 // --- State Management ---
 let currentRegister = 'conversational';
-let currentProficiency = 'high'; // Default proficiency
+let currentProficiency = 'high'; // ⭐ FIX: This line was missing.
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -297,11 +297,9 @@ document.addEventListener('DOMContentLoaded', () => {
         proficiencyToggleBtn.classList.toggle('is-high', currentProficiency === 'high');
         refetchCurrentView();
     }
-
-    // ... (rest of the file with other handlers like handleNodeClick, generateGraphForView, etc.)
-    // Make sure generateGraphForView, handleWordSubmitted, and all other functions are present.
     
-    // (This is an abbreviated version showing only the changed parts. The rest of your file should remain)
+    // ... (All other functions remain the same) ...
+
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
           if (d.type !== 'add') {
