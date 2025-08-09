@@ -625,77 +625,84 @@ function getCollisionRadius(d) {
     }   
 
     async function generateGraphForView(view, options = {}) {
-        if (!currentActiveCentral) return renderError('No word selected.');
-        
-        const cluster = graphClusters.get(currentActiveCentral);
-        if (!cluster) return renderError('Invalid word cluster.');
+    if (!currentActiveCentral) return renderError('No word selected.');
+    
+    const cluster = graphClusters.get(currentActiveCentral);
+    if (!cluster) return renderError('Invalid word cluster.');
 
-        const alreadyLoaded = cluster.nodes.some(n => n.type === view);
+    const alreadyLoaded = cluster.nodes.some(n => n.type === view);
+    
+    // Set the new view immediately
+    cluster.currentView = view;
+    currentView = view;
+    updateActiveButton();
 
-        if (alreadyLoaded) {
-            console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
-            cluster.currentView = view;
-            currentView = view;
-            updateActiveButton();
-
-            cluster.nodes.forEach(node => {
-                const isExample = node.type === 'example';
-                if (!isExample) {
-                    node.visible = node.isCentral || node.type === 'add' || node.type === view;
-                } else {
-                    const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
-                    node.visible = sourceNode ? sourceNode.visible : false;
-                }
-            });
-
-            updateGraph();
-            return;
-        }
-
-        console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
-        cluster.currentView = view;
-        currentView = view;
-        updateActiveButton();
-        renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
-
-        try {
-            const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
-            if (!data || !data.nodes) throw new Error("No data received from server.");
-            
-            cluster.nodes.forEach(node => {
-                if (!node.isCentral && node.type !== 'add') node.visible = false;
-            });
-
-            data.nodes.forEach(nodeData => {
-                if (!nodeData || typeof nodeData.text !== 'string') return;
-                const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
-                if (cluster.nodes.some(n => n.id === nodeId)) return;
-
-                const newNode = {
-                    ...nodeData, id: nodeId, type: view,
-                    clusterId: currentActiveCentral, visible: true, lang: options.language 
-                };
-                cluster.nodes.push(newNode);
-                cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-            });
-            
-            const addNodeId = `add-${currentActiveCentral}`;
-            let addNode = cluster.nodes.find(n => n.id === addNodeId);
-            if (!addNode) {
-                addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral };
-                cluster.nodes.push(addNode);
-                cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
+    if (alreadyLoaded) {
+        console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
+        // This is the robust logic we want to reuse.
+        cluster.nodes.forEach(node => {
+            const isExample = node.type === 'example';
+            if (!isExample) {
+                node.visible = node.isCentral || node.type === 'add' || node.type === view;
+            } else {
+                const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
+                node.visible = sourceNode ? sourceNode.visible : false;
             }
-            addNode.visible = true;
-            
-            detectCrossConnections();
-            updateGraph();
-
-        } catch (error) {
-            console.error("Error generating graph:", error);
-            renderError(`Error loading ${view}: ${error.message}`);
-        }
+        });
+        updateGraph();
+        return;
     }
+
+    console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
+    renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
+
+    try {
+        const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
+        if (!data || !data.nodes) throw new Error("No data received from server.");
+        
+        // Add the new nodes to the cluster
+        data.nodes.forEach(nodeData => {
+            if (!nodeData || typeof nodeData.text !== 'string') return;
+            const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
+            if (cluster.nodes.some(n => n.id === nodeId)) return;
+
+            const newNode = {
+                ...nodeData, id: nodeId, type: view,
+                clusterId: currentActiveCentral, visible: true, lang: options.language 
+            };
+            cluster.nodes.push(newNode);
+            cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
+        });
+        
+        const addNodeId = `add-${currentActiveCentral}`;
+        if (!cluster.nodes.some(n => n.id === addNodeId)) {
+            const addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral, visible: true };
+            cluster.nodes.push(addNode);
+            cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
+        }
+        
+        // ⭐ FIX: Now, run the SAME robust visibility logic as the cache hit.
+        // This will iterate through ALL nodes (new and old) and correctly set visibility.
+        cluster.nodes.forEach(node => {
+            const isExample = node.type === 'example';
+            if (!isExample) {
+                // A node is visible only if it's central, the 'add' button, or matches the NEW current view.
+                node.visible = node.isCentral || node.type === 'add' || node.type === currentView;
+            } else {
+                // An example is visible only if its source node is visible.
+                const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
+                node.visible = sourceNode ? sourceNode.visible : false;
+            }
+        });
+
+        detectCrossConnections();
+        updateGraph();
+
+    } catch (error) {
+        console.error("Error generating graph:", error);
+        renderError(`Error loading ${view}: ${error.message}`);
+    }
+}
 
     function promptForInitialWord() {
         const inputOverlay = document.getElementById('input-overlay');
