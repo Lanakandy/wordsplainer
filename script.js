@@ -470,7 +470,9 @@ function getCollisionRadius(d) {
     // --- END OF ENHANCED FUNCTIONS ---
 
     const zoomBehavior = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
-        graphGroup.attr("transform", event.transform);
+    // Apply the same pan/zoom transform to both the graph AND the icons
+    graphGroup.attr("transform", event.transform);
+    iconGroup.attr("transform", event.transform);
     });
     svg.call(zoomBehavior);
 
