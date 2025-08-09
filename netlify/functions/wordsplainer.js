@@ -13,7 +13,7 @@ function getLLMPrompt(type, register, word, options = {}) {
         translation = null 
     } = options;
 
-    const baseInstruction = `You are an expert linguist providing explanations of English vocabulary for language learners using modern realia.`;
+    const baseInstruction = `You are an expert linguist providing unique non-trivial explanations of English vocabulary.`;
 
     const registerInstruction = register === 'academic' 
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
@@ -87,7 +87,8 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "openai/gpt-4.1-nano",
+        "tngtech/deepseek-r1t2-chimera:free",
+        "tngtech/deepseek-r1t-chimera:free",        
         "openai/gpt-oss-20b:free",
         "google/gemini-2.0-flash-exp:free",
         "mistralai/mistral-small-3.2-24b-instruct:free",
