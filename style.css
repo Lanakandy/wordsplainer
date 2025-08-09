@@ -503,6 +503,21 @@ header h1 {
     animation-name: pulse-glow-dark; /* Override the animation name */
 }
 
+.tts-icon-group {
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+.tts-icon path {
+    /* Use CSS variables to match your theme */
+    fill: var(--canvas-text-color);
+    transition: fill 0.3s ease;
+}
+
+.tts-icon-group:hover .tts-icon path {
+    fill: var(--primary-coral);
+}
+
 /* --- Responsive Design --- */
 @media (max-width: 768px) {
     #app-wrapper { padding: 10px; gap: 15px; }

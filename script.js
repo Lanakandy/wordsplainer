@@ -282,7 +282,7 @@ nodeGroups.each(function(d) {
     const selection = d3.select(this);
 
     // --- Clear previous shapes to prevent rendering artifacts ---
-    selection.selectAll("circle, rect, foreignObject, text").remove();
+    selection.selectAll("circle, rect, foreignObject, text, .tts-icon-group").remove(); // Also remove old icons
 
     if (d.isCentral) {
         selection.append("circle")
@@ -305,55 +305,78 @@ nodeGroups.each(function(d) {
             .style("fill", "var(--primary-coral)");
             
     } else {
-    // --- RENDER ALL PERIPHERAL NODES (DEFINITIONS, EXAMPLES, ETC.) ---
-    const isExample = d.type === 'example';
-    
-    // For non-example nodes, create the interactive colored circle
-    if (!isExample) {
-        selection.append("circle").attr("r", 18);
+        // --- RENDER ALL PERIPHERAL NODES (DEFINITIONS, EXAMPLES, ETC.) ---
+        const isExample = d.type === 'example';
+        
+        if (!isExample) {
+            selection.append("circle").attr("r", 18);
+        }
+
+        const textWidth = isExample ? 220 : 200;
+        const PADDING = isExample ? 0 : 12;
+        const circleRadius = isExample ? 0 : 18;
+
+        const foreignObject = selection.append("foreignObject")
+            .attr("class", "node-html-wrapper")
+            .attr("width", textWidth)
+            .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
+            .style("opacity", 0);
+
+        const div = foreignObject.append("xhtml:div")
+            .attr("class", "node-html-content");
+
+        createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+
+        setTimeout(() => {
+            if(div.node()) {
+                const textHeight = div.node().scrollHeight;
+                
+                foreignObject.attr("height", textHeight)
+                           .attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+
+                d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                d.height = Math.max(circleRadius * 2, textHeight);
+
+                foreignObject.transition().duration(400).style("opacity", 1);
+                
+                simulation.alpha(0.1).restart();
+            }
+        }, 50);
+        
+        selection.style("cursor", "pointer");
     }
 
-    // Determine the width for the text container
-    const textWidth = isExample ? 220 : 200;
-    const PADDING = isExample ? 0 : 12; // No padding for examples
-    const circleRadius = isExample ? 0 : 18;
+    // ⭐ NEW: Add the speaker icon for central and example nodes
+    if (d.isCentral || d.type === 'example') {
+        const isExampleNode = d.type === 'example';
+        const textToSpeak = isExampleNode ? d.text.replace(/\n/g, ' ') : d.word; // Prepare text
+        const iconSize = isExampleNode ? 22 : 24;
+        
+        // Position icon inside the node bounds
+        const xOffset = d.isCentral ? 30 : (d.width / 2) - iconSize - 5;
+        const yOffset = d.isCentral ? -30 : (-d.height / 2) + iconSize - 10;
 
-    // Use <foreignObject> for robust text wrapping and styling
-    const foreignObject = selection.append("foreignObject")
-        .attr("class", "node-html-wrapper")
-        .attr("width", textWidth)
-        .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING) // Center examples, offset others
-        .style("opacity", 0);
-
-    const div = foreignObject.append("xhtml:div")
-        .attr("class", "node-html-content");
-
-    // Populate the div with interactive text
-    createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
-
-    // After the browser renders the div, calculate its height and set final dimensions
-    setTimeout(() => {
-        if(div.node()) {
-            const textHeight = div.node().scrollHeight;
-            
-            // Position vertically
-            foreignObject.attr("height", textHeight)
-                       .attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
-
-            // Update overall node size for collision detection
-            d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
-            d.height = Math.max(circleRadius * 2, textHeight);
-
-            // Animate into view
-            foreignObject.transition().duration(400).style("opacity", 1);
-            
-            simulation.alpha(0.1).restart(); // Nudge simulation with new size
-        }
-    }, 50);
-    
-    // The colored circle is for getting an example. The text is for exploring.
-    selection.style("cursor", "pointer");
-}
+        selection.append('g')
+            .attr('class', 'tts-icon-group')
+            .attr('transform', `translate(${xOffset}, ${yOffset})`)
+            .on('click', (event) => {
+                // IMPORTANT: Prevents the node's main click event from firing
+                event.stopPropagation(); 
+                speak(textToSpeak);
+                
+                // Visual feedback for the click
+                const icon = d3.select(event.currentTarget);
+                icon.transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1.2)`)
+                  .transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1)`);
+            })
+            .append('svg')
+              .attr('class', 'tts-icon')
+              .attr('width', iconSize)
+              .attr('height', iconSize)
+              .attr('viewBox', '0 0 16 16')
+              // Here is your specific SVG icon
+              .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
+    }
 });
         graphGroup.selectAll(".link")
             .style("stroke", d => {
@@ -1003,6 +1026,23 @@ nodeGroups.each(function(d) {
             btn.classList.toggle('active', btn.dataset.type === currentView);
         });
     }
+
+    function speak(text, lang = 'en-US') {
+        if ('speechSynthesis' in window) {
+        // Stop any currently speaking utterance to prevent overlap
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.pitch = 1; // Range: 0 to 2
+        utterance.rate = 1;  // Range: 0.1 to 10
+        
+        window.speechSynthesis.speak(utterance);
+    } else {
+        // Fallback for older browsers
+        alert("Sorry, your browser does not support text-to-speech.");
+    }
+}
    
     function toggleTheme() {
         const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
