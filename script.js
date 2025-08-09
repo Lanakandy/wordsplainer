@@ -9,6 +9,10 @@ function applyTheme(theme) {
 const savedTheme = localStorage.getItem('theme') || 'light';
 applyTheme(savedTheme);
 
+// --- State Management ---
+let currentRegister = 'conversational';
+let currentProficiency = 'high'; // Default proficiency
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
     const languageModal = document.getElementById('language-modal');
@@ -18,7 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const controlsDock = document.getElementById('controls-dock');
     const zoomControls = document.getElementById('zoom-controls');
     const registerToggleBtn = document.getElementById('register-toggle-btn');
-    
+    const proficiencyToggleBtn = document.getElementById('proficiency-toggle-btn');
+
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
     }
@@ -29,36 +34,62 @@ document.addEventListener('DOMContentLoaded', () => {
             const isAcademic = registerToggleBtn.classList.contains('is-academic');
             console.log('Register is now:', isAcademic ? 'Academic' : 'Conversational');
         });
-    }    
+    }
 
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
     const iconGroup = svg.append("g").attr("class", "icon-layer");
-    const SNAP_OFF_THRESHOLD = 120;
 
     // --- Enhanced State Management ---
     let centralNodes = [];
     let graphClusters = new Map();
     let crossConnections = [];
-    let explorationHistory = [];
     let currentActiveCentral = null;
-    let clusterColors = d3.scaleOrdinal(d3.schemeCategory10);
-    
     let currentView = 'meaning';
-    let currentRegister = 'conversational';    
     let viewState = { offset: 0, hasMore: true };
 
     function stopRegisterButtonAnimation() {
         if (registerToggleBtn) {
             registerToggleBtn.classList.remove('needs-attention');
         }
-    }    
+    }
+    
+    // --- Helper Functions ---
+    function speak(text, lang = 'en-US') {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            utterance.pitch = 1;
+            utterance.rate = 1;
+            window.speechSynthesis.speak(utterance);
+        } else {
+            alert("Sorry, your browser does not support text-to-speech.");
+        }
+    }
+
+    function copyToClipboard(text) {
+        const cleanedText = text.split('\n\n(')[0];
+        if (!navigator.clipboard) {
+            alert("Sorry, your browser does not support the Clipboard API.");
+            return;
+        }
+        navigator.clipboard.writeText(cleanedText).then(() => {
+            tooltip.textContent = 'Copied to clipboard!';
+            tooltip.classList.add('visible');
+            setTimeout(() => { tooltip.classList.remove('visible'); }, 1500);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            tooltip.textContent = 'Copy failed!';
+            tooltip.classList.add('visible');
+            setTimeout(() => { tooltip.classList.remove('visible'); }, 1500);
+        });
+    }
 
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
         try {
-            console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}`);
-            
+            console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}, proficiency: ${currentProficiency}`);
             const response = await fetch('/.netlify/functions/wordsplainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -68,10 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     offset: offset,
                     limit: limit,
                     language: language,
-                    register: currentRegister
+                    register: currentRegister,
+                    proficiency: currentProficiency
                 }),
             });
-
             if (!response.ok) {
                 let errorMessage;
                 try {
@@ -83,146 +114,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 throw new Error(errorMessage);
             }
-
             const data = await response.json();
-            console.log("Received data:", data);
             return data;
-
         } catch (error) {
             console.error("fetchData error:", error);
             throw new Error(`Failed to fetch ${type} for "${word}": ${error.message}`);
         }
     }
 
-    // --- START OF ENHANCED FUNCTIONS (from enhanced_graph_functions.js) ---
-
-    // ⭐ NEW: Simplified and more predictable clustering force
     function forceCluster() {
-        const strength = 0.2; // A bit stronger to keep things tight
-
+        const strength = 0.2;
         return function(alpha) {
             const allNodes = getConsolidatedGraphData().nodes;
-            
             for (let node of allNodes) {
-                if (node.isCentral || !node.clusterId || !graphClusters.has(node.clusterId)) {
-                    continue; // Skip central nodes (they are pinned) and orphans
-                }
-
+                if (node.isCentral || !node.clusterId || !graphClusters.has(node.clusterId)) continue;
                 const cluster = graphClusters.get(node.clusterId);
-                const target = cluster.center; // The pinned center of the graph
-
-                // Gently pull peripheral nodes towards the cluster's center
+                const target = cluster.center;
                 node.vx += (target.x - node.x) * strength * alpha;
                 node.vy += (target.y - node.y) * strength * alpha;
             }
         };
     }
 
-    // Enhanced collision detection with adaptive radii
-function getCollisionRadius(d) {
-    if (d.isCentral) {
-        return 60; // Larger radius for the central node to push others away
+    function getCollisionRadius(d) {
+        if (d.isCentral) return 60;
+        if (d.width && d.height) return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 15;
+        if (d.type === 'add') return 25;
+        return 45;
     }
-    if (d.width && d.height) {
-        // Use half the diagonal for example boxes
-        return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 15; // +padding
-    }
-    if (d.type === 'add') {
-        return 25;
-    }
-    // Default for regular peripheral nodes
-    return 45; // Increased radius to prevent text overlap
-}
 
-    // Enhanced simulation with better forces
     const simulation = d3.forceSimulation()
-        .force("link", d3.forceLink()
-            .id(d => d.id)
-            .distance(d => {
-                if (d.target.type === 'example') return 100;
-                return 150; // A good default distance from the center
-            })
-            .strength(0.7)
-        )
-        .force("charge", d3.forceManyBody()
-            .strength(d => d.isCentral ? -1500 : -400) // Stronger repulsion from center
-            .distanceMax(500)
-        )
-        .force("collision", d3.forceCollide()
-            .radius(getCollisionRadius)
-            .strength(0.9) // Strong collision to prevent overlap
-        )
-        .force("cluster", forceCluster()); // Our new, simpler cluster force
+        .force("link", d3.forceLink().id(d => d.id).distance(d => d.target.type === 'example' ? 100 : 150).strength(0.7))
+        .force("charge", d3.forceManyBody().strength(d => d.isCentral ? -1500 : -400).distanceMax(500))
+        .force("collision", d3.forceCollide().radius(getCollisionRadius).strength(0.9))
+        .force("cluster", forceCluster());
 
-     /**
-     * Counts the number of "notional" (meaningful) words in a string.
-     * This helps differentiate single words from phrases.
-     * @param {string} text The text to analyze.
-     * @returns {number} The count of notional words.
-     */
-    function countNotionalWords(text) {
-        if (!text || typeof text !== 'string') {
-            return 0;
-        }
-        // A simple list of common English stopwords.
-        const stopwords = new Set(['a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of', 'with', 'by', 'is', 'am', 'are', 'was', 'were']);
-        
-        const words = text.toLowerCase().split(/\s+/);
-        
-        const notionalWords = words.filter(word => {
-            const cleanedWord = word.replace(/[.,!?;:"]+/g, ''); // Remove punctuation
-            // A word is considered "notional" if it's not a stopword and has more than 1 letter.
-            return cleanedWord.length > 1 && !stopwords.has(cleanedWord);
+    const zoomBehavior = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
+        graphGroup.attr("transform", event.transform);
+        iconGroup.attr("transform", event.transform);
+    });
+    svg.call(zoomBehavior);
+
+    simulation.on("tick", () => {
+        graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        graphGroup.selectAll('.node').attr("transform", d => `translate(${d.x},${d.y})`);
+        iconGroup.selectAll('.icon-wrapper').attr("transform", d => {
+            if (d.isCentral) return `translate(${d.x}, ${d.y + 45 + 15})`;
+            if (d.type === 'example' && d.width && d.height) {
+                const x = d.x + (d.width / 2) - 10;
+                const y = d.y - (d.height / 2) + 10;
+                return `translate(${x}, ${y})`;
+            }
+            return `translate(-1000, -1000)`; // Hide icon until position is known
         });
-        
-        return notionalWords.length;
-    }
-
-    // Enhanced graph update with smooth animations
-    function updateGraph() {
-    const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
-
-    const visibleNodes = allNodes.filter(n => n.visible !== false);
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-    const visibleLinks = allLinks.filter(l => 
-        visibleNodeIds.has(l.source.id || l.source) &&
-        visibleNodeIds.has(l.target.id || l.target)
-    );
+    });
     
-    const { width, height } = graphContainer.getBoundingClientRect();
-    graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
+    function updateGraph() {
+        const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
+        const visibleNodes = allNodes.filter(n => n.visible !== false);
+        const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+        const visibleLinks = allLinks.filter(l => visibleNodeIds.has(l.source.id || l.source) && visibleNodeIds.has(l.target.id || l.target));
+        const { width, height } = graphContainer.getBoundingClientRect();
+        graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
 
-    // --- (Link rendering remains the same) ---
-    graphGroup.selectAll(".link")
-        .data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
-        .join(
+        graphGroup.selectAll(".link").data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join(
             enter => enter.append("line").attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`).style("opacity", 0).style("stroke-width", 0)
                 .transition().duration(800).delay((d, i) => i * 50).ease(d3.easeCircleOut).style("opacity", 1).style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1),
             update => update.attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`),
             exit => exit.transition().duration(400).ease(d3.easeCircleIn).style("opacity", 0).style("stroke-width", 0).remove()
         );
 
-    // --- (Node rendering logic) ---
-    const nodeGroups = graphGroup.selectAll(".node")
-        .data(visibleNodes, d => d.id)
-        .join(
+        const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id).join(
             enter => {
-                const nodeGroup = enter.append("g")
-                    .attr("class", d => `node ${d.isCentral ? 'central-node' : `node-${d.type}`}`)
-                    .style("opacity", 0)
-                    .attr("transform", d => {
-                        const cluster = graphClusters.get(d.clusterId);
-                        const startPos = cluster ? cluster.center : { x: width/2, y: height/2 };
-                        return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
-                    })
+                const nodeGroup = enter.append("g").attr("class", d => `node ${d.isCentral ? 'central-node' : `node-${d.type}`}`).style("opacity", 0)
+                    .attr("transform", d => { const cluster = graphClusters.get(d.clusterId); const startPos = cluster ? cluster.center : { x: width/2, y: height/2 }; return `translate(${startPos.x},${startPos.y}) scale(0.1)`; })
                     .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
-                    .on("mouseover", handleMouseOver)
-                    .on("mouseout", handleMouseOut)
-                    .on("click", handleNodeClick);
-                
+                    .on("mouseover", handleMouseOver).on("mouseout", handleMouseOut).on("click", handleNodeClick);
                 nodeGroup.append(d => d.type === 'example' ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
                 nodeGroup.append("text");
-
                 nodeGroup.transition().duration(600).delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80)).ease(d3.easeBackOut.overshoot(1.2)).style("opacity", 1).attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`);
                 return nodeGroup;
             },
@@ -230,73 +199,109 @@ function getCollisionRadius(d) {
             exit => exit.transition().duration(400).ease(d3.easeCircleIn).attr("transform", d => `translate(${d.x},${d.y}) scale(0)`).style("opacity", 0).remove()
         );
 
-    nodeGroups.each(function(d) {
-        const selection = d3.select(this);
-        selection.selectAll("circle, rect, foreignObject, text").remove();
-        if (d.isCentral) {
-            selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-            selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
-        } else if (d.type === 'add') {
-            selection.append("circle").attr("r", 20);
-            selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-        } else {
-            const isExample = d.type === 'example';
-            if (!isExample) selection.append("circle").attr("r", 18);
-            const textWidth = isExample ? 220 : 200;
-            const PADDING = isExample ? 0 : 12;
-            const circleRadius = isExample ? 0 : 18;
-            const foreignObject = selection.append("foreignObject").attr("class", "node-html-wrapper").attr("width", textWidth).attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING).style("opacity", 0);
-            const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
-            createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
-            setTimeout(() => {
-                if (div.node()) {
-                    const textHeight = div.node().scrollHeight;
-                    foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
-                    d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
-                    d.height = Math.max(circleRadius * 2, textHeight);
-                    foreignObject.transition().duration(400).style("opacity", 1);
-                    simulation.alpha(0.1).restart();
-                }
-            }, 50);
-            selection.style("cursor", "pointer");
-        }
-    });
+        nodeGroups.each(function(d) {
+            const selection = d3.select(this);
+            selection.selectAll("circle, rect, foreignObject, text").remove();
+            if (d.isCentral) {
+                selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
+            } else if (d.type === 'add') {
+                selection.append("circle").attr("r", 20);
+                selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
+            } else {
+                const isExample = d.type === 'example';
+                if (!isExample) selection.append("circle").attr("r", 18);
+                const textWidth = isExample ? 220 : 200;
+                const PADDING = isExample ? 0 : 12;
+                const circleRadius = isExample ? 0 : 18;
+                const foreignObject = selection.append("foreignObject").attr("class", "node-html-wrapper").attr("width", textWidth).attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING).style("opacity", 0);
+                const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
+                createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+                setTimeout(() => {
+                    if (div.node()) {
+                        const textHeight = div.node().scrollHeight;
+                        foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+                        d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                        d.height = Math.max(circleRadius * 2, textHeight);
+                        foreignObject.transition().duration(400).style("opacity", 1);
+                        simulation.alpha(0.1).restart();
+                    }
+                }, 50);
+                selection.style("cursor", "pointer");
+            }
+        });
 
-    // ⭐ FIX: Change this filter to create icons for all examples, even before their width is set.
-    const iconData = visibleNodes.filter(d => d.isCentral || d.type === 'example');
-    
-    iconGroup.selectAll('.icon-wrapper')
-        .data(iconData, d => d.id)
-        .join(
+        const iconData = visibleNodes.filter(d => d.isCentral || d.type === 'example');
+        iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
             enter => {
                 const iconWrapper = enter.append('g').attr('class', 'icon-wrapper').style('opacity', 0);
-
-                iconWrapper.filter(d => d.isCentral).append('g')
-                    .attr('class', 'tts-icon-group')
-                    .on('click', (event, d) => { speak(d.word); })
+                iconWrapper.filter(d => d.isCentral).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
                     .append('svg').attr('class', 'tts-icon').attr('width', 24).attr('height', 24).attr('viewBox', '0 0 16 16')
                     .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
-
-                iconWrapper.filter(d => d.type === 'example').append('g')
-                    .attr('class', 'copy-icon-group')
-                    .on('click', (event, d) => { copyToClipboard(d.text); })
+                iconWrapper.filter(d => d.type === 'example').append('g').attr('class', 'copy-icon-group').on('click', (event, d) => { copyToClipboard(d.text); })
                     .append('svg').attr('class', 'copy-icon').attr('width', 20).attr('height', 20).attr('viewBox', '0 0 16 16')
                     .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
-                
                 return iconWrapper.transition().duration(600).delay(500).style('opacity', 1);
             },
             update => update,
             exit => exit.transition().duration(400).style('opacity', 0).remove()
         );
 
-    graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? 'var(--accent-orange)' : d.target.type === 'example' ? 'var(--primary-coral)' : 'var(--text-secondary)').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : d.target.type === 'example' ? 1.5 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none").style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
-    simulation.nodes(visibleNodes);
-    simulation.force("link").links(visibleLinks);
-    simulation.alpha(1).restart();
-    graphGroup.selectAll('.central-node').raise();
-    updateCentralNodeState();
-}
+        graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? 'var(--accent-orange)' : d.target.type === 'example' ? 'var(--primary-coral)' : 'var(--text-secondary)').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : d.target.type === 'example' ? 1.5 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none").style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
+        simulation.nodes(visibleNodes);
+        simulation.force("link").links(visibleLinks);
+        simulation.alpha(1).restart();
+        graphGroup.selectAll('.central-node').raise();
+        updateCentralNodeState();
+    }
+    
+    function renderInitialPrompt() {
+        simulation.stop();
+        centralNodes = [];
+        graphClusters.clear();
+        crossConnections = [];
+        currentActiveCentral = null;
+        graphGroup.selectAll("*").remove();
+        iconGroup.selectAll("*").remove();
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const promptGroup = graphGroup.append("g").attr("class", "node central-node").style("cursor", "pointer").on("click", promptForInitialWord);
+        promptGroup.append("circle").attr("cx", width / 2).attr("cy", height / 2).attr("r", 40);
+        promptGroup.append("text").attr("class", "sub-text").attr("x", width / 2).attr("y", height / 2).attr("dy", "0.1em").text("+");
+        promptGroup.append("text").attr("class", "status-text").attr("x", width / 2).attr("y", height / 2 + 70).text("Add a word to explore");
+    }
 
+    // --- Event Handlers & Core Logic ---
+    function refetchCurrentView() {
+        if (currentActiveCentral) {
+            console.log(`Settings changed. Re-fetching for '${currentActiveCentral}'.`);
+            const cluster = graphClusters.get(currentActiveCentral);
+            if (cluster) {
+                cluster.nodes = cluster.nodes.filter(n => n.isCentral || n.type === 'add');
+                const addNode = cluster.nodes.find(n => n.id === `add-${currentActiveCentral}`);
+                cluster.links = addNode ? [{ source: `central-${currentActiveCentral}`, target: addNode.id }] : [];
+                viewState = { offset: 0, hasMore: true };
+                generateGraphForView(currentView);
+            }
+        }
+    }
+
+    function handleRegisterToggle() {
+        stopRegisterButtonAnimation();
+        currentRegister = (currentRegister === 'conversational') ? 'academic' : 'conversational';
+        registerToggleBtn.classList.toggle('is-academic', currentRegister === 'academic');
+        refetchCurrentView();
+    }
+
+    function handleProficiencyToggle() {
+        currentProficiency = (currentProficiency === 'high') ? 'low' : 'high';
+        proficiencyToggleBtn.classList.toggle('is-high', currentProficiency === 'high');
+        refetchCurrentView();
+    }
+
+    // ... (rest of the file with other handlers like handleNodeClick, generateGraphForView, etc.)
+    // Make sure generateGraphForView, handleWordSubmitted, and all other functions are present.
+    
+    // (This is an abbreviated version showing only the changed parts. The rest of your file should remain)
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
           if (d.type !== 'add') {
@@ -399,11 +404,9 @@ function getCollisionRadius(d) {
        }
     }
     
-    // ⭐ MODIFIED: `handleWordSubmitted` to orchestrate the new layout and camera pan
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
         const lowerWord = word.toLowerCase();
         
-        // Prevent duplicate central nodes
         if (isNewCentral) {
             if (centralNodes.some(c => c.word === lowerWord)) {
                 const existingNode = centralNodes.find(n => n.word === lowerWord);
@@ -411,7 +414,6 @@ function getCollisionRadius(d) {
                 return;
             }
 
-            // Create new central node data WITHOUT setting position yet
             const centralNodeData = { 
                 word: lowerWord, id: `central-${lowerWord}`, 
                 isCentral: true, type: 'central', clusterId: lowerWord,
@@ -422,14 +424,12 @@ function getCollisionRadius(d) {
             graphClusters.set(lowerWord, { 
                 nodes: [centralNodeData], 
                 links: [], 
-                center: { x: 0, y: 0 }, // Placeholder center
+                center: { x: 0, y: 0 }, 
                 currentView: 'meaning' 
             });
 
-            // Call the layout function to position all clusters
             const newClusterCenter = repositionAllClusters();
             
-            // Pan the camera to the precisely calculated center of the new graph
             if (newClusterCenter) {
                 panToNode(newClusterCenter, 1.2);
             }
@@ -442,9 +442,7 @@ function getCollisionRadius(d) {
         await generateGraphForView(currentView);
     }
 
-    // ⭐ MODIFIED: `panToNode` to be more robust
     function panToNode(target, scale = 1.2) {
-        // Check if the target is a valid node or a coordinate object
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
             console.error("panToNode called with invalid target:", target);
             return;
@@ -452,7 +450,6 @@ function getCollisionRadius(d) {
         
         const { width, height } = graphContainer.getBoundingClientRect();
         
-        // This transform centers the view on the target's data-space coordinates
         const transform = d3.zoomIdentity
             .translate(width / 2, height / 2)
             .scale(scale)
@@ -462,34 +459,6 @@ function getCollisionRadius(d) {
             .duration(1000)
             .ease(d3.easeCubicInOut)
             .call(zoomBehavior.transform, transform);
-    }
-    
-    // --- END OF ENHANCED FUNCTIONS ---
-
-    const zoomBehavior = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
-    // Apply the same pan/zoom transform to both the graph AND the icons
-    graphGroup.attr("transform", event.transform);
-    iconGroup.attr("transform", event.transform);
-    });
-    svg.call(zoomBehavior);
-
-    function renderInitialPrompt() {
-        simulation.stop();
-        centralNodes = [];
-        graphClusters.clear();
-        crossConnections = [];
-        currentActiveCentral = null;
-        graphGroup.selectAll("*").remove();
-        iconGroup.selectAll("*").remove();
-        
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const promptGroup = graphGroup.append("g")
-            .attr("class", "node central-node")
-            .style("cursor", "pointer")
-            .on("click", promptForInitialWord);
-        promptGroup.append("circle").attr("cx", width / 2).attr("cy", height / 2).attr("r", 40);
-        promptGroup.append("text").attr("class", "sub-text").attr("x", width / 2).attr("y", height / 2).attr("dy", "0.1em").text("+");
-        promptGroup.append("text").attr("class", "status-text").attr("x", width / 2).attr("y", height / 2 + 70).text("Add a word to explore");
     }
     
     function renderLoading(message) {
@@ -516,31 +485,6 @@ function getCollisionRadius(d) {
         }
         return { nodes, links: [...links, ...crossConnections] };
     }
-
-    simulation.on("tick", () => {
-    graphGroup.selectAll('.link')
-        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-        
-    graphGroup.selectAll('.node')
-        .attr("transform", d => `translate(${d.x},${d.y})`);
-
-    // ⭐ NEW: Update icon positions every tick
-    iconGroup.selectAll('.icon-wrapper')
-        .attr("transform", d => {
-            if (d.isCentral) {
-                // Position below the central node's circle
-                return `translate(${d.x}, ${d.y + 45 + 15})`;
-            }
-            if (d.type === 'example' && d.width && d.height) {
-                // Position at the top-right corner of the example box
-                const x = d.x + (d.width / 2) - 10;
-                const y = d.y - (d.height / 2) + 10;
-                return `translate(${x}, ${y})`;
-            }
-            return `translate(${d.x}, ${d.y})`; // Fallback
-        });
-});
 
     function detectCrossConnections() {
         crossConnections = [];
@@ -574,6 +518,7 @@ function getCollisionRadius(d) {
                     type: 'generateExample',
                     word: nodeData.text,
                     register: currentRegister,
+                    proficiency: currentProficiency,
                     sourceNodeType: nodeData.type
                 };
                 if (nodeData.type === 'meaning' || nodeData.type === 'context' || nodeData.type === 'translation') {
@@ -625,84 +570,61 @@ function getCollisionRadius(d) {
     }   
 
     async function generateGraphForView(view, options = {}) {
-    if (!currentActiveCentral) return renderError('No word selected.');
-    
-    const cluster = graphClusters.get(currentActiveCentral);
-    if (!cluster) return renderError('Invalid word cluster.');
-
-    const alreadyLoaded = cluster.nodes.some(n => n.type === view);
-    
-    // Set the new view immediately
-    cluster.currentView = view;
-    currentView = view;
-    updateActiveButton();
-
-    if (alreadyLoaded) {
-        console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
-        // This is the robust logic we want to reuse.
-        cluster.nodes.forEach(node => {
-            const isExample = node.type === 'example';
-            if (!isExample) {
-                node.visible = node.isCentral || node.type === 'add' || node.type === view;
-            } else {
-                const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
-                node.visible = sourceNode ? sourceNode.visible : false;
-            }
-        });
-        updateGraph();
-        return;
-    }
-
-    console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
-    renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
-
-    try {
-        const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
-        if (!data || !data.nodes) throw new Error("No data received from server.");
-        
-        // Add the new nodes to the cluster
-        data.nodes.forEach(nodeData => {
-            if (!nodeData || typeof nodeData.text !== 'string') return;
-            const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
-            if (cluster.nodes.some(n => n.id === nodeId)) return;
-
-            const newNode = {
-                ...nodeData, id: nodeId, type: view,
-                clusterId: currentActiveCentral, visible: true, lang: options.language 
-            };
-            cluster.nodes.push(newNode);
-            cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
-        });
-        
-        const addNodeId = `add-${currentActiveCentral}`;
-        if (!cluster.nodes.some(n => n.id === addNodeId)) {
-            const addNode = { id: addNodeId, type: 'add', clusterId: currentActiveCentral, visible: true };
-            cluster.nodes.push(addNode);
-            cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
+        if (!currentActiveCentral) return renderError('No word selected.');
+        const cluster = graphClusters.get(currentActiveCentral);
+        if (!cluster) return renderError('Invalid word cluster.');
+        const alreadyLoaded = cluster.nodes.some(n => n.type === view);
+        cluster.currentView = view;
+        currentView = view;
+        updateActiveButton();
+        if (alreadyLoaded) {
+            console.log(`CACHE HIT for "${currentActiveCentral}" - view: ${view}`);
+            cluster.nodes.forEach(node => {
+                const isExample = node.type === 'example';
+                if (!isExample) {
+                    node.visible = node.isCentral || node.type === 'add' || node.type === view;
+                } else {
+                    const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
+                    node.visible = sourceNode ? sourceNode.visible : false;
+                }
+            });
+            updateGraph();
+            return;
         }
-        
-        // ⭐ FIX: Now, run the SAME robust visibility logic as the cache hit.
-        // This will iterate through ALL nodes (new and old) and correctly set visibility.
-        cluster.nodes.forEach(node => {
-            const isExample = node.type === 'example';
-            if (!isExample) {
-                // A node is visible only if it's central, the 'add' button, or matches the NEW current view.
-                node.visible = node.isCentral || node.type === 'add' || node.type === currentView;
-            } else {
-                // An example is visible only if its source node is visible.
-                const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
-                node.visible = sourceNode ? sourceNode.visible : false;
+        console.log(`CACHE MISS for "${currentActiveCentral}" - view: ${view}. Fetching...`);
+        renderLoading(`Loading ${view} for "${currentActiveCentral}"...`);
+        try {
+            const data = await fetchData(currentActiveCentral, view, 0, view === 'meaning' ? 1 : 5, options.language);
+            if (!data || !data.nodes) throw new Error("No data received from server.");
+            data.nodes.forEach(nodeData => {
+                if (!nodeData || typeof nodeData.text !== 'string') return;
+                const nodeId = `${currentActiveCentral}-${nodeData.text.slice(0, 10)}-${view}`;
+                if (cluster.nodes.some(n => n.id === nodeId)) return;
+                const newNode = { ...nodeData, id: nodeId, type: view, clusterId: currentActiveCentral, visible: true, lang: options.language };
+                cluster.nodes.push(newNode);
+                cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNode.id });
+            });
+            if (!cluster.nodes.some(n => n.id === `add-${currentActiveCentral}`)) {
+                const addNode = { id: `add-${currentActiveCentral}`, type: 'add', clusterId: currentActiveCentral, visible: true };
+                cluster.nodes.push(addNode);
+                cluster.links.push({ source: `central-${currentActiveCentral}`, target: addNode.id });
             }
-        });
-
-        detectCrossConnections();
-        updateGraph();
-
-    } catch (error) {
-        console.error("Error generating graph:", error);
-        renderError(`Error loading ${view}: ${error.message}`);
+            cluster.nodes.forEach(node => {
+                const isExample = node.type === 'example';
+                if (!isExample) {
+                    node.visible = node.isCentral || node.type === 'add' || node.type === currentView;
+                } else {
+                    const sourceNode = cluster.nodes.find(n => n.id === node.sourceNodeId);
+                    node.visible = sourceNode ? sourceNode.visible : false;
+                }
+            });
+            detectCrossConnections();
+            updateGraph();
+        } catch (error) {
+            console.error("Error generating graph:", error);
+            renderError(`Error loading ${view}: ${error.message}`);
+        }
     }
-}
 
     function promptForInitialWord() {
         const inputOverlay = document.getElementById('input-overlay');
@@ -737,7 +659,7 @@ function getCollisionRadius(d) {
         if (dataType) {
             if (!currentActiveCentral) return alert("Please add a word first by clicking the '+' icon.");
             if (dataType === 'translation') return languageModal.classList.add('visible');
-            if (graphClusters.get(currentActiveCentral).currentView !== dataType) generateGraphForView(dataType);
+            generateGraphForView(dataType);
         } else {
             switch (button.id) {
                 case 'clear-btn': renderInitialPrompt(); break;
@@ -754,22 +676,6 @@ function getCollisionRadius(d) {
         switch (button.id) {
             case 'zoom-in-btn': svg.transition().duration(250).call(zoomBehavior.scaleBy, 1.2); break;
             case 'zoom-out-btn': svg.transition().duration(250).call(zoomBehavior.scaleBy, 0.8); break;
-        }
-    }
-
-    function handleRegisterToggle() {
-        stopRegisterButtonAnimation();
-        currentRegister = (currentRegister === 'conversational') ? 'academic' : 'conversational';
-        registerToggleBtn.classList.toggle('is-academic', currentRegister === 'academic');
-        if (currentActiveCentral) {
-            console.log(`Register changed to '${currentRegister}'. Re-fetching for '${currentActiveCentral}'.`);
-            const cluster = graphClusters.get(currentActiveCentral);
-            if (cluster) {
-                cluster.nodes = cluster.nodes.filter(n => n.isCentral || n.type === 'add');
-                const addNode = cluster.nodes.find(n => n.id === `add-${currentActiveCentral}`);
-                cluster.links = addNode ? [{ source: `central-${currentActiveCentral}`, target: addNode.id }] : [];
-            }
-            generateGraphForView(currentView); 
         }
     }
 
@@ -791,29 +697,15 @@ function getCollisionRadius(d) {
     function createInteractiveText(d3Element, text, onWordClick) {
         const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
         d3Element.html("");
-
         const lines = text.split('\n');
         lines.forEach((line, lineIndex) => {
-            if (lineIndex > 0 && !isSvg) {
-                d3Element.append("br");
-            }
-            
+            if (lineIndex > 0 && !isSvg) d3Element.append("br");
             const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
-            
-            const lineContainer = isSvg ? 
-                d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : 
-                d3Element;
-
+            const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
             tokens.forEach(token => {
                 const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"]+/g, '');
                 if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
-                    lineContainer.append('span')
-                        .attr('class', 'interactive-word')
-                        .text(token)
-                        .on('click', (event) => {
-                            event.stopPropagation();
-                            if(token) onWordClick(token);
-                        });
+                    lineContainer.append('span').attr('class', 'interactive-word').text(token).on('click', (event) => { event.stopPropagation(); if(token) onWordClick(token); });
                 } else {
                     lineContainer.append('span').text(token);
                 }
@@ -821,87 +713,54 @@ function getCollisionRadius(d) {
         });
     }
 
-    // ⭐ NEW: The core "film strip" layout function
-    const CLUSTER_SPACING = 700; // Horizontal distance between graph centers
-
+    const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
         if (centralNodes.length === 0) return null;
-
         const { width, height } = graphContainer.getBoundingClientRect();
-        
-        // Find the data-space coordinates of the screen's center
         const currentTransform = d3.zoomTransform(svg.node());
         const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
         const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
-
         const lastNodeIndex = centralNodes.length - 1;
         let lastNodeCenter = null;
-
-        // Arrange all clusters in a horizontal line
         centralNodes.forEach((node, i) => {
             const cluster = graphClusters.get(node.clusterId);
             if (cluster) {
-                // Calculate position relative to the last node
-                // The last node (newest) will be at the view's center
                 const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
                 const targetY = viewCenterY;
-
-                // Pin the central node to this calculated position
                 node.fx = targetX;
                 node.fy = targetY;
-                
-                // Update the cluster's center property for child nodes to follow
                 cluster.center.x = targetX;
                 cluster.center.y = targetY;
-
-                // Store the coordinates of the newest graph's center
-                if (i === lastNodeIndex) {
-                    lastNodeCenter = { x: targetX, y: targetY };
-                }
+                if (i === lastNodeIndex) lastNodeCenter = { x: targetX, y: targetY };
             }
         });
-
-        // Nudge the simulation to apply the new positions
         simulation.alpha(0.5).restart();
-        
-        // Return the center of the newest cluster so we can pan to it
         return lastNodeCenter;
     }
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
         svg.attr("width", width).attr("height", height);
-        
         if (centralNodes.length > 0) {
-            repositionAllClusters(); // Re-calculate layout on resize
+            repositionAllClusters();
         } else {
             renderInitialPrompt();
         }
     }
 
-    // ⭐ FIX: This function now prevents adding duplicate nodes.
     async function fetchMoreNodes() {
         const cluster = graphClusters.get(currentActiveCentral);
         if (!currentActiveCentral || !cluster || !viewState.hasMore) return;
-        
         const addNodeElement = graphGroup.selectAll('.node-add').filter(node_d => node_d.clusterId === currentActiveCentral);
         if (addNodeElement.classed('is-loading')) return;
-    
         addNodeElement.classed('is-loading', true);
-        
         try {
             const data = await fetchData(currentActiveCentral, cluster.currentView, viewState.offset, 3);
             if (data.nodes.length > 0) {
                 let addedNodeCount = 0;
                 data.nodes.forEach(newNodeData => {
                     if (!newNodeData || typeof newNodeData.text !== 'string') return;
-
-                    // CHECK FOR DUPLICATES: See if a node with this text already exists in the cluster.
-                    const isDuplicate = cluster.nodes.some(existingNode => 
-                        existingNode.text && existingNode.text.toLowerCase() === newNodeData.text.toLowerCase()
-                    );
-
-                    // If it's not a duplicate, add it to the graph.
+                    const isDuplicate = cluster.nodes.some(existingNode => existingNode.text && existingNode.text.toLowerCase() === newNodeData.text.toLowerCase());
                     if (!isDuplicate) {
                         const newNodeId = `${currentActiveCentral}-${newNodeData.text.slice(0, 10)}-${cluster.currentView}`;
                         const newNode = { ...newNodeData, id: newNodeId, type: cluster.currentView, clusterId: currentActiveCentral, visible: true };
@@ -912,14 +771,10 @@ function getCollisionRadius(d) {
                         console.log(`Skipping duplicate node: "${newNodeData.text}"`);
                     }
                 });
-
-                // Only update the graph if we actually added new nodes
                 if (addedNodeCount > 0) {
                     detectCrossConnections();
                     updateGraph();
                 }
-
-                // The offset for the *next* fetch should be incremented by the number of items we received, not just the ones we added.
                 viewState.offset += data.nodes.length;
                 viewState.hasMore = data.hasMore;
             } else {
@@ -932,9 +787,7 @@ function getCollisionRadius(d) {
             setTimeout(() => tooltip.classList.remove('visible'), 2000);
         } finally {
             addNodeElement.classed('is-loading', false);
-            if (!viewState.hasMore) {
-                addNodeElement.classed('is-disabled', true);
-            }
+            if (!viewState.hasMore) addNodeElement.classed('is-disabled', true);
             updateCentralNodeState();
         }
     }
@@ -952,51 +805,6 @@ function getCollisionRadius(d) {
             btn.classList.toggle('active', btn.dataset.type === currentView);
         });
     }
-
-    function copyToClipboard(text) {
-    // Clean up text for copying (e.g., remove explanations in parentheses)
-    const cleanedText = text.split('\n\n(')[0];
-
-    if (!navigator.clipboard) {
-        alert("Sorry, your browser does not support the Clipboard API.");
-        return;
-    }
-
-    navigator.clipboard.writeText(cleanedText).then(() => {
-        console.log('Text copied to clipboard');
-        // Provide user feedback
-        tooltip.textContent = 'Copied to clipboard!';
-        tooltip.classList.add('visible');
-        // Hide the feedback message after 1.5 seconds
-        setTimeout(() => {
-            tooltip.classList.remove('visible');
-        }, 1500);
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-        tooltip.textContent = 'Copy failed!';
-        tooltip.classList.add('visible');
-        setTimeout(() => {
-            tooltip.classList.remove('visible');
-        }, 1500);
-    });
-}
-
-    function speak(text, lang = 'en-US') {
-        if ('speechSynthesis' in window) {
-        // Stop any currently speaking utterance to prevent overlap
-        window.speechSynthesis.cancel();
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang;
-        utterance.pitch = 1; // Range: 0 to 2
-        utterance.rate = 1;  // Range: 0.1 to 10
-        
-        window.speechSynthesis.speak(utterance);
-    } else {
-        // Fallback for older browsers
-        alert("Sorry, your browser does not support text-to-speech.");
-    }
-}
    
     function toggleTheme() {
         const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
@@ -1009,109 +817,60 @@ function getCollisionRadius(d) {
     }
     
     function saveAsPng() {
-    if (centralNodes.length === 0) {
-        alert("Nothing to save yet!");
-        return;
+        if (centralNodes.length === 0) {
+            alert("Nothing to save yet!");
+            return;
+        }
+        const allNodes = getConsolidatedGraphData().nodes;
+        if (allNodes.length === 0) return;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        allNodes.forEach(d => {
+            const nodeWidth = d.width || (d.isCentral ? 90 : 40);
+            const nodeHeight = d.height || (d.isCentral ? 90 : 40);
+            minX = Math.min(minX, d.x - nodeWidth / 2);
+            maxX = Math.max(maxX, d.x + nodeWidth / 2);
+            minY = Math.min(minY, d.y - nodeHeight / 2);
+            maxY = Math.max(maxY, d.y + nodeHeight / 2);
+        });
+        const padding = 100;
+        const exportWidth = (maxX - minX) + 2 * padding;
+        const exportHeight = (maxY - minY) + 2 * padding;
+        const tempSvg = d3.create('svg').attr('xmlns', 'http://www.w3.org/2000/svg').attr('width', exportWidth).attr('height', exportHeight).attr('viewBox', `0 0 ${exportWidth} ${exportHeight}`);
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        tempSvg.attr('data-theme', currentTheme);
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
+        tempSvg.append('rect').attr('width', '100%').attr('height', '100%').attr('fill', bgColor);
+        const creditTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
+        tempSvg.append('text').attr('x', exportWidth / 2).attr('y', exportHeight - 20).attr('text-anchor', 'middle').attr('font-family', 'Inter, sans-serif').attr('font-size', '14px').attr('fill', creditTextColor).text('Wordsplainer, www.eltcation.com');
+        const tempGroup = tempSvg.append('g').attr('transform', `translate(${-minX + padding}, ${-minY + padding})`);
+        const style = tempSvg.append('style');
+        let cssText = "";
+        for (const sheet of document.styleSheets) {
+            try { if (sheet.cssRules) for (const rule of sheet.cssRules) cssText += rule.cssText + '\n'; } catch (e) { console.warn("Cannot read CSS rules from stylesheet: " + e); }
+        }
+        style.text(cssText);
+        graphGroup.selectAll('.link').each(function() { tempGroup.node().appendChild(this.cloneNode(true)); });
+        graphGroup.selectAll('.node').each(function() { tempGroup.node().appendChild(this.cloneNode(true)); });
+        const svgString = new XMLSerializer().serializeToString(tempSvg.node());
+        const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+        const image = new Image();
+        image.src = svgDataUrl;
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = exportWidth;
+            canvas.height = exportHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0);
+            const a = document.createElement('a');
+            a.href = canvas.toDataURL('image/png', 1.0);
+            a.download = `Wordsplainer-infographic.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        };
+        image.onerror = (e) => { console.error('Failed to load SVG into image:', e); alert('An error occurred while creating the image. Please check the console.'); };
     }
 
-    // --- 1. ACCURATE BOUNDING BOX CALCULATION ---
-    const allNodes = getConsolidatedGraphData().nodes;
-    if (allNodes.length === 0) return;
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    
-    allNodes.forEach(d => {
-        const nodeWidth = d.width || (d.isCentral ? 90 : 40);
-        const nodeHeight = d.height || (d.isCentral ? 90 : 40);
-        minX = Math.min(minX, d.x - nodeWidth / 2);
-        maxX = Math.max(maxX, d.x + nodeWidth / 2);
-        minY = Math.min(minY, d.y - nodeHeight / 2);
-        maxY = Math.max(maxY, d.y + nodeHeight / 2);
-    });
-
-    const padding = 100;
-    const exportWidth = (maxX - minX) + 2 * padding;
-    const exportHeight = (maxY - minY) + 2 * padding;
-
-    // --- 2. CREATE A TEMPORARY SVG IN MEMORY ---
-    const tempSvg = d3.create('svg')
-        .attr('xmlns', 'http://www.w3.org/2000/svg')
-        .attr('width', exportWidth)
-        .attr('height', exportHeight)
-        .attr('viewBox', `0 0 ${exportWidth} ${exportHeight}`);
-
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    tempSvg.attr('data-theme', currentTheme);
-
-    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
-    tempSvg.append('rect')
-        .attr('width', '100%')
-        .attr('height', '100%')
-        .attr('fill', bgColor);
-        
-    const creditTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
-    tempSvg.append('text')
-        .attr('x', exportWidth / 2)
-        .attr('y', exportHeight - 20)
-        .attr('text-anchor', 'middle')
-        .attr('font-family', 'Inter, sans-serif')
-        .attr('font-size', '14px')
-        .attr('fill', creditTextColor)
-        .text('Wordsplainer, www.eltcation.com');
-
-    const tempGroup = tempSvg.append('g')
-        .attr('transform', `translate(${-minX + padding}, ${-minY + padding})`);
-
-    // --- 3. EMBED ALL STYLES ---
-    const style = tempSvg.append('style');
-    let cssText = "";
-    for (const sheet of document.styleSheets) {
-        try {
-            if (sheet.cssRules) {
-                for (const rule of sheet.cssRules) {
-                    cssText += rule.cssText + '\n';
-                }
-            }
-        } catch (e) { console.warn("Cannot read CSS rules from stylesheet: " + e); }
-    }
-    style.text(cssText);
-
-    // --- 4. CLONE THE LIVE GRAPH CONTENT ---
-    graphGroup.selectAll('.link').each(function() {
-        tempGroup.node().appendChild(this.cloneNode(true));
-    });
-    graphGroup.selectAll('.node').each(function() {
-        tempGroup.node().appendChild(this.cloneNode(true));
-    });
-
-    // --- 5. SERIALIZE AND RENDER ---
-    const svgString = new XMLSerializer().serializeToString(tempSvg.node());
-    const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
-
-    const image = new Image();
-    image.src = svgDataUrl;
-    
-    image.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = exportWidth;
-        canvas.height = exportHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(image, 0, 0);
-
-        const a = document.createElement('a');
-        a.href = canvas.toDataURL('image/png', 1.0);
-        a.download = `Wordsplainer-infographic.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    };
-
-    image.onerror = (e) => {
-        console.error('Failed to load SVG into image:', e);
-        alert('An error occurred while creating the image. Please check the console.');
-    };
-}
-    // ⭐ MODIFIED: Drag handlers to respect the pinned central nodes
     function dragstarted(event, d) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.isCentral ? d.fx : d.x;
@@ -1119,25 +878,20 @@ function getCollisionRadius(d) {
     }
 
     function dragged(event, d) {
-        if (!d.isCentral) {
-            d.fx = event.x;
-            d.fy = event.y;
-        }
+        if (!d.isCentral) { d.fx = event.x; d.fy = event.y; }
     }
 
     function dragended(event, d) {
         if (!event.active) simulation.alphaTarget(0);
-        if (!d.isCentral) {
-            d.fx = null;
-            d.fy = null;
-        }
+        if (!d.isCentral) { d.fx = null; d.fy = null; }
     }
 
     // --- Initialization ---
     renderInitialPrompt();
     controlsDock.addEventListener('click', handleDockClick);
-    zoomControls.addEventListener('click', handleZoomControlsClick);    
-    registerToggleBtn.addEventListener('click', handleRegisterToggle);    
+    zoomControls.addEventListener('click', handleZoomControlsClick);
+    registerToggleBtn.addEventListener('click', handleRegisterToggle);
+    proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
     window.addEventListener('resize', handleResize);
     document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
     modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));
