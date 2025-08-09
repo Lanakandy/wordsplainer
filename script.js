@@ -282,7 +282,7 @@ nodeGroups.each(function(d) {
     const selection = d3.select(this);
 
     // --- Clear previous shapes to prevent rendering artifacts ---
-    selection.selectAll("circle, rect, foreignObject, text, .tts-icon-group, .copy-icon-group").remove(); // Also remove old icons
+    selection.selectAll("circle, rect, foreignObject, text, .tts-icon-group, .copy-icon-group").remove();
 
     if (d.isCentral) {
         selection.append("circle")
@@ -327,6 +327,7 @@ nodeGroups.each(function(d) {
 
         createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
 
+        // This setTimeout is key. It calculates final dimensions after rendering.
         setTimeout(() => {
             if(div.node()) {
                 const textHeight = div.node().scrollHeight;
@@ -340,6 +341,25 @@ nodeGroups.each(function(d) {
                 foreignObject.transition().duration(400).style("opacity", 1);
                 
                 simulation.alpha(0.1).restart();
+
+                // ⭐ FIX 2: Create the copy icon INSIDE the timeout, after dimensions are known.
+                if (isExample) {
+                    const iconSize = 20;
+                    const xOffset = (d.width / 2) - iconSize - 8;
+                    const yOffset = (-d.height / 2) + 8;
+
+                    selection.append('g')
+                        .attr('class', 'copy-icon-group')
+                        .attr('transform', `translate(${xOffset}, ${yOffset})`)
+                        .on('click', (event) => {
+                            event.stopPropagation();
+                            copyToClipboard(d.text);
+                            const icon = d3.select(event.currentTarget);
+                            icon.transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1.2)`).transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1)`);
+                        })
+                        .append('svg').attr('class', 'copy-icon').attr('width', iconSize).attr('height', iconSize).attr('viewBox', '0 0 16 16')
+                        .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
+                }
             }
         }, 50);
         
@@ -348,12 +368,12 @@ nodeGroups.each(function(d) {
 
     // --- ICON LOGIC ---
 
-    // Add speaker icon for central nodes
+    // ⭐ FIX 1: Reposition speaker icon to be below the central word.
     if (d.isCentral) {
         const textToSpeak = d.word;
         const iconSize = 24;
-        const xOffset = 30;
-        const yOffset = -30;
+        const xOffset = 0;   // Center horizontally
+        const yOffset = 25;  // Place below the text
 
         selection.append('g')
             .attr('class', 'tts-icon-group')
@@ -366,26 +386,6 @@ nodeGroups.each(function(d) {
             })
             .append('svg').attr('class', 'tts-icon').attr('width', iconSize).attr('height', iconSize).attr('viewBox', '0 0 16 16')
             .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
-    }
-
-    // ⭐ NEW: Add copy icon for example nodes
-    if (d.type === 'example') {
-        const iconSize = 20;
-        // Position icon in the top-right corner of the example box
-        const xOffset = (d.width / 2) - iconSize - 8;
-        const yOffset = (-d.height / 2) + 8;
-
-        selection.append('g')
-            .attr('class', 'copy-icon-group')
-            .attr('transform', `translate(${xOffset}, ${yOffset})`)
-            .on('click', (event) => {
-                event.stopPropagation();
-                copyToClipboard(d.text);
-                 const icon = d3.select(event.currentTarget);
-                icon.transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1.2)`).transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1)`);
-            })
-            .append('svg').attr('class', 'copy-icon').attr('width', iconSize).attr('height', iconSize).attr('viewBox', '0 0 16 16')
-            .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
     }
 });
         graphGroup.selectAll(".link")
