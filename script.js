@@ -282,7 +282,7 @@ nodeGroups.each(function(d) {
     const selection = d3.select(this);
 
     // --- Clear previous shapes to prevent rendering artifacts ---
-    selection.selectAll("circle, rect, foreignObject, text, .tts-icon-group").remove(); // Also remove old icons
+    selection.selectAll("circle, rect, foreignObject, text, .tts-icon-group, .copy-icon-group").remove(); // Also remove old icons
 
     if (d.isCentral) {
         selection.append("circle")
@@ -346,36 +346,46 @@ nodeGroups.each(function(d) {
         selection.style("cursor", "pointer");
     }
 
-    // ⭐ NEW: Add the speaker icon for central and example nodes
-    if (d.isCentral || d.type === 'example') {
-        const isExampleNode = d.type === 'example';
-        const textToSpeak = isExampleNode ? d.text.replace(/\n/g, ' ') : d.word; // Prepare text
-        const iconSize = isExampleNode ? 22 : 24;
-        
-        // Position icon inside the node bounds
-        const xOffset = d.isCentral ? 30 : (d.width / 2) - iconSize - 5;
-        const yOffset = d.isCentral ? -30 : (-d.height / 2) + iconSize - 10;
+    // --- ICON LOGIC ---
+
+    // Add speaker icon for central nodes
+    if (d.isCentral) {
+        const textToSpeak = d.word;
+        const iconSize = 24;
+        const xOffset = 30;
+        const yOffset = -30;
 
         selection.append('g')
             .attr('class', 'tts-icon-group')
             .attr('transform', `translate(${xOffset}, ${yOffset})`)
             .on('click', (event) => {
-                // IMPORTANT: Prevents the node's main click event from firing
                 event.stopPropagation(); 
                 speak(textToSpeak);
-                
-                // Visual feedback for the click
                 const icon = d3.select(event.currentTarget);
-                icon.transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1.2)`)
-                  .transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1)`);
+                icon.transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1.2)`).transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1)`);
             })
-            .append('svg')
-              .attr('class', 'tts-icon')
-              .attr('width', iconSize)
-              .attr('height', iconSize)
-              .attr('viewBox', '0 0 16 16')
-              // Here is your specific SVG icon
-              .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
+            .append('svg').attr('class', 'tts-icon').attr('width', iconSize).attr('height', iconSize).attr('viewBox', '0 0 16 16')
+            .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
+    }
+
+    // ⭐ NEW: Add copy icon for example nodes
+    if (d.type === 'example') {
+        const iconSize = 20;
+        // Position icon in the top-right corner of the example box
+        const xOffset = (d.width / 2) - iconSize - 8;
+        const yOffset = (-d.height / 2) + 8;
+
+        selection.append('g')
+            .attr('class', 'copy-icon-group')
+            .attr('transform', `translate(${xOffset}, ${yOffset})`)
+            .on('click', (event) => {
+                event.stopPropagation();
+                copyToClipboard(d.text);
+                 const icon = d3.select(event.currentTarget);
+                icon.transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1.2)`).transition().duration(150).attr('transform', `translate(${xOffset}, ${yOffset}) scale(1)`);
+            })
+            .append('svg').attr('class', 'copy-icon').attr('width', iconSize).attr('height', iconSize).attr('viewBox', '0 0 16 16')
+            .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
     }
 });
         graphGroup.selectAll(".link")
@@ -1026,6 +1036,34 @@ nodeGroups.each(function(d) {
             btn.classList.toggle('active', btn.dataset.type === currentView);
         });
     }
+
+    function copyToClipboard(text) {
+    // Clean up text for copying (e.g., remove explanations in parentheses)
+    const cleanedText = text.split('\n\n(')[0];
+
+    if (!navigator.clipboard) {
+        alert("Sorry, your browser does not support the Clipboard API.");
+        return;
+    }
+
+    navigator.clipboard.writeText(cleanedText).then(() => {
+        console.log('Text copied to clipboard');
+        // Provide user feedback
+        tooltip.textContent = 'Copied to clipboard!';
+        tooltip.classList.add('visible');
+        // Hide the feedback message after 1.5 seconds
+        setTimeout(() => {
+            tooltip.classList.remove('visible');
+        }, 1500);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        tooltip.textContent = 'Copy failed!';
+        tooltip.classList.add('visible');
+        setTimeout(() => {
+            tooltip.classList.remove('visible');
+        }, 1500);
+    });
+}
 
     function speak(text, lang = 'en-US') {
         if ('speechSynthesis' in window) {

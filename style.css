@@ -518,6 +518,23 @@ header h1 {
     fill: var(--primary-coral);
 }
 
+.copy-icon-group {
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+.copy-icon path {
+    /* Use CSS variables to match your theme */
+    fill: var(--canvas-text-color);
+    transition: fill 0.3s ease;
+    opacity: 0.6; /* Make it slightly more subtle than text */
+}
+
+.copy-icon-group:hover .copy-icon path {
+    fill: var(--primary-coral);
+    opacity: 1;
+}
+
 /* --- Responsive Design --- */
 @media (max-width: 768px) {
     #app-wrapper { padding: 10px; gap: 15px; }
