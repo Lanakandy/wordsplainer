@@ -480,6 +480,7 @@ function getCollisionRadius(d) {
         crossConnections = [];
         currentActiveCentral = null;
         graphGroup.selectAll("*").remove();
+        iconGroup.selectAll("*").remove();
         
         const { width, height } = graphContainer.getBoundingClientRect();
         const promptGroup = graphGroup.append("g")
