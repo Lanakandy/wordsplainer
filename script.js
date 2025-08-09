@@ -2,16 +2,19 @@
 
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    // Note: localStorage is not available in Claude.ai artifacts
+    // In a real environment, you would use: localStorage.setItem('theme', theme);
 }
 
 // Immediately check for and apply the saved theme
-const savedTheme = localStorage.getItem('theme') || 'light';
+// Note: In Claude.ai artifacts, we'll default to 'light'
+// In a real environment: const savedTheme = localStorage.getItem('theme') || 'light';
+const savedTheme = 'light';
 applyTheme(savedTheme);
 
 // --- State Management ---
 let currentRegister = 'conversational';
-let currentProficiency = 'high'; // ⭐ FIX: This line was missing and is now added.
+let currentProficiency = 'high';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -797,9 +800,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function updateActiveButton() {
-        document.querySelectorAll('.category-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.type === currentView);
-        });
+        const categoryButtons = document.querySelectorAll('.category-btn');
+        if (categoryButtons.length > 0) {
+            categoryButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === currentView);
+            });
+        }
     }
    
     function toggleTheme() {
@@ -808,8 +814,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function toggleFullScreen() {
-        if (!document.fullscreenElement) document.getElementById('app-wrapper').requestFullscreen().catch(err => alert(`Error: ${err.message}`));
-        else document.exitFullscreen();
+        if (!document.fullscreenElement) {
+            const appWrapper = document.getElementById('app-wrapper');
+            if (appWrapper && appWrapper.requestFullscreen) {
+                appWrapper.requestFullscreen().catch(err => alert(`Error: ${err.message}`));
+            } else {
+                alert("Fullscreen not supported");
+            }
+        } else {
+            document.exitFullscreen();
+        }
     }
     
     function saveAsPng() {
@@ -884,19 +898,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     renderInitialPrompt();
-    controlsDock.addEventListener('click', handleDockClick);
-    zoomControls.addEventListener('click', handleZoomControlsClick);
-    registerToggleBtn.addEventListener('click', handleRegisterToggle);
-    proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
+    
+    // Add null checks for all event listeners
+    if (controlsDock) {
+        controlsDock.addEventListener('click', handleDockClick);
+    }
+    if (zoomControls) {
+        zoomControls.addEventListener('click', handleZoomControlsClick);
+    }
+    if (registerToggleBtn) {
+        registerToggleBtn.addEventListener('click', handleRegisterToggle);
+    }
+    if (proficiencyToggleBtn) {
+        proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
+    }
+    
     window.addEventListener('resize', handleResize);
-    document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
-    modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));
-    languageModal.addEventListener('click', (event) => { if (event.target === languageModal) languageModal.classList.remove('visible'); });
-    languageList.addEventListener('click', (event) => {
-        if (event.target.tagName === 'LI') {
-            const selectedLang = event.target.dataset.lang;
-            languageModal.classList.remove('visible');
-            generateGraphForView('translation', { language: selectedLang });
+    document.addEventListener('keydown', (event) => { 
+        if (event.key === "Escape" && languageModal) {
+            languageModal.classList.remove('visible'); 
         }
     });
+    
+    if (modalCloseBtn) {
+        modalCloseBtn.addEventListener('click', () => {
+            if (languageModal) languageModal.classList.remove('visible');
+        });
+    }
+    
+    if (languageModal) {
+        languageModal.addEventListener('click', (event) => { 
+            if (event.target === languageModal) languageModal.classList.remove('visible'); 
+        });
+    }
+    
+    if (languageList) {
+        languageList.addEventListener('click', (event) => {
+            if (event.target.tagName === 'LI') {
+                const selectedLang = event.target.dataset.lang;
+                if (languageModal) languageModal.classList.remove('visible');
+                generateGraphForView('translation', { language: selectedLang });
+            }
+        });
+    }
 });
+                
