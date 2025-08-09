@@ -11,7 +11,7 @@ applyTheme(savedTheme);
 
 // --- State Management ---
 let currentRegister = 'conversational';
-let currentProficiency = 'high'; // ⭐ FIX: This line was missing.
+let currentProficiency = 'high'; // ⭐ FIX: This line was missing and is now added.
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -298,8 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
         refetchCurrentView();
     }
     
-    // ... (All other functions remain the same) ...
-
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
           if (d.type !== 'add') {
