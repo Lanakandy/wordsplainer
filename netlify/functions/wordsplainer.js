@@ -16,12 +16,21 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
 
     const baseInstruction = `You are an expert linguist providing unique witty explanations of English vocabulary.`;
 
-    const registerInstruction = register === 'academic' 
-        ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
-        : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language as heard in conversations.`;
+    let registerInstruction;
+    switch (register) {
+        case 'academic':
+            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`;
+            break;
+        case 'business':
+            registerInstruction = `The user has selected the 'Business' register. All generated content must use professional, clear, and concise language suitable for corporate communications like emails, reports, presentations, and memos. Avoid overly casual slang or overly academic jargon.`;
+            break;
+        case 'conversational':
+        default:
+            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language as heard in modern conversations.`;
+            break;
+    }
     
-    // This now correctly uses the `proficiency` parameter.
-    const proficiencyInstruction = proficiency === 'low'
+    const proficiencyInstruction = proficiency === 'high'
         ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
         : `The user's proficiency is HIGH. All definitions and examples should be nuanced and use vocabulary that native speakers would use in conversations (dialogues) in modern situations.`;
 
