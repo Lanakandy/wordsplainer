@@ -11,7 +11,7 @@ applyTheme(savedTheme);
 
 // --- State Management ---
 let currentRegister = 'conversational';
-let currentProficiency = 'high'; // ⭐ FIX: This line was missing and is now added.
+let currentProficiency = 'low';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
