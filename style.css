@@ -459,11 +459,26 @@ header h1 {
 .register-state .register-text { opacity: 0; position: absolute; font-weight: 600; font-size: 0.8rem; }
 .conversational-state { opacity: 1; transform: translateY(0); }
 .academic-state { opacity: 0; transform: translateY(20px); }
+.business-state { opacity: 0; transform: translateY(20px); }
+
 #register-toggle-btn.is-academic .conversational-state { opacity: 0; transform: translateY(-20px); }
 #register-toggle-btn.is-academic .academic-state { opacity: 1; transform: translateY(0); }
-#register-toggle-btn:hover { width: 145px; }
-#register-toggle-btn:hover .register-icon { opacity: 0; }
-#register-toggle-btn:hover .register-text { opacity: 1; }
+#register-toggle-btn.is-academic .business-state { opacity: 0; transform: translateY(20px); } /* Explicitly hide */
+
+#register-toggle-btn.is-business .conversational-state { opacity: 0; transform: translateY(-20px); }
+#register-toggle-btn.is-business .academic-state { opacity: 0; transform: translateY(-20px); } /* Move up and hide */
+#register-toggle-btn.is-business .business-state { opacity: 1; transform: translateY(0); }
+#register-toggle-btn:hover {
+    width: 145px; 
+}
+
+#register-toggle-btn:hover .register-icon {
+    opacity: 0;
+}
+
+#register-toggle-btn:hover .register-text {
+    opacity: 1;
+}
 #zoom-controls .control-btn { width: 38px; }
 #zoom-controls .control-btn svg { fill: currentColor; width: 20px; height: 20px; }
 #register-toggle-btn.needs-attention { animation: pulse-glow 2.5s infinite ease-in-out; }
@@ -497,15 +512,12 @@ header h1 {
     font-size: 0.8rem;
 }
 
-/* Default state: .is-high is on the button */
 .high-state { opacity: 1; transform: translateY(0); }
 .low-state { opacity: 0; transform: translateY(20px); }
 
-/* When .is-high class is NOT present, show Low state */
 #proficiency-toggle-btn:not(.is-high) .high-state { opacity: 0; transform: translateY(-20px); }
 #proficiency-toggle-btn:not(.is-high) .low-state { opacity: 1; transform: translateY(0); }
 
-/* Expand on hover and show text */
 #proficiency-toggle-btn:hover {
     width: 80px;
 }

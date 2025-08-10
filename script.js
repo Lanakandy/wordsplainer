@@ -24,14 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
         registerToggleBtn.classList.add('needs-attention');
     }
 
-    if (registerToggleBtn) {
-        registerToggleBtn.addEventListener('click', () => {
-            registerToggleBtn.classList.toggle('is-academic');
-            const isAcademic = registerToggleBtn.classList.contains('is-academic');
-            console.log('Register is now:', isAcademic ? 'Academic' : 'Conversational');
-        });
-    }
-
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
@@ -282,12 +274,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleRegisterToggle() {
-        stopRegisterButtonAnimation();
-        currentRegister = (currentRegister === 'conversational') ? 'academic' : 'conversational';
-        registerToggleBtn.classList.toggle('is-academic', currentRegister === 'academic');
-        refetchCurrentView();
+    stopRegisterButtonAnimation();
+    const registers = ['conversational', 'academic', 'business'];
+    const currentIndex = registers.indexOf(currentRegister);
+    const nextIndex = (currentIndex + 1) % registers.length;
+    currentRegister = registers[nextIndex];
+    console.log(`Register is now: ${currentRegister}`); // For debugging
+    registerToggleBtn.classList.remove('is-academic', 'is-business'); // Clear old state classes
+    if (currentRegister === 'academic') {
+        registerToggleBtn.classList.add('is-academic');
+    } else if (currentRegister === 'business') {
+        registerToggleBtn.classList.add('is-business');
     }
-
+   
+    refetchCurrentView();
+}
     function handleProficiencyToggle() {
         currentProficiency = (currentProficiency === 'high') ? 'low' : 'high';
         proficiencyToggleBtn.classList.toggle('is-high', currentProficiency === 'high');
