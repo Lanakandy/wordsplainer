@@ -12,6 +12,7 @@ applyTheme(savedTheme);
 // --- State Management ---
 let currentRegister = 'conversational';
 let currentProficiency = 'low';
+let currentTone = 'neutral';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomControls = document.getElementById('zoom-controls');
     const registerToggleBtn = document.getElementById('register-toggle-btn');
     const proficiencyToggleBtn = document.getElementById('proficiency-toggle-btn');
+    const toneToggleBtn = document.getElementById('tone-toggle-btn');
 
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
@@ -100,7 +102,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     limit: limit,
                     language: language,
                     register: currentRegister,
-                    proficiency: currentProficiency
+                    proficiency: currentProficiency,
+                    tone: currentTone
                 }),
             });
             if (!response.ok) {
@@ -298,6 +301,23 @@ document.addEventListener('DOMContentLoaded', () => {
         refetchCurrentView();
     }
     
+    function handleToneToggle() {
+        // This logic cycles through the three states
+        if (currentTone === 'neutral') {
+            currentTone = 'witty';
+        } else if (currentTone === 'witty') {
+            currentTone = 'kid-friendly';
+        } else {
+            currentTone = 'neutral';
+        }
+
+        // Update the button's classes to show the correct state
+        toneToggleBtn.classList.remove('is-neutral', 'is-witty', 'is-kid-friendly');
+        toneToggleBtn.classList.add(`is-${currentTone}`);
+
+        // Re-fetch data for the current view with the new tone
+        refetchCurrentView();
+    }
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
           if (d.type !== 'add') {
@@ -888,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomControls.addEventListener('click', handleZoomControlsClick);
     registerToggleBtn.addEventListener('click', handleRegisterToggle);
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
+    toneToggleBtn.addEventListener('click', handleToneToggle);    
     window.addEventListener('resize', handleResize);
     document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
     modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));
