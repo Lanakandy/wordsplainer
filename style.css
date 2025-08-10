@@ -591,36 +591,6 @@ header h1 {
     opacity: 1;
 }
 
-#tone-toggle-btn .tone-state {
-    display: none;
-}
-
-/* This shows the currently active state by overriding the 'display: none'. */
-#tone-toggle-btn.is-neutral .neutral-state,
-#tone-toggle-btn.is-witty .witty-state,
-#tone-toggle-btn.is-kid-friendly .kid-friendly-state {
-    display: flex;
-    align-items: center;
-    gap: 8px; /* Adjust gap between icon and text if needed */
-}
-
-/* Style for the icon container and the image inside */
-.tone-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.tone-icon img {
-    width: 22px;  /* Match the size of your other icons */
-    height: 22px;
-}
-
-/* This is important for theming. It makes your black SVG icons turn white in dark mode. */
-[data-theme="dark"] .tone-icon img {
-    filter: invert(1);
-}
-
 /* --- Responsive Design --- */
 @media (max-width: 768px) {
     #app-wrapper { padding: 10px; gap: 15px; }
