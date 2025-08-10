@@ -3,7 +3,7 @@
 const fetch = require('node-fetch');
 
 // FIX 1: Accept `proficiency` as an argument.
-function getLLMPrompt(type, register, proficiency, word, options = {}) {
+function getLLMPrompt(type, register, proficiency, tone, word, options = {}) {
     const { 
         language = null, 
         limit = 5, 
@@ -24,6 +24,18 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
     const proficiencyInstruction = proficiency === 'low'
         ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
         : `The user's proficiency is HIGH. All definitions and examples should be nuanced, witty and use vocabulary that native speakers would use in a modern conversation.`;
+    let toneInstruction = '';
+    switch (tone) {
+        case 'witty':
+            toneInstruction = `Adopt a witty, clever, and slightly humorous tone, like a knowledgeable friend who loves wordplay. Use smart analogies and sophisticated humor. The user is a language enthusiast.`;
+            break;
+        case 'kid-friendly':
+            toneInstruction = `Adopt a 'cartoonish' and very enthusiastic tone, as if you're a friendly character explaining things to a 10-year-old. Use simple words, fun sound effects in examples (like *poof!* or *zap!*), and silly comparisons.`;
+            break;
+        default: // 'neutral'
+            toneInstruction = `Adopt a clear, helpful, and neutral tone. Explanations should be straightforward and easy to understand.`;
+            break;
+    }
 
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -85,8 +97,7 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
             throw new Error(`Unknown type: ${type}`);
     }
     
-    // FIX 2 (cont.): Add `proficiencyInstruction` to the system prompt for all other types.
-    systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+    systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, toneInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
 
@@ -155,11 +166,9 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        // FIX 3: Explicitly extract `proficiency` and provide a default value.
-        const { word, type, register = 'conversational', proficiency = 'high' } = body;
+        const { word, type, register = 'conversational', proficiency = 'high', tone = 'neutral' } = body;
         
-        // Pass the extracted `proficiency` to the prompt generator.
-        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, proficiency, word, body);
+        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, proficiency, tone, word, body);
         
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
