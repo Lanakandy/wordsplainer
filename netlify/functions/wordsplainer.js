@@ -23,7 +23,7 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
     // This now correctly uses the `proficiency` parameter.
     const proficiencyInstruction = proficiency === 'low'
         ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
-        : `The user's proficiency is HIGH. All definitions and examples should be nuanced, witty and use vocabulary that native speakers would use.`;
+        : `The user's proficiency is HIGH. All definitions and examples should be nuanced, witty and use vocabulary that native speakers would use in natural conversations.`;
 
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -35,7 +35,7 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the target word. For each, include its part of speech.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the target word. Use similes or other devices to make them clear, non-trivial and interesting. Include a part of speech for each definition of the target word.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
