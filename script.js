@@ -172,52 +172,80 @@ document.addEventListener('DOMContentLoaded', () => {
             exit => exit.transition().duration(400).ease(d3.easeCircleIn).style("opacity", 0).style("stroke-width", 0).remove()
         );
 
-        const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id).join(
-            enter => {
-                const nodeGroup = enter.append("g").attr("class", d => `node ${d.isCentral ? 'central-node' : `node-${d.type}`}`).style("opacity", 0)
-                    .attr("transform", d => { const cluster = graphClusters.get(d.clusterId); const startPos = cluster ? cluster.center : { x: width/2, y: height/2 }; return `translate(${startPos.x},${startPos.y}) scale(0.1)`; })
-                    .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
-                    .on("mouseover", handleMouseOver).on("mouseout", handleMouseOut).on("click", handleNodeClick);
-                nodeGroup.append(d => d.type === 'example' ? document.createElementNS(d3.namespaces.svg, 'rect') : document.createElementNS(d3.namespaces.svg, 'circle'));
-                nodeGroup.append("text");
-                nodeGroup.transition().duration(600).delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80)).ease(d3.easeBackOut.overshoot(1.2)).style("opacity", 1).attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`);
-                return nodeGroup;
-            },
-            update => update.transition().duration(300).attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`),
-            exit => exit.transition().duration(400).ease(d3.easeCircleIn).attr("transform", d => `translate(${d.x},${d.y}) scale(0)`).style("opacity", 0).remove()
-        );
+        const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id)
+    .join(
+        enter => enter.append("g")
+            .style("opacity", 0)
+            .attr("transform", d => {
+                const cluster = graphClusters.get(d.clusterId);
+                const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
+                // Start new nodes from their cluster center and scaled down
+                return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
+            })
+            .call(g => g.transition().duration(600)
+                .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
+                .ease(d3.easeBackOut.overshoot(1.2))
+                .style("opacity", 1)
+                .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
+            ),
+        update => update, // No special logic needed for update here
+        exit => exit.transition().duration(400).ease(d3.easeCircleIn)
+            .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
+            .style("opacity", 0)
+            .remove()
+    );
 
-        nodeGroups.each(function(d) {
-            const selection = d3.select(this);
-            selection.selectAll("circle, rect, foreignObject, text").remove();
-            if (d.isCentral) {
-                selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
-            } else if (d.type === 'add') {
-                selection.append("circle").attr("r", 20);
-                selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-            } else {
-                const isExample = d.type === 'example';
-                if (!isExample) selection.append("circle").attr("r", 18);
-                const textWidth = isExample ? 220 : 200;
-                const PADDING = isExample ? 0 : 12;
-                const circleRadius = isExample ? 0 : 18;
-                const foreignObject = selection.append("foreignObject").attr("class", "node-html-wrapper").attr("width", textWidth).attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING).style("opacity", 0);
-                const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
-                createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
-                setTimeout(() => {
-                    if (div.node()) {
-                        const textHeight = div.node().scrollHeight;
-                        foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
-                        d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
-                        d.height = Math.max(circleRadius * 2, textHeight);
-                        foreignObject.transition().duration(400).style("opacity", 1);
-                        simulation.alpha(0.1).restart();
-                    }
-                }, 50);
-                selection.style("cursor", "pointer");
+// Apply these attributes and event handlers to ALL nodes (both entering and updating)
+nodeGroups
+    .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
+    .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
+    .on("mouseover", handleMouseOver)
+    .on("mouseout", handleMouseOut)
+    .on("click", handleNodeClick);
+
+// Now, populate the content for all nodes
+nodeGroups.each(function(d) {
+    const selection = d3.select(this);
+    // Clear previous contents
+    selection.selectAll("circle, rect, foreignObject, text").remove();
+
+    if (d.isCentral) {
+        selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+        selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
+    } else if (d.type === 'add') {
+        selection.append("circle").attr("r", 20);
+        selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
+    } else {
+        const isExample = d.type === 'example';
+        if (!isExample) selection.append("circle").attr("r", 18);
+
+        const textWidth = isExample ? 220 : 200;
+        const PADDING = isExample ? 0 : 12;
+        const circleRadius = isExample ? 0 : 18;
+
+        const foreignObject = selection.append("foreignObject")
+            .attr("class", "node-html-wrapper")
+            .attr("width", textWidth)
+            .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
+            .style("opacity", 0);
+
+        const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
+        createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+
+        setTimeout(() => {
+            if (div.node()) {
+                const textHeight = div.node().scrollHeight;
+                foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+                d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                d.height = Math.max(circleRadius * 2, textHeight);
+                foreignObject.transition().duration(400).style("opacity", 1);
+                // Nudge the simulation to re-evaluate collisions with the new size
+                simulation.alpha(0.1).restart();
             }
-        });
+        }, 50); // Small delay to allow DOM to render for height calculation
+        selection.style("cursor", "pointer");
+    }
+});
 
         const iconData = visibleNodes.filter(d => d.isCentral || d.type === 'example');
         iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
