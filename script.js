@@ -5,10 +5,6 @@ function applyTheme(theme) {
     localStorage.setItem('theme', theme);
 }
 
-// Immediately check for and apply the saved theme
-const savedTheme = localStorage.getItem('theme') || 'dark';
-applyTheme(savedTheme);
-
 // --- State Management ---
 let currentRegister = 'conversational';
 let currentProficiency = 'high';
