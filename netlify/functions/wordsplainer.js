@@ -19,14 +19,14 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
     let registerInstruction;
     switch (register) {
         case 'academic':
-            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`;
+            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a research paper or university essay.`;
             break;
         case 'business':
             registerInstruction = `The user has selected the 'Business' register. All generated content must use professional, clear, and concise language suitable for corporate communications like emails, reports, presentations, and memos. Avoid overly casual slang or overly academic jargon.`;
             break;
         case 'conversational':
         default:
-            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language as heard in modern conversations.`;
+            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations.`;
             break;
     }
     
