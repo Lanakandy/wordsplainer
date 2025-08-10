@@ -30,7 +30,7 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
             break;
     }
     
-    const proficiencyInstruction = proficiency === 'high'
+    const proficiencyInstruction = proficiency === 'low'
         ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
         : `The user's proficiency is HIGH. All definitions and examples should be nuanced and use vocabulary that native speakers would use in conversations (dialogues) in modern situations.`;
 
