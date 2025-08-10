@@ -2,7 +2,8 @@
 
 const fetch = require('node-fetch');
 
-function getLLMPrompt(type, register, word, options = {}) {
+// FIX 1: Accept `proficiency` as an argument.
+function getLLMPrompt(type, register, proficiency, word, options = {}) {
     const { 
         language = null, 
         limit = 5, 
@@ -19,6 +20,7 @@ function getLLMPrompt(type, register, word, options = {}) {
         ? `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a university essay or research paper.`
         : `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language.`;
     
+    // This now correctly uses the `proficiency` parameter.
     const proficiencyInstruction = proficiency === 'low'
         ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
         : `The user's proficiency is HIGH. All definitions and examples should be nuanced, witty and use vocabulary that native speakers would use in a modern conversation.`;
@@ -75,14 +77,16 @@ function getLLMPrompt(type, register, word, options = {}) {
                 taskInstruction = `Create a single, high-quality, engaging example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            systemPrompt = [baseInstruction, registerInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+            // FIX 2: Add `proficiencyInstruction` to the system prompt.
+            systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
         default:
             throw new Error(`Unknown type: ${type}`);
     }
-
-    systemPrompt = [baseInstruction, registerInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+    
+    // FIX 2 (cont.): Add `proficiencyInstruction` to the system prompt for all other types.
+    systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
 
@@ -151,9 +155,11 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        const { word, type, register = 'conversational' } = body;
+        // FIX 3: Explicitly extract `proficiency` and provide a default value.
+        const { word, type, register = 'conversational', proficiency = 'high' } = body;
         
-        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, word, body);
+        // Pass the extracted `proficiency` to the prompt generator.
+        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, proficiency, word, body);
         
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
