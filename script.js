@@ -456,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderLoading(message) {
         const { width, height } = graphContainer.getBoundingClientRect();
         graphGroup.selectAll("*").remove();
+        iconGroup.selectAll("*").remove();
         
         const loadingGroup = graphGroup.append("g");
         loadingGroup.append("circle").attr("class", "loading-spinner").attr("cx", width / 2).attr("cy", height / 2 - 30).attr("r", 20).attr("fill", "none").attr("stroke", "var(--primary-coral)").attr("stroke-width", 3).attr("stroke-dasharray", "31.4, 31.4");
@@ -465,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderError(message) {
         const { width, height } = graphContainer.getBoundingClientRect();
         graphGroup.selectAll("*").remove();
+        iconGroup.selectAll("*").remove();
         graphGroup.append("text").attr("class", "status-text error-text").attr("x", width / 2).attr("y", height / 2).text(message);
     }
 
