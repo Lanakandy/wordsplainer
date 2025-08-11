@@ -26,7 +26,7 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
             break;
         case 'conversational':
         default:
-            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations.`;
+            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations. Use conversational grammar.`;
             break;
     }
     
