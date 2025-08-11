@@ -9,6 +9,7 @@ function applyTheme(theme) {
 let currentRegister = 'conversational';
 let currentProficiency = 'high';
 let currentAgeGroup = 'adults';
+let currentLayout = 'force';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -21,10 +22,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const registerToggleBtn = document.getElementById('register-toggle-btn');
     const proficiencyToggleBtn = document.getElementById('proficiency-toggle-btn');
     const ageToggleBtn = document.getElementById('age-toggle-btn');
+    const layoutToggleBtn = document.getElementById('layout-toggle-btn');
 
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
     }
+
+    const radialForce = d3.forceRadial(d => {
+    if (d.isCentral) return 0;
+    if (d.type === 'example') return 280;
+    return 180;
+}).strength(0.8).x(graphContainer.getBoundingClientRect().width / 2).y(graphContainer.getBoundingClientRect().height / 2);
 
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
@@ -38,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentActiveCentral = null;
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
-
+    
     function stopRegisterButtonAnimation() {
         if (registerToggleBtn) {
             registerToggleBtn.classList.remove('needs-attention');
@@ -855,6 +863,39 @@ nodeGroups.each(function(d) {
             btn.classList.toggle('active', btn.dataset.type === currentView);
         });
     }
+
+function handleLayoutToggle() {
+    currentLayout = (currentLayout === 'force') ? 'radial' : 'force';
+    layoutToggleBtn.classList.toggle('active', currentLayout === 'radial');
+
+    if (currentLayout === 'radial') {
+        // Center the central node and fix it there
+        const centralNode = centralNodes.find(n => n.clusterId === currentActiveCentral);
+        if (centralNode) {
+            const { width, height } = graphContainer.getBoundingClientRect();
+            centralNode.fx = width / 2;
+            centralNode.fy = height / 2;
+            // Update the center for the radial force
+            radialForce.x(width / 2).y(height / 2);
+        }
+        // Add the radial force to the simulation
+        simulation.force("radial", radialForce);
+    } else {
+        // Un-fix the central node
+        const centralNode = centralNodes.find(n => n.clusterId === currentActiveCentral);
+        if (centralNode) {
+            centralNode.fx = null;
+            centralNode.fy = null;
+        }
+        // Remove the radial force
+        simulation.force("radial", null);
+    }
+    // Reheat the simulation to apply changes
+    simulation.alpha(1).restart();
+}
+
+// Add the event listener
+layoutToggleBtn.addEventListener('click', handleLayoutToggle);
    
     function toggleTheme() {
         const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';

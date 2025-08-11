@@ -443,6 +443,11 @@ header h1 {
     align-items: center; position: relative; overflow: hidden;
 }
 #canvas-controls .control-btn:hover { background-color: var(--btn-hover); border-color: var(--primary-coral); }
+#canvas-controls .control-btn.active {
+    background-color: var(--btn-hover);
+    border-color: var(--primary-coral);
+    color: var(--primary-coral);
+}
 #register-toggle-btn {
     position: relative; overflow: hidden; width: 38px;
     transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -572,6 +577,13 @@ header h1 {
 #age-toggle-btn:hover .age-text {
     opacity: 1;
 }
+
+/* FIX: New rules for layout toggle button */
+#layout-toggle-btn {
+    width: 38px; /* a) Ensure consistent width */
+    margin-top: 20px; /* b) Add space above to create a visual group */
+}
+
 
 /* Default state: High is visible */
 .high-state { opacity: 1; transform: translateY(0); }
