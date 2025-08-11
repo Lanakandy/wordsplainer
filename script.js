@@ -8,6 +8,7 @@ function applyTheme(theme) {
 // --- State Management ---
 let currentRegister = 'conversational';
 let currentProficiency = 'high';
+let currentAgeGroup = 'adults';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomControls = document.getElementById('zoom-controls');
     const registerToggleBtn = document.getElementById('register-toggle-btn');
     const proficiencyToggleBtn = document.getElementById('proficiency-toggle-btn');
+    const ageToggleBtn = document.getElementById('age-toggle-btn');
 
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
@@ -77,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchData(word, type, offset = 0, limit = 3, language = null) {
         try {
-            console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}, proficiency: ${currentProficiency}`);
+            console.log(`Fetching data: ${word}, ${type}, register: ${currentRegister}, proficiency: ${currentProficiency}, age: ${currentAgeGroup}`);
             const response = await fetch('/.netlify/functions/wordsplainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -88,7 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     limit: limit,
                     language: language,
                     register: currentRegister,
-                    proficiency: currentProficiency
+                    proficiency: currentProficiency,
+                    ageGroup: currentAgeGroup
                 }),
             });
             if (!response.ok) {
@@ -322,6 +325,12 @@ nodeGroups.each(function(d) {
         proficiencyToggleBtn.classList.toggle('is-high', currentProficiency === 'high');
         refetchCurrentView();
     }
+
+    function handleAgeToggle() {
+        currentAgeGroup = (currentAgeGroup === 'adults') ? 'teens' : 'adults';
+        ageToggleBtn.classList.toggle('is-adult', currentAgeGroup === 'adults');
+        refetchCurrentView();
+    }
     
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
@@ -542,6 +551,7 @@ nodeGroups.each(function(d) {
                     word: nodeData.text,
                     register: currentRegister,
                     proficiency: currentProficiency,
+                    ageGroup: currentAgeGroup,
                     sourceNodeType: nodeData.type
                 };
                 if (nodeData.type === 'meaning' || nodeData.type === 'context' || nodeData.type === 'translation') {
@@ -915,6 +925,7 @@ nodeGroups.each(function(d) {
     zoomControls.addEventListener('click', handleZoomControlsClick);
     registerToggleBtn.addEventListener('click', handleRegisterToggle);
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
+    ageToggleBtn.addEventListener('click', handleAgeToggle);
     window.addEventListener('resize', handleResize);
     document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
     modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));

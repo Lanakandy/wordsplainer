@@ -528,6 +528,51 @@ header h1 {
     opacity: 1;
 }
 
+#age-toggle-btn {
+    position: relative;
+    overflow: hidden;
+    width: 38px;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.age-state {
+    position: absolute; width: 100%; height: 100%; left: 0; top: 0;
+    display: flex; justify-content: center; align-items: center;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.age-state .age-icon {
+    transition: opacity 0.3s ease;
+}
+
+.age-state .age-text {
+    opacity: 0;
+    position: absolute;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+/* Default state: Adults is visible */
+.adult-state { opacity: 1; transform: translateY(0); }
+.teen-state { opacity: 0; transform: translateY(20px); }
+
+/* When .is-adult class is NOT present, show Teens */
+#age-toggle-btn:not(.is-adult) .adult-state { opacity: 0; transform: translateY(-20px); }
+#age-toggle-btn:not(.is-adult) .teen-state { opacity: 1; transform: translateY(0); }
+
+/* Expand on hover */
+#age-toggle-btn:hover {
+    width: 80px;
+}
+
+#age-toggle-btn:hover .age-icon {
+    opacity: 0;
+}
+
+#age-toggle-btn:hover .age-text {
+    opacity: 1;
+}
+
 /* Default state: High is visible */
 .high-state { opacity: 1; transform: translateY(0); }
 .low-state { opacity: 0; transform: translateY(20px); }
