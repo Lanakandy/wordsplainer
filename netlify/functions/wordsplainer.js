@@ -2,6 +2,7 @@
 
 const fetch = require('node-fetch');
 
+// FIX 1: Accept `proficiency` and `ageGroup` as arguments.
 function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {}) {
     const { 
         language = null, 
@@ -13,32 +14,32 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
         translation = null 
     } = options;
 
-    const baseSystemPrompt = `You are an expert linguist and vocabulary coach creating tailored learning content.
+    const baseInstruction = `You are an expert linguist providing unique witty explanations of English vocabulary.`;
 
-Your response MUST be adapted for the following user profile:
-- **Target Audience:** ${ageGroup === 'teens' 
-    ? "Teens/Schoolkids. Content must be fun, engaging, and relatable (social media, gaming, school life). Use a playful, energetic tone." 
-    : "Adults. Content can be mature, nuanced, and relevant to work, higher education, or complex topics."}
-- **Proficiency Level:** ${proficiency === 'low' 
-    ? "Low (CEFR A2-B1). CRITICAL: Use simple words, short sentences, and basic concepts." 
-    : "High (Native/C1+). Use sophisticated vocabulary and nuanced explanations."}
-- **Communication Style (Register):** Your tone and examples must be strictly '${register}'.`;
-
-    let registerSpecificInstruction;
+    let registerInstruction;
     switch (register) {
         case 'academic':
-            registerSpecificInstruction = `Adopt a formal, precise, and objective tone suitable for a research paper. Use complex sentences and technical vocabulary where appropriate. Avoid all colloquialisms and contractions.`;
+            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a research paper or academic writing.`;
             break;
         case 'business':
-            registerSpecificInstruction = `Adopt a professional, clear, and concise tone suitable for corporate communication. Use direct, action-oriented language and focus on practical application in a work environment.`;
+            registerInstruction = `The user has selected the 'Business' register. All generated content must use professional, clear, and concise language suitable for corporate communications like emails, reports, presentations, and memos. Avoid overly casual slang or overly academic jargon.`;
             break;
         case 'conversational':
         default:
-            registerSpecificInstruction = `Adopt a natural, friendly, and witty tone, as if explaining to a friend. Use contractions, idioms, and relatable analogies. CRITICAL: For 'meaning' and 'generateExample' tasks, you MUST include at least one example in the form of a short, realistic dialogue.`;
+            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations. Use similes or other devices to make it clear, non-trivial and engaging.`;
             break;
     }
+    
+    const proficiencyInstruction = proficiency === 'low'
+        ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
+        : `The user's proficiency is HIGH. All definitions and examples should be nuanced and use vocabulary that native speakers would use in conversations (dialogues) in modern situations.`;
+
+    const ageGroupInstruction = ageGroup === 'teens'
+        ? `CRITICAL: The target audience is TEENS/SCHOOLKIDS. All explanations and examples must be fun, engaging, and use language and references appropriate for a younger audience (e.g., social media, gaming, school life). Avoid overly complex, abstract, or mature themes. Use a slightly more playful and energetic tone.`
+        : `The target audience is ADULTS. Explanations and examples can be more mature, nuanced, and relevant to adult life, work, or higher education.`;
 
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
+
     const limitInstruction = `Provide up to ${limit} distinct items.`;
 
     let taskInstruction;
@@ -47,59 +48,60 @@ Your response MUST be adapted for the following user profile:
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Task: Provide definitions for the main meanings of the target word. Include a part of speech for each definition.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the target word. Include a part of speech for each definition of the target word.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
-            taskInstruction = `Task: List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
+            taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
             break;
         case 'derivatives':
-            taskInstruction = `Task: Provide word forms (noun, verb, adjective, etc.) with the same root.\nJSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide word forms (noun, verb, adjective, etc.). All word forms should have the same root.\nJSON format: {"nodes": [{"text": "derivative word", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'collocations':
-            taskInstruction = `Task: Provide common collocations. Each phrase MUST contain the target word.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
+            taskInstruction = `Provide common collocations with the target word. CRITICAL: Each collocation phrase MUST contain the target word. For example, for the word "hand", you could provide "on the one hand" or "heavy hand". Include frequent noun, verb, adjective, and adverb pairings.\nJSON format: {"nodes": [{"text": "collocation phrase"}]}`;
             break;
         case 'idioms':
-            taskInstruction = `Task: Provide idioms or set phrases. Every single idiom MUST contain the exact target word.\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
+            taskInstruction = `Provide idioms or set phrases. CRITICAL: Every single idiom you provide MUST contain the exact target word. Do not provide general proverbs. For example, for the word 'hand', a good idiom is "get out of hand".\nJSON format: {"nodes": [{"text": "idiom phrase"}]}`;
             break;
         case 'synonyms':
-            taskInstruction = `Task: Provide common single-word synonyms.\nJSON format: {"nodes": [{"text": "the synonym here"}]}`;
+            taskInstruction = `Provide common synonyms for the target word. For example, for the word 'happy', you could provide 'joyful' or 'pleased'. The response should be single words. Do not provide definitions.\nJSON format: {"nodes": [{"text": "the synonym here"}]}`;
             break;
         case 'opposites':
-            taskInstruction = `Task: Provide common single-word antonyms (opposites).\nJSON format: {"nodes": [{"text": "the antonym here"}]}`;
+            taskInstruction = `Provide common antonyms (opposites) for the target word. For example, for the word 'hot', you could provide 'cold' or 'cool'. The response should be single words. Do not provide definitions.\nJSON format: {"nodes": [{"text": "the antonym here"}]}`;
             break;        
         case 'translation':
-            taskInstruction = `Task: Provide the main translations for the word into the target language.\nJSON format: {"nodes": [{"text": "translation"}]}`;
+            taskInstruction = `Provide the main translations for the word into the target language.\nJSON format: {"nodes": [{"text": "translation"}]}`;
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
             break;
         
         case 'generateExample':
             if (sourceNodeType === 'idioms') {
-                taskInstruction = `Task: Create a single, engaging example sentence for the given idiom and provide a brief explanation of its meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
+                taskInstruction = `The user clicked on an idiom. Create a single, high-quality engaging example sentence using the idiom. Also, provide a brief, clear explanation of the idiom's meaning.\nJSON format: {"example": "The generated sentence.", "explanation": "The explanation of the idiom."}`;
                 userPrompt = `Idiom to use and explain: "${word}"`;
             } else if (sourceNodeType === 'meaning' && centralWord && definition) {
-                taskInstruction = `Task: Create a single, high-quality example sentence for the word "${centralWord}" that clearly illustrates this specific definition: "${definition}".\nJSON format: {"example": "The generated sentence."}`;
+                taskInstruction = `The user is exploring the word "${centralWord}" and clicked on this specific definition: "${definition}". Create a single, high-quality engaging example sentence that uses "${centralWord}" to clearly illustrate this exact meaning.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word: "${centralWord}", Definition to illustrate: "${definition}"`;
             } else if (centralWord && context) {
-                taskInstruction = `Task: Create a single, high-quality example sentence using "${centralWord}" in a way that is specific to the field of "${context}".\nJSON format: {"example": "The generated sentence."}`;
+                taskInstruction = `The user is exploring the word "${centralWord}" and has clicked on the context "${context}". Create a single, high-quality engaging example sentence that uses the word "${centralWord}" in a way that is specific to the field of "${context}".\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word: "${centralWord}", Context: "${context}"`;
             } else if (sourceNodeType === 'translation' && centralWord && translation && language) {
-                taskInstruction = `Task: Create a high-quality English example sentence using "${centralWord}". Then, provide its direct translation into ${language}.\nJSON format: {"english_example": "The English sentence.", "translated_example": "The sentence in the target language."}`;
+                taskInstruction = `The user is exploring the English word "${centralWord}". They clicked on its translation into ${language}: "${translation}". Create a single, high-quality engaging English example sentence using "${centralWord}". Then, provide its direct and natural translation into ${language}.\nJSON format: {"english_example": "The English sentence.", "translated_example": "The sentence in the target language."}`;
                 userPrompt = `English Word: "${centralWord}", Target Language: "${language}", Translation: "${translation}"`;
             } else {
-                taskInstruction = `Task: Create a single, high-quality, engaging example sentence using the provided word.\nJSON format: {"example": "The generated sentence."}`;
+                taskInstruction = `Create a single, high-quality, engaging example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            systemPrompt = [baseSystemPrompt, registerSpecificInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+            // FIX 2: Add all instructions to the system prompt.
+            systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, ageGroupInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
         default:
             throw new Error(`Unknown type: ${type}`);
     }
     
-    systemPrompt = [baseSystemPrompt, registerSpecificInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+    // FIX 2 (cont.): Add all instructions to the system prompt for other types.
+    systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, ageGroupInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
-
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -166,8 +168,10 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
+        // FIX 3: Explicitly extract all settings and provide default values.
         const { word, type, register = 'conversational', proficiency = 'high', ageGroup = 'adults' } = body;
         
+        // Pass the extracted settings to the prompt generator.
         const { systemPrompt, userPrompt } = getLLMPrompt(type, register, proficiency, ageGroup, word, body);
         
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
