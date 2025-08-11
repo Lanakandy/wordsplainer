@@ -2,8 +2,8 @@
 
 const fetch = require('node-fetch');
 
-// FIX 1: Accept `proficiency` as an argument.
-function getLLMPrompt(type, register, proficiency, word, options = {}) {
+// FIX 1: Accept `proficiency` and `ageGroup` as arguments.
+function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {}) {
     const { 
         language = null, 
         limit = 5, 
@@ -26,13 +26,17 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
             break;
         case 'conversational':
         default:
-            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations. Use conversational grammar.`;
+            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations.`;
             break;
     }
     
     const proficiencyInstruction = proficiency === 'low'
         ? `CRITICAL: The user's proficiency is LOW. All definitions and examples MUST use simple, common English (CEFR A2-B1 level). Explain concepts using very simple words. Sentences must be short and easy to understand.`
         : `The user's proficiency is HIGH. All definitions and examples should be nuanced and use vocabulary that native speakers would use in conversations (dialogues) in modern situations.`;
+
+    const ageGroupInstruction = ageGroup === 'teens'
+        ? `CRITICAL: The target audience is TEENS/SCHOOLKIDS. All explanations and examples must be fun, engaging, and use language and references appropriate for a younger audience (e.g., social media, gaming, school life). Avoid overly complex, abstract, or mature themes. Use a slightly more playful and energetic tone.`
+        : `The target audience is ADULTS. Explanations and examples can be more mature, nuanced, and relevant to adult life, work, or higher education.`;
 
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
 
@@ -86,16 +90,16 @@ function getLLMPrompt(type, register, proficiency, word, options = {}) {
                 taskInstruction = `Create a single, high-quality, engaging example sentence using the word provided in the user prompt. The sentence must clearly demonstrate the word's meaning in the specified register.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            // FIX 2: Add `proficiencyInstruction` to the system prompt.
-            systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+            // FIX 2: Add all instructions to the system prompt.
+            systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, ageGroupInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
         default:
             throw new Error(`Unknown type: ${type}`);
     }
     
-    // FIX 2 (cont.): Add `proficiencyInstruction` to the system prompt for all other types.
-    systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+    // FIX 2 (cont.): Add all instructions to the system prompt for other types.
+    systemPrompt = [baseInstruction, registerInstruction, proficiencyInstruction, ageGroupInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
 
@@ -164,11 +168,11 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        // FIX 3: Explicitly extract `proficiency` and provide a default value.
-        const { word, type, register = 'conversational', proficiency = 'high' } = body;
+        // FIX 3: Explicitly extract all settings and provide default values.
+        const { word, type, register = 'conversational', proficiency = 'high', ageGroup = 'adults' } = body;
         
-        // Pass the extracted `proficiency` to the prompt generator.
-        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, proficiency, word, body);
+        // Pass the extracted settings to the prompt generator.
+        const { systemPrompt, userPrompt } = getLLMPrompt(type, register, proficiency, ageGroup, word, body);
         
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
