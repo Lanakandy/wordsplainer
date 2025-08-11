@@ -19,7 +19,7 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
     let registerInstruction;
     switch (register) {
         case 'academic':
-            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a research paper or academic essay.`;
+            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a research paper or academic writing.`;
             break;
         case 'business':
             registerInstruction = `The user has selected the 'Business' register. All generated content must use professional, clear, and concise language suitable for corporate communications like emails, reports, presentations, and memos. Avoid overly casual slang or overly academic jargon.`;
