@@ -22,6 +22,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const proficiencyToggleBtn = document.getElementById('proficiency-toggle-btn');
     const ageToggleBtn = document.getElementById('age-toggle-btn');
     const layoutToggleBtn = document.getElementById('layout-toggle-btn');
+    const voiceInputBtn = document.getElementById('voice-input-btn');
+
+     const colorMap = {
+        meaning: 'var(--meaning-color)',
+        context: 'var(--context-color)',
+        derivatives: 'var(--derivative-color)',
+        idioms: 'var(--idiom-color)',
+        collocations: 'var(--collocation-color)',
+        synonyms: 'var(--synonym-color)',
+        opposites: 'var(--opposite-color)',
+        translation: 'var(--translation-color)'
+    };
 
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
@@ -227,7 +239,10 @@ nodeGroups.each(function(d) {
         selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
     } else {
         const isExample = d.type === 'example';
-        if (!isExample) selection.append("circle").attr("r", 18);
+        if (!isExample) {
+        selection.append("circle").attr("r", 18)
+            .style("fill", colorMap[d.type] || 'var(--text-muted)'); // Fallback to muted color
+    }
 
         const textWidth = isExample ? 220 : 200;
         const PADDING = isExample ? 0 : 12;
