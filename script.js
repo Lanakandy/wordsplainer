@@ -230,22 +230,39 @@ nodeGroups.each(function(d) {
             .attr("class", "node-html-wrapper")
             .attr("width", textWidth)
             .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
-            .style("opacity", 0);
+            .style("opacity", 0)
+            // FIX: Set a minimum height initially so it's not zero.
+            .attr("height", 20); 
 
         const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
         createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+        
+        // FIX: Decouple the visibility transition from the height calculation.
+        // Make the object visible first.
+        foreignObject.transition().duration(400).style("opacity", 1);
 
         setTimeout(() => {
+            // FIX: Add a defensive check to ensure the node still exists in the DOM.
             if (div.node()) {
-                const textHeight = div.node().scrollHeight;
+                // Now, measure the height.
+                let textHeight = div.node().scrollHeight;
+                
+                // FIX: If height is still 0 (edge case), use a fallback.
+                if (textHeight === 0) {
+                    console.warn(`Could not calculate height for node text: "${d.text.substring(0, 20)}...". Using fallback.`);
+                    textHeight = 20; // A small fallback height.
+                }
+
                 foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
                 d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
                 d.height = Math.max(circleRadius * 2, textHeight);
-                foreignObject.transition().duration(400).style("opacity", 1);
-                // Nudge the simulation to re-evaluate collisions with the new size
-                simulation.alpha(0.1).restart();
+                
+                // Nudge the simulation to re-evaluate collisions with the new, correct size.
+                if (simulation.alpha() < 0.1) {
+                    simulation.alpha(0.1).restart();
+                }
             }
-        }, 50); // Small delay to allow DOM to render for height calculation
+        }, 50); // The delay is still useful, but now it's not critical for visibility.
         selection.style("cursor", "pointer");
     }
 });
