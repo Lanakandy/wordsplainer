@@ -62,8 +62,21 @@
 .input-overlay.visible {
     opacity: 1; visibility: visible; pointer-events: auto;
 }
+
+/* FIX: Add styles for the new wrapper */
+.input-wrapper {
+    position: relative;
+    width: 80%;
+    max-width: 500px;
+    display: flex;
+    align-items: center;
+}
+
 .overlay-input-field {
-    width: 80%; max-width: 500px; box-sizing: border-box; padding: 15px 25px;
+    width: 100%; /* FIX: Take full width of the wrapper */
+    box-sizing: border-box;
+    /* FIX: Add more padding on the right for the mic button */
+    padding: 15px 60px 15px 25px; 
     border: 2px solid var(--primary-coral); border-radius: 12px;
     background-color: var(--canvas-bg); color: var(--canvas-text-color);
     font-family: inherit; font-size: 1.3rem; text-align: center;
@@ -353,7 +366,68 @@ header h1 {
     100% { transform: rotate(360deg); }
 }
 
-/* ===== END OF ENHANCED D3 STYLES SECTION ===== */
+/* --- Voice Input Button --- */
+.input-overlay {
+    /* This no longer needs to be a positioning context */
+}
+
+.voice-input-btn {
+    position: absolute;
+    /* FIX: Positioned inside the wrapper's right edge */
+    right: 15px; 
+    top: 50%;
+    transform: translateY(-50%);
+    
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    display: none; /* Hidden by default, JS will show it if supported */
+}
+
+.voice-input-btn:hover {
+    color: var(--primary-coral);
+    background-color: var(--btn-bg);
+}
+
+.voice-input-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+[data-theme='dark'] .voice-input-btn {
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .voice-input-btn:hover {
+    color: var(--primary-coral);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Style for when the microphone is actively listening */
+.voice-input-btn.listening {
+    color: white;
+    background-color: var(--primary-coral);
+    animation: pulse-mic 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-mic {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 71, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 107, 71, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 71, 0);
+    }
+}
 
 
 /* --- Tooltip Styles --- */

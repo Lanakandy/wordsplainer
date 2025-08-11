@@ -1,4 +1,3 @@
-// --- START OF FILE script.js ---
 
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
@@ -685,30 +684,96 @@ nodeGroups.each(function(d) {
     }
 
     function promptForInitialWord() {
-        const inputOverlay = document.getElementById('input-overlay');
-        const overlayInput = document.getElementById('overlay-input');
-        overlayInput.placeholder = "Type a word and press Enter...";
-        inputOverlay.classList.add('visible');
-        overlayInput.focus();
-        overlayInput.value = '';
-        const handleKeyDown = (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                const value = overlayInput.value.trim();
-                if (value) { handleWordSubmitted(value, true); }
-                inputOverlay.classList.remove('visible');
-                overlayInput.removeEventListener('keydown', handleKeyDown);
-                overlayInput.removeEventListener('blur', handleBlur);
+    const inputOverlay = document.getElementById('input-overlay');
+    const overlayInput = document.getElementById('overlay-input');
+    const voiceInputBtn = document.getElementById('voice-input-btn');
+
+    overlayInput.placeholder = "Type a word or use the mic...";
+    inputOverlay.classList.add('visible');
+    overlayInput.focus();
+    overlayInput.value = '';
+
+    // --- Voice Recognition Setup ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+
+    // Check if the browser supports the API
+    if (SpeechRecognition) {
+        voiceInputBtn.style.display = 'flex'; // Show the button
+        recognition = new SpeechRecognition();
+        recognition.continuous = false; // We only need one result
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        voiceInputBtn.onclick = () => {
+            recognition.start();
+            console.log("Voice recognition started. Try speaking into the microphone.");
+        };
+
+        recognition.onstart = () => {
+            voiceInputBtn.classList.add('listening');
+        };
+
+        recognition.onend = () => {
+            voiceInputBtn.classList.remove('listening');
+            console.log("Voice recognition ended.");
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript.trim();
+            console.log('Result received: ' + transcript);
+            
+            // Clean up punctuation that speech recognition sometimes adds
+            const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+
+            if (cleanedTranscript) {
+                overlayInput.value = cleanedTranscript; // Show the result in the input
+                handleWordSubmitted(cleanedTranscript, true);
+                closeOverlay(); // Close the overlay after successful submission
             }
         };
-        const handleBlur = () => {
-            inputOverlay.classList.remove('visible');
-            overlayInput.removeEventListener('keydown', handleKeyDown);
-            overlayInput.removeEventListener('blur', handleBlur);
+
+        recognition.onerror = (event) => {
+            console.error("Speech recognition error:", event.error);
+            voiceInputBtn.classList.remove('listening');
         };
-        overlayInput.addEventListener('keydown', handleKeyDown);
-        overlayInput.addEventListener('blur', handleBlur);
+
+    } else {
+        // If not supported, hide the button and adjust placeholder
+        voiceInputBtn.style.display = 'none';
+        overlayInput.placeholder = "Type a word and press Enter...";
+        console.log("Speech recognition not supported in this browser.");
     }
+    // --- End of Voice Recognition Setup ---
+
+    const closeOverlay = () => {
+        inputOverlay.classList.remove('visible');
+        overlayInput.removeEventListener('keydown', handleKeyDown);
+        overlayInput.removeEventListener('blur', handleBlur);
+        if (recognition) {
+            recognition.stop(); // Ensure recognition is stopped when overlay closes
+        }
+    };
+
+    const handleKeyDown = (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            const value = overlayInput.value.trim();
+            if (value) {
+                handleWordSubmitted(value, true);
+            }
+            closeOverlay();
+        }
+    };
+
+    const handleBlur = () => {
+        closeOverlay();
+    };
+
+    overlayInput.addEventListener('keydown', handleKeyDown);
+    overlayInput.addEventListener('blur', handleBlur);
+}
           
     function handleDockClick(event) {
         const button = event.target.closest('button');
