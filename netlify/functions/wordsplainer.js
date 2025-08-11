@@ -19,14 +19,14 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
     let registerInstruction;
     switch (register) {
         case 'academic':
-            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a research paper or university essay.`;
+            registerInstruction = `The user has selected the 'Academic' register. All generated content (word choices, definitions, examples, explanations, etc.) must use formal, precise language suitable for a research paper or academic essay.`;
             break;
         case 'business':
             registerInstruction = `The user has selected the 'Business' register. All generated content must use professional, clear, and concise language suitable for corporate communications like emails, reports, presentations, and memos. Avoid overly casual slang or overly academic jargon.`;
             break;
         case 'conversational':
         default:
-            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations.`;
+            registerInstruction = `The user has selected the 'Conversational' register. All generated content (word choices, definitions, examples, explanations, etc.) must use natural colloquial language that native speakers would use in modern conversations. Use similes or other devices to make it clear, non-trivial and engaging.`;
             break;
     }
     
@@ -48,7 +48,7 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
 
     switch(type) {
         case 'meaning':
-            taskInstruction = `Provide definitions for the main meanings of the target word. Use similes or other devices to make them clear, non-trivial and engaging. Include a part of speech for each definition of the target word.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
+            taskInstruction = `Provide definitions for the main meanings of the target word. Include a part of speech for each definition of the target word.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
         case 'context':
             taskInstruction = `List different contexts or domains where this word is commonly used.\nJSON format: {"nodes": [{"text": "Context/Domain Name"}]}`;
