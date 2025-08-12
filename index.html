@@ -220,9 +220,18 @@
                </ul>
             </div>
         </div>
+         <div id="game-over-modal" class="modal-overlay">
+            <div class="modal-content game-over-content">
+                <canvas id="confetti-canvas"></canvas>
+                <h2>Congratulations!</h2>
+                <p id="game-over-message">You reached your target!</p>
+                <button id="play-again-btn" class="modal-play-again-btn">Play Again</button>
+            </div>
+        </div>
 
     </div>
-      
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script> 
     <script src="script.js"></script>
 </body>
 </html>

@@ -808,6 +808,57 @@ header h1 {
     color: white;
 }
 
+/* --- Game Over Modal --- */
+.game-over-content {
+    text-align: center;
+    position: relative; /* Needed for the canvas */
+    overflow: hidden; /* Keeps confetti inside the modal bounds */
+}
+
+.game-over-content h2 {
+    font-size: 2.5rem;
+    color: var(--primary-coral);
+    margin-bottom: 15px;
+}
+
+.game-over-content p {
+    font-size: 1.2rem;
+    margin-bottom: 30px;
+    color: var(--dock-text-color);
+}
+
+[data-theme='dark'] .game-over-content p {
+    color: var(--text-light);
+}
+
+.modal-play-again-btn {
+    background: var(--primary-coral);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 15px 30px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 5px 15px rgba(255, 107, 71, 0.3);
+}
+
+.modal-play-again-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.4);
+}
+
+#confetti-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Allows clicks to go through to the button */
+    z-index: -1;
+}
+
 /* --- Responsive Design --- */
 @media (max-width: 768px) {
     #app-wrapper { padding: 10px; gap: 15px; }

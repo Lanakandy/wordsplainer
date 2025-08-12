@@ -35,6 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const startWordEl = document.getElementById('start-word');
     const targetWordEl = document.getElementById('target-word');
     const stepCountEl = document.getElementById('step-count');
+    const gameOverModal = document.getElementById('game-over-modal');
+    const gameOverMessage = document.getElementById('game-over-message');
+    const playAgainBtn = document.getElementById('play-again-btn');
+    const confettiCanvas = document.getElementById('confetti-canvas');
 
      const colorMap = {
         meaning: 'var(--meaning-color)',
@@ -64,6 +68,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     playGameBtn.addEventListener('click', startGame);
     endGameBtn.addEventListener('click', endGame);
+    playAgainBtn.addEventListener('click', () => {
+    gameOverModal.classList.remove('visible');
+    startGame(); // Start a new game immediately
+});
+
+// Also allow closing the modal by clicking the background
+gameOverModal.addEventListener('click', (event) => {
+    if (event.target === gameOverModal) {
+        gameOverModal.classList.remove('visible');
+    }
+});
 
     // --- Enhanced State Management ---
     let centralNodes = [];
@@ -495,9 +510,8 @@ nodeGroups.each(function(d) {
         gameData.steps++;
         updateGameUI();
         if (lowerWord === gameData.targetWord) {
-            alert(`Congratulations! You reached "${gameData.targetWord}" in ${gameData.steps} steps!`);
-            endGame();
-            return; // Stop further execution
+            handleWin();
+            return;
         }
     }
         if (isNewCentral) {
@@ -732,7 +746,6 @@ nodeGroups.each(function(d) {
     overlayInput.focus();
     overlayInput.value = '';
 
-    // --- Voice Recognition Setup ---
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
 
@@ -985,11 +998,9 @@ nodeGroups.each(function(d) {
         gameData.targetWord = challenge.endWord.toLowerCase();
         gameData.steps = 0;
         
-        // Clear canvas and start with the first word
         renderInitialPrompt();
         await handleWordSubmitted(gameData.startWord, true);
 
-        // Show the game UI
         updateGameUI();
         gameStatusUI.classList.add('visible');
 
@@ -999,19 +1010,39 @@ nodeGroups.each(function(d) {
     }
 }
 
-// 4. Create a function to update the UI
 function updateGameUI() {
     startWordEl.textContent = gameData.startWord;
     targetWordEl.textContent = gameData.targetWord;
     stepCountEl.textContent = gameData.steps;
 }
 
-// 5. Create a function to end the game
 function endGame() {
     isGameMode = false;
     gameStatusUI.classList.remove('visible');
     // Optional: You can render the initial prompt again
     // renderInitialPrompt();
+}
+
+function handleWin() {
+    // Set the message
+    gameOverMessage.textContent = `You reached "${gameData.targetWord}" in ${gameData.steps} steps!`;
+    
+    // Show the modal
+    gameOverModal.classList.add('visible');
+    
+    // Trigger confetti!
+    const myConfetti = confetti.create(confettiCanvas, {
+        resize: true,
+        useWorker: true
+    });
+    myConfetti({
+        particleCount: 150,
+        spread: 160,
+        origin: { y: 0.6 }
+    });
+    
+    // End the current game state
+    endGame();
 }
 
 
