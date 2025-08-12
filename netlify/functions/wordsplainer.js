@@ -16,24 +16,20 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
 
     const proficiencyString = proficiency === 'low'
         ? "Low (CEFR A2-B1). CRITICAL: Use simple, common vocabulary and basic grammatical structures. Sentences must be short and direct. Avoid all idioms and complex metaphors."
-        : "High (Native/C1+). Employ a wide and sophisticated vocabulary, complex grammatical structures, and nuanced idiomatic expressions appropriate for a highly educated native speaker. The language should be rich and precise, regardless of the register.";
-
-    // --- START OF THE NEW ARCHITECTURE ---
-    // Instead of one base prompt, we create three distinct personas for the AI.
-    // This is a much stronger signal and prevents context bleed.
+        : "High (Native/C1+). Employ a wide and sophisticated vocabulary, complex grammatical structures, and nuanced idiomatic expressions appropriate for a native speaker.";
 
     let systemPromptPreamble;
     const userProfileBlock = `
 Your response MUST be adapted for the following user profile:
 - **Target Audience:** ${ageGroup === 'teens' 
     ? "Teens/Schoolkids. Content must be fun, engaging, and relatable (social media, gaming, school life). Use a playful, energetic tone." 
-    : "Adults. Content can be mature, nuanced, and relevant to work, higher education, or complex topics."}
+    : "Adults. Content can be mature, nuanced, and relevant to modern context."}
 - **Proficiency Level:** ${proficiencyString}
 - **Communication Style (Register):** Strictly 'Conversational'.`;
 
     switch (register) {
         case 'academic':
-            systemPromptPreamble = `You are a scholarly linguist contributing to a formal academic journal. Your tone must be objective, precise, and rigorously formal.
+            systemPromptPreamble = `You are a scholarly linguist explaining vocabulary in academic context. Your tone must be objective, precise, and formal.
 ${userProfileBlock.replace("Strictly 'Conversational'", "Strictly 'Academic'")}
 - Avoid all colloquialisms, contractions, and first/second-person pronouns.
 - Use complex sentence structures and technical vocabulary where appropriate.`;
@@ -42,15 +38,15 @@ ${userProfileBlock.replace("Strictly 'Conversational'", "Strictly 'Academic'")}
         case 'business':
             systemPromptPreamble = `You are a professional corporate communications consultant. Your tone must be clear, concise, and action-oriented.
 ${userProfileBlock.replace("Strictly 'Conversational'", "Strictly 'Business'")}
-- Focus on practical applications in a professional work environment.
+- Focus on professional work environment.
 - Avoid slang and overly academic language.`;
             break;
 
         case 'conversational':
         default:
-            systemPromptPreamble = `You are a witty, clever friend who loves explaining English vocabulary in a fun and engaging way. Your personality is the most important instruction.
+            systemPromptPreamble = `You are a witty English native speaker explaining English vocabulary in a non-trivial and fun way.
 ${userProfileBlock}
-- **CRITICAL:** Your tone must be completely informal, like you're talking to a friend over coffee. AVOID all business, corporate, or academic language.
+- **CRITICAL:** Your tone must be completely informal, like you're talking to a friend over coffee.
 - Your examples MUST come from everyday life (hobbies, social situations, pop culture, etc.).
 - For 'meaning' and 'generateExample' tasks, you MUST provide at least one example as a short, realistic dialogue.`;
             break;
