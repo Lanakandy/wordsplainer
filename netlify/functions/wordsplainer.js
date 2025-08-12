@@ -81,17 +81,24 @@ Your response MUST be adapted for the following user profile:
         case 'generateWordLadderChallenge':
             let avoidInstruction = '';
             if (previousWords && previousWords.length > 0) {
-                avoidInstruction = `\n4. CRITICAL: Do NOT use any of the following words as the start or end word: ${previousWords.join(', ')}.`;
+                avoidInstruction = `\nCRITICAL AVOIDANCE: The start and end words MUST NOT be any of the following: ${previousWords.join(', ')}.`;
             }
-            taskInstruction = `You are a creative game designer. Your task is to generate a "Word Weaver" challenge.
-1.  The start and end words must be common, concrete English nouns.
-2.  They must be thematically related but not direct synonyms (e.g., "sea" to "ship" is good; "sea" to "ocean" is bad).
-3.  The logical path between them should be approximately 4-6 conceptual steps.${avoidInstruction}
+
+            taskInstruction = `You are a cunning game designer creating clever word puzzles. Your goal is to create a 'Word Weaver' challenge that requires lateral thinking and makes the player say "Aha!" when they find the connection.
+
+Follow these rules strictly:
+1.  **Word Choice:** The start and end words must be common, concrete English nouns.
+2.  **The Connection:** The link between the words must be indirect and surprising, often by bridging two different conceptual domains.
+    - **Good Examples:** "cloud" -> "server" (bridges meteorology and technology), "key" -> "music" (bridges a physical tool and an art form), "web" -> "spider" (bridges technology and nature).
+    - **Bad Examples:** "dog" -> "cat" (too obvious, same domain), "sea" -> "ocean" (direct synonym), "hot" -> "cold" (direct opposite).
+3.  **Solvability:** The logical path between the words should be solvable in approximately 4-7 conceptual steps for a creative thinker.${avoidInstruction}
+
 CRITICAL: Do not provide the path, only the two words.
 
 JSON format: {"startWord": "word here", "endWord": "word here"}`;
+            
             systemPrompt = `You are a helpful assistant generating game content in JSON format.\n\n${taskInstruction}\n\n${finalFormatInstruction}`;
-            userPrompt = "Generate a new, unique challenge.";
+            userPrompt = "Generate a new, clever, and non-obvious challenge."; // A more demanding user prompt
             return { systemPrompt, userPrompt };
         
         case 'generateExample':
