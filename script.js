@@ -1117,34 +1117,28 @@ function handleWin() {
 
 
 function handleLayoutToggle() {
-    currentLayout = (currentLayout === 'force') ? 'radial' : 'force';
-    layoutToggleBtn.classList.toggle('active', currentLayout === 'radial');
+        currentLayout = (currentLayout === 'force') ? 'radial' : 'force';
+        layoutToggleBtn.classList.toggle('active', currentLayout === 'radial');
 
-    if (currentLayout === 'radial') {
-        // Center the central node and fix it there
-        const centralNode = centralNodes.find(n => n.clusterId === currentActiveCentral);
-        if (centralNode) {
-            const { width, height } = graphContainer.getBoundingClientRect();
-            centralNode.fx = width / 2;
-            centralNode.fy = height / 2;
-            // Update the center for the radial force
-            radialForce.x(width / 2).y(height / 2);
+        if (currentLayout === 'radial' && currentActiveCentral) {
+            const centralNode = centralNodes.find(n => n.clusterId === currentActiveCentral);
+            if (centralNode) {
+                const center = getViewportCenter();
+                centralNode.fx = center.x;
+                centralNode.fy = center.y;
+                radialForce.x(center.x).y(center.y);
+            }
+            simulation.force("radial", radialForce);
+        } else {
+            const centralNode = centralNodes.find(n => n.clusterId === currentActiveCentral);
+            if (centralNode) {
+                centralNode.fx = null;
+                centralNode.fy = null;
+            }
+            simulation.force("radial", null);
         }
-        // Add the radial force to the simulation
-        simulation.force("radial", radialForce);
-    } else {
-        // Un-fix the central node
-        const centralNode = centralNodes.find(n => n.clusterId === currentActiveCentral);
-        if (centralNode) {
-            centralNode.fx = null;
-            centralNode.fy = null;
-        }
-        // Remove the radial force
-        simulation.force("radial", null);
+        simulation.alpha(1).restart();
     }
-    // Reheat the simulation to apply changes
-    simulation.alpha(1).restart();
-}
 
 // Add the event listener
 layoutToggleBtn.addEventListener('click', handleLayoutToggle);
@@ -1221,12 +1215,23 @@ layoutToggleBtn.addEventListener('click', handleLayoutToggle);
     }
 
     function dragged(event, d) {
-        if (!d.isCentral) { d.fx = event.x; d.fy = event.y; }
+        d.fx = event.x;
+        d.fy = event.y;
+        if (d.isCentral) {
+            const cluster = graphClusters.get(d.clusterId);
+            if (cluster) {
+                cluster.center.x = d.fx;
+                cluster.center.y = d.fy;
+            }
+        }
     }
 
     function dragended(event, d) {
         if (!event.active) simulation.alphaTarget(0);
-        if (!d.isCentral) { d.fx = null; d.fy = null; }
+        if (!d.isCentral) {
+            d.fx = null;
+            d.fy = null;
+        }
     }
 
     // --- Initialization ---
@@ -1236,6 +1241,7 @@ layoutToggleBtn.addEventListener('click', handleLayoutToggle);
     registerToggleBtn.addEventListener('click', handleRegisterToggle);
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
     ageToggleBtn.addEventListener('click', handleAgeToggle);
+    layoutToggleBtn.addEventListener('click', handleLayoutToggle);    
     window.addEventListener('resize', handleResize);
     document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
     modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));
