@@ -9,6 +9,12 @@ let currentRegister = 'conversational';
 let currentProficiency = 'high';
 let currentAgeGroup = 'adults';
 let currentLayout = 'force';
+let isGameMode = false;
+let gameData = {
+    startWord: '',
+    targetWord: '',
+    steps: 0
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
@@ -23,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const ageToggleBtn = document.getElementById('age-toggle-btn');
     const layoutToggleBtn = document.getElementById('layout-toggle-btn');
     const voiceInputBtn = document.getElementById('voice-input-btn');
+    const playGameBtn = document.getElementById('play-game-btn');
+    const gameStatusUI = document.getElementById('game-status-ui');
+    const endGameBtn = document.getElementById('end-game-btn');
+    const startWordEl = document.getElementById('start-word');
+    const targetWordEl = document.getElementById('target-word');
+    const stepCountEl = document.getElementById('step-count');
 
      const colorMap = {
         meaning: 'var(--meaning-color)',
@@ -49,6 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const svg = d3.select("#wordsplainer-graph-svg");
     const graphGroup = svg.append("g");
     const iconGroup = svg.append("g").attr("class", "icon-layer");
+
+    playGameBtn.addEventListener('click', startGame);
+    endGameBtn.addEventListener('click', endGame);
 
     // --- Enhanced State Management ---
     let centralNodes = [];
@@ -476,6 +491,15 @@ nodeGroups.each(function(d) {
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
         const lowerWord = word.toLowerCase();
         
+         if (isGameMode && isNewCentral) {
+        gameData.steps++;
+        updateGameUI();
+        if (lowerWord === gameData.targetWord) {
+            alert(`Congratulations! You reached "${gameData.targetWord}" in ${gameData.steps} steps!`);
+            endGame();
+            return; // Stop further execution
+        }
+    }
         if (isNewCentral) {
             if (centralNodes.some(c => c.word === lowerWord)) {
                 const existingNode = centralNodes.find(n => n.word === lowerWord);
@@ -943,6 +967,53 @@ nodeGroups.each(function(d) {
             btn.classList.toggle('active', btn.dataset.type === currentView);
         });
     }
+
+     async function startGame() {
+    renderLoading("Generating your challenge...");
+    try {
+        const response = await fetch('/.netlify/functions/wordsplainer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'generateWordLadderChallenge' })
+        });
+        if (!response.ok) throw new Error("Could not generate a challenge.");
+        
+        const challenge = await response.json();
+        
+        isGameMode = true;
+        gameData.startWord = challenge.startWord.toLowerCase();
+        gameData.targetWord = challenge.endWord.toLowerCase();
+        gameData.steps = 0;
+        
+        // Clear canvas and start with the first word
+        renderInitialPrompt();
+        await handleWordSubmitted(gameData.startWord, true);
+
+        // Show the game UI
+        updateGameUI();
+        gameStatusUI.classList.add('visible');
+
+    } catch (error) {
+        renderError("Failed to start game. Please try again.");
+        console.error("Error starting game:", error);
+    }
+}
+
+// 4. Create a function to update the UI
+function updateGameUI() {
+    startWordEl.textContent = gameData.startWord;
+    targetWordEl.textContent = gameData.targetWord;
+    stepCountEl.textContent = gameData.steps;
+}
+
+// 5. Create a function to end the game
+function endGame() {
+    isGameMode = false;
+    gameStatusUI.classList.remove('visible');
+    // Optional: You can render the initial prompt again
+    // renderInitialPrompt();
+}
+
 
 function handleLayoutToggle() {
     currentLayout = (currentLayout === 'force') ? 'radial' : 'force';
