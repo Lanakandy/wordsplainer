@@ -874,23 +874,31 @@ nodeGroups.each(function(d) {
     }
 
     function createInteractiveText(d3Element, text, onWordClick) {
-        const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
-        d3Element.html("");
-        const lines = text.split('\n');
-        lines.forEach((line, lineIndex) => {
-            if (lineIndex > 0 && !isSvg) d3Element.append("br");
-            const tokens = line.split(/(\s+|[.,!?;:"])/g).filter(t => t);
-            const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
-            tokens.forEach(token => {
-                const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"]+/g, '');
-                if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
-                    lineContainer.append('span').attr('class', 'interactive-word').text(token).on('click', (event) => { event.stopPropagation(); if(token) onWordClick(token); });
-                } else {
-                    lineContainer.append('span').text(token);
-                }
-            });
+    const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
+    d3Element.html("");
+    const lines = text.split('\n');
+    lines.forEach((line, lineIndex) => {
+        if (lineIndex > 0 && !isSvg) d3Element.append("br");
+        
+        // FIX: Expanded the regex to treat slashes and brackets as delimiters.
+        // The original was: /(\s+|[.,!?;:"])/g
+        const tokens = line.split(/(\s+|[.,!?;:"/()\[\]])/g).filter(t => t);
+        
+        const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
+        
+        tokens.forEach(token => {
+            // FIX: Expanded the regex to strip slashes and brackets before validation.
+            // The original was: /[.,!?;:"]+/g
+            const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
+            
+            if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
+                lineContainer.append('span').attr('class', 'interactive-word').text(token).on('click', (event) => { event.stopPropagation(); if(token) onWordClick(token); });
+            } else {
+                lineContainer.append('span').text(token);
+            }
         });
-    }
+    });
+}
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
