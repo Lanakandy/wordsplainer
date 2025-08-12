@@ -2,7 +2,6 @@
 
 const fetch = require('node-fetch');
 
-// FIX 1: Accept `proficiency` and `ageGroup` as arguments.
 function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {}) {
     const { 
         language = null, 
@@ -11,15 +10,15 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
         context = null, 
         sourceNodeType = null,
         definition = null,
-        translation = null 
+        translation = null,
+        previousWords = []
     } = options;
 
-    // This block is now used by ALL prompt types, ensuring consistency.
     const proficiencyString = proficiency === 'low'
-        ? "Low (CEFR A2-B1). CRITICAL: Use simple words, short sentences, and basic concepts."
-        : "High (Native/C1+). Use nuanced, sophisticated, and idiomatic language that native speakers use in *informal, everyday* situations. The complexity should come from wit and natural phrasing, not from formal or academic vocabulary.";
-
-    const baseSystemPrompt = `You are an expert linguist and vocabulary coach creating tailored learning content.
+        ? "Low (CEFR A2-B1). CRITICAL: Use simple, common vocabulary and basic grammatical structures. Sentences must be short and direct. Avoid all idioms and complex metaphors."
+        : "High (Native/C1+). Employ a wide and sophisticated vocabulary, complex grammatical structures, and nuanced idiomatic expressions appropriate for a highly educated native speaker. The language should be rich and precise, regardless of the register.";
+    
+    const baseSystemPrompt = `You are an expert linguist creating engaging non-trivial content about English vocabulary.
 
 Your response MUST be adapted for the following user profile:
 - **Target Audience:** ${ageGroup === 'teens' 
@@ -40,13 +39,12 @@ Your response MUST be adapted for the following user profile:
         default:
             registerSpecificInstruction = `Adopt a natural, witty, and informal tone, as if explaining a word to a friend over coffee.
 - **CRITICAL:** Explicitly AVOID business, corporate, or academic contexts and jargon. Examples must come from everyday life (hobbies, social situations, media, etc.).
-- Use contractions, relatable analogies, and pop culture references where appropriate.
+- Use contractions, relatable analogies and similes, and pop culture references where appropriate.
 - For 'meaning' and 'generateExample' tasks, you MUST provide at least one example as a short, realistic dialogue.`;
             break;
     }
 
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
-
     const limitInstruction = `Provide up to ${limit} distinct items.`;
 
     let taskInstruction;
@@ -79,24 +77,22 @@ Your response MUST be adapted for the following user profile:
             taskInstruction = `Task: Provide the main translations for the word into the target language.\nJSON format: {"nodes": [{"text": "translation"}]}`;
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
             break;
-
-        // --- START OF FIX ---
+        
         case 'generateWordLadderChallenge':
-            // This prompt is now stronger and more specific.
+            let avoidInstruction = '';
+            if (previousWords && previousWords.length > 0) {
+                avoidInstruction = `\n4. CRITICAL: Do NOT use any of the following words as the start or end word: ${previousWords.join(', ')}.`;
+            }
             taskInstruction = `You are a creative game designer. Your task is to generate a "Word Weaver" challenge.
 1.  The start and end words must be common, concrete English nouns.
 2.  They must be thematically related but not direct synonyms (e.g., "sea" to "ship" is good; "sea" to "ocean" is bad).
-3.  The logical path between them should be approximately 4-6 conceptual steps.
-4.  CRITICAL: Do not provide the path, only the two words.
+3.  The logical path between them should be approximately 4-6 conceptual steps.${avoidInstruction}
+CRITICAL: Do not provide the path, only the two words.
 
 JSON format: {"startWord": "word here", "endWord": "word here"}`;
-            
-            // We use a simplified, consistent "persona" for this task to ensure good results.
-            // This replaces the incorrect use of `baseInstruction`.
             systemPrompt = `You are a helpful assistant generating game content in JSON format.\n\n${taskInstruction}\n\n${finalFormatInstruction}`;
-            userPrompt = "Generate a new challenge.";
+            userPrompt = "Generate a new, unique challenge.";
             return { systemPrompt, userPrompt };
-        // --- END OF FIX ---
         
         case 'generateExample':
             if (sourceNodeType === 'idioms') {
@@ -127,9 +123,8 @@ JSON format: {"startWord": "word here", "endWord": "word here"}`;
     return { systemPrompt, userPrompt };
 }
 
-
+// ... the rest of the file (callOpenRouterWithFallback, handler) is unchanged ...
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
-    // ... function is unchanged
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
@@ -201,12 +196,9 @@ exports.handler = async function(event) {
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
         let responseData;
-        // --- START OF FIX ---
-        // Add a direct return for the new type to avoid going through the node processing logic.
         if (type === 'generateWordLadderChallenge') {
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
         }
-        // --- END OF FIX ---
         
         if (type === 'generateExample') {
             responseData = apiResponse;
