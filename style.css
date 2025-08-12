@@ -828,7 +828,7 @@ header h1 {
 }
 
 [data-theme='dark'] .game-over-content p {
-    color: var(--text-light);
+    color: var(--dock-text-color);
 }
 
 .modal-play-again-btn {
