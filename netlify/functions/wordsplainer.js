@@ -44,15 +44,14 @@ ${userProfileBlock.replace("Strictly 'Conversational'", "Strictly 'Business'")}
 
         case 'conversational':
         default:
-            systemPromptPreamble = `You are a witty English native speaker explaining English vocabulary in a non-trivial and fun way.
+            systemPromptPreamble = `You are a witty English native speaker explaining English vocabulary in a non-trivial and fun way. Use humor, similies and metaphors, where appropriate.
 ${userProfileBlock}
 - **CRITICAL:** Your tone must be completely informal, like you're talking to a friend over coffee.
 - Your examples MUST come from everyday life (hobbies, social situations, pop culture, etc.).
 - For 'meaning' and 'generateExample' tasks, you MUST provide at least one example as a short, realistic dialogue.`;
             break;
     }
-    // --- END OF THE NEW ARCHITECTURE ---
-
+   
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
     const limitInstruction = `Provide up to ${limit} distinct items.`;
 
