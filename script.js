@@ -95,14 +95,24 @@ gameOverModal.addEventListener('click', (event) => {
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
     
-    function stopRegisterButtonAnimation() {
+      
+    // --- Helper Functions ---
+    function getViewportCenter() {
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const transform = d3.zoomTransform(svg.node());
+        // Use the transform's `invert` method to find the SVG coordinate
+        // that corresponds to the screen's center point.
+        const [svgX, svgY] = transform.invert([width / 2, height / 2]);
+        return { x: svgX, y: svgY };
+    }
+
+      function stopRegisterButtonAnimation() {
         if (registerToggleBtn) {
             registerToggleBtn.classList.remove('needs-attention');
         }
     }
-    
-    // --- Helper Functions ---
-    function speak(text, lang = 'en-US') {
+
+      function speak(text, lang = 'en-US') {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
@@ -276,12 +286,12 @@ nodeGroups.each(function(d) {
         selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
     } else {
         const isExample = d.type === 'example';
-        if (!isExample) {
-        selection.append("circle").attr("r", 18)
-            .style("fill", colorMap[d.type] || 'var(--text-muted)'); // Fallback to muted color
-    }
-
-        const textWidth = isExample ? 220 : 200;
+            if (!isExample) {
+                // FIX #2: Use .attr() for fill, which is more robust for SVG.
+                selection.append("circle").attr("r", 18)
+                    .attr("fill", colorMap[d.type] || 'var(--text-muted)');
+            }
+            const textWidth = isExample ? 220 : 200;
         const PADDING = isExample ? 0 : 12;
         const circleRadius = isExample ? 0 : 18;
 
@@ -576,20 +586,24 @@ nodeGroups.each(function(d) {
     }
     
     function renderLoading(message) {
-        const { width, height } = graphContainer.getBoundingClientRect();
+        const center = getViewportCenter(); // Get the correct center
         graphGroup.selectAll("*").remove();
         iconGroup.selectAll("*").remove();
-        
         const loadingGroup = graphGroup.append("g");
-        loadingGroup.append("circle").attr("class", "loading-spinner").attr("cx", width / 2).attr("cy", height / 2 - 30).attr("r", 20).attr("fill", "none").attr("stroke", "var(--primary-coral)").attr("stroke-width", 3).attr("stroke-dasharray", "31.4, 31.4");
-        loadingGroup.append("text").attr("class", "status-text").attr("x", width / 2).attr("y", height / 2 + 30).text(message);
+        loadingGroup.append("circle").attr("class", "loading-spinner")
+            .attr("cx", center.x).attr("cy", center.y - 30)
+            .attr("r", 20).attr("fill", "none").attr("stroke", "var(--primary-coral)")
+            .attr("stroke-width", 3).attr("stroke-dasharray", "31.4, 31.4");
+        loadingGroup.append("text").attr("class", "status-text")
+            .attr("x", center.x).attr("y", center.y + 30).text(message);
     }
 
     function renderError(message) {
-        const { width, height } = graphContainer.getBoundingClientRect();
+        const center = getViewportCenter(); // Get the correct center
         graphGroup.selectAll("*").remove();
         iconGroup.selectAll("*").remove();
-        graphGroup.append("text").attr("class", "status-text error-text").attr("x", width / 2).attr("y", height / 2).text(message);
+        graphGroup.append("text").attr("class", "status-text error-text")
+            .attr("x", center.x).attr("y", center.y).text(message);
     }
 
     function getConsolidatedGraphData() {
