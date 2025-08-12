@@ -17,32 +17,45 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
     const proficiencyString = proficiency === 'low'
         ? "Low (CEFR A2-B1). CRITICAL: Use simple, common vocabulary and basic grammatical structures. Sentences must be short and direct. Avoid all idioms and complex metaphors."
         : "High (Native/C1+). Employ a wide and sophisticated vocabulary, complex grammatical structures, and nuanced idiomatic expressions appropriate for a highly educated native speaker. The language should be rich and precise, regardless of the register.";
-    
-    const baseSystemPrompt = `You are an expert linguist creating engaging non-trivial content about English vocabulary.
 
+    // --- START OF THE NEW ARCHITECTURE ---
+    // Instead of one base prompt, we create three distinct personas for the AI.
+    // This is a much stronger signal and prevents context bleed.
+
+    let systemPromptPreamble;
+    const userProfileBlock = `
 Your response MUST be adapted for the following user profile:
 - **Target Audience:** ${ageGroup === 'teens' 
     ? "Teens/Schoolkids. Content must be fun, engaging, and relatable (social media, gaming, school life). Use a playful, energetic tone." 
     : "Adults. Content can be mature, nuanced, and relevant to work, higher education, or complex topics."}
 - **Proficiency Level:** ${proficiencyString}
-- **Communication Style (Register):** Your tone and examples must be strictly '${register}'.`;
+- **Communication Style (Register):** Strictly 'Conversational'.`;
 
-    let registerSpecificInstruction;
     switch (register) {
         case 'academic':
-            registerSpecificInstruction = `Adopt a formal, precise, and objective tone suitable for a research paper. Use complex sentences and technical vocabulary where appropriate. Avoid all colloquialisms and contractions.`;
+            systemPromptPreamble = `You are a scholarly linguist contributing to a formal academic journal. Your tone must be objective, precise, and rigorously formal.
+${userProfileBlock.replace("Strictly 'Conversational'", "Strictly 'Academic'")}
+- Avoid all colloquialisms, contractions, and first/second-person pronouns.
+- Use complex sentence structures and technical vocabulary where appropriate.`;
             break;
+
         case 'business':
-            registerSpecificInstruction = `Adopt a professional, clear, and concise tone suitable for corporate communication. Use direct, action-oriented language and focus on practical application in a work environment.`;
+            systemPromptPreamble = `You are a professional corporate communications consultant. Your tone must be clear, concise, and action-oriented.
+${userProfileBlock.replace("Strictly 'Conversational'", "Strictly 'Business'")}
+- Focus on practical applications in a professional work environment.
+- Avoid slang and overly academic language.`;
             break;
+
         case 'conversational':
         default:
-            registerSpecificInstruction = `Adopt a natural, witty, and informal tone, as if explaining a word to a friend over coffee.
-- **CRITICAL:** Explicitly AVOID business, corporate, or academic contexts and jargon. Examples must come from everyday life (hobbies, social situations, media, etc.).
-- Use contractions, relatable analogies and similes, and pop culture references where appropriate.
+            systemPromptPreamble = `You are a witty, clever friend who loves explaining English vocabulary in a fun and engaging way. Your personality is the most important instruction.
+${userProfileBlock}
+- **CRITICAL:** Your tone must be completely informal, like you're talking to a friend over coffee. AVOID all business, corporate, or academic language.
+- Your examples MUST come from everyday life (hobbies, social situations, pop culture, etc.).
 - For 'meaning' and 'generateExample' tasks, you MUST provide at least one example as a short, realistic dialogue.`;
             break;
     }
+    // --- END OF THE NEW ARCHITECTURE ---
 
     const finalFormatInstruction = `CRITICAL: Your entire response must be ONLY the valid JSON object specified in the task, with no extra text, commentary, or markdown formatting.`;
     const limitInstruction = `Provide up to ${limit} distinct items.`;
@@ -52,6 +65,7 @@ Your response MUST be adapted for the following user profile:
     let systemPrompt;
 
     switch(type) {
+        // ... (cases for meaning, context, etc. are unchanged)
         case 'meaning':
             taskInstruction = `Task: Provide definitions for the main meanings of the target word. Include a part of speech for each definition.\nJSON format: {"nodes": [{"text": "definition here", "part_of_speech": "e.g., noun, verb"}]}`;
             break;
@@ -83,7 +97,6 @@ Your response MUST be adapted for the following user profile:
             if (previousWords && previousWords.length > 0) {
                 avoidInstruction = `\nCRITICAL AVOIDANCE: The start and end words MUST NOT be any of the following: ${previousWords.join(', ')}.`;
             }
-
             taskInstruction = `You are a cunning game designer creating clever word puzzles. Your goal is to create a 'Word Weaver' challenge that requires lateral thinking and makes the player say "Aha!" when they find the connection.
 
 Follow these rules strictly:
@@ -96,9 +109,8 @@ Follow these rules strictly:
 CRITICAL: Do not provide the path, only the two words.
 
 JSON format: {"startWord": "word here", "endWord": "word here"}`;
-            
             systemPrompt = `You are a helpful assistant generating game content in JSON format.\n\n${taskInstruction}\n\n${finalFormatInstruction}`;
-            userPrompt = "Generate a new, clever, and non-obvious challenge."; // A more demanding user prompt
+            userPrompt = "Generate a new, clever, and non-obvious challenge.";
             return { systemPrompt, userPrompt };
         
         case 'generateExample':
@@ -118,15 +130,16 @@ JSON format: {"startWord": "word here", "endWord": "word here"}`;
                 taskInstruction = `Task: Create a single, high-quality, engaging example sentence using the provided word.\nJSON format: {"example": "The generated sentence."}`;
                 userPrompt = `Word to use in a sentence: "${word}"`;
             }
-            systemPrompt = [baseSystemPrompt, registerSpecificInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+            // Use the new preamble to construct the prompt
+            systemPrompt = [systemPromptPreamble, taskInstruction, finalFormatInstruction].join('\n\n');
             return { systemPrompt, userPrompt };
 
         default:
             throw new Error(`Unknown type: ${type}`);
     }
     
-    // Assemble the final system prompt for all list-based types
-    systemPrompt = [baseSystemPrompt, registerSpecificInstruction, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
+    // Use the new preamble to construct the prompt
+    systemPrompt = [systemPromptPreamble, limitInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
     return { systemPrompt, userPrompt };
 }
 
