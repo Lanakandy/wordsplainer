@@ -798,7 +798,7 @@ nodeGroups.each(function(d) {
             console.log('Result received: ' + transcript);
             
             // Clean up punctuation that speech recognition sometimes adds
-            const cleanedTranscript = transcript.replace(/([.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+            const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
 
             if (cleanedTranscript) {
                 overlayInput.value = cleanedTranscript; // Show the result in the input
