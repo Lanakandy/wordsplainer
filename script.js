@@ -10,6 +10,7 @@ let currentProficiency = 'high';
 let currentAgeGroup = 'adults';
 let currentLayout = 'force';
 let isGameMode = false;
+let previousChallengeWords = [];
 let gameData = {
     startWord: '',
     targetWord: '',
@@ -837,7 +838,10 @@ nodeGroups.each(function(d) {
             generateGraphForView(dataType);
         } else {
             switch (button.id) {
-                case 'clear-btn': renderInitialPrompt(); break;
+                case 'clear-btn':
+            previousChallengeWords = [];
+            renderInitialPrompt(); 
+            break;
                 case 'save-btn': saveAsPng(); break;
                 case 'fullscreen-btn': toggleFullScreen(); break;
                 case 'theme-toggle-btn': toggleTheme(); break;
@@ -987,11 +991,16 @@ nodeGroups.each(function(d) {
         const response = await fetch('/.netlify/functions/wordsplainer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'generateWordLadderChallenge' })
+            // Add the list of used words to the request body
+            body: JSON.stringify({ 
+                type: 'generateWordLadderChallenge',
+                previousWords: previousChallengeWords 
+            })
         });
         if (!response.ok) throw new Error("Could not generate a challenge.");
         
         const challenge = await response.json();
+        previousChallengeWords.push(challenge.startWord.toLowerCase(), challenge.endWord.toLowerCase());
         
         isGameMode = true;
         gameData.startWord = challenge.startWord.toLowerCase();
