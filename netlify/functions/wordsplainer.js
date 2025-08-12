@@ -14,8 +14,7 @@ function getLLMPrompt(type, register, proficiency, ageGroup, word, options = {})
         translation = null 
     } = options;
 
-    // FIX 1: Refined the "High Proficiency" instruction to decouple it from formality.
-    // This is a critical change to prevent the model from defaulting to a business tone.
+    // This block is now used by ALL prompt types, ensuring consistency.
     const proficiencyString = proficiency === 'low'
         ? "Low (CEFR A2-B1). CRITICAL: Use simple words, short sentences, and basic concepts."
         : "High (Native/C1+). Use nuanced, sophisticated, and idiomatic language that native speakers use in *informal, everyday* situations. The complexity should come from wit and natural phrasing, not from formal or academic vocabulary.";
@@ -29,8 +28,6 @@ Your response MUST be adapted for the following user profile:
 - **Proficiency Level:** ${proficiencyString}
 - **Communication Style (Register):** Your tone and examples must be strictly '${register}'.`;
 
-
-    // FIX 2: Made the 'Conversational' instruction much stronger with explicit negative constraints.
     let registerSpecificInstruction;
     switch (register) {
         case 'academic':
@@ -83,20 +80,23 @@ Your response MUST be adapted for the following user profile:
             userPrompt = `Word: "${word}", Target Language: "${language}"`;
             break;
 
+        // --- START OF FIX ---
         case 'generateWordLadderChallenge':
-            taskInstruction = `Generate a "Word Weaver" game challenge.
-    1.  Pick a common, concrete start word (noun or verb).
-    2.  Pick a common, concrete end word that is related but not a direct synonym.
-    3.  Ensure there is a logical path between them through related concepts in about 4-6 steps.
-    Example: start="river", end="bridge". Path: river -> water -> flow -> structure -> bridge.
-    CRITICAL: Do not provide the path in the response.
+            // This prompt is now stronger and more specific.
+            taskInstruction = `You are a creative game designer. Your task is to generate a "Word Weaver" challenge.
+1.  The start and end words must be common, concrete English nouns.
+2.  They must be thematically related but not direct synonyms (e.g., "sea" to "ship" is good; "sea" to "ocean" is bad).
+3.  The logical path between them should be approximately 4-6 conceptual steps.
+4.  CRITICAL: Do not provide the path, only the two words.
 
-    JSON format: {"startWord": "word here", "endWord": "word here"}`;
-    
-    // This type doesn't need all the other instructions
-    systemPrompt = [baseInstruction, taskInstruction, finalFormatInstruction].join('\n\n');
-    userPrompt = "Generate a challenge."; // Simple user prompt
-    return { systemPrompt, userPrompt };
+JSON format: {"startWord": "word here", "endWord": "word here"}`;
+            
+            // We use a simplified, consistent "persona" for this task to ensure good results.
+            // This replaces the incorrect use of `baseInstruction`.
+            systemPrompt = `You are a helpful assistant generating game content in JSON format.\n\n${taskInstruction}\n\n${finalFormatInstruction}`;
+            userPrompt = "Generate a new challenge.";
+            return { systemPrompt, userPrompt };
+        // --- END OF FIX ---
         
         case 'generateExample':
             if (sourceNodeType === 'idioms') {
@@ -129,6 +129,7 @@ Your response MUST be adapted for the following user profile:
 
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
+    // ... function is unchanged
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
@@ -200,6 +201,13 @@ exports.handler = async function(event) {
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
         let responseData;
+        // --- START OF FIX ---
+        // Add a direct return for the new type to avoid going through the node processing logic.
+        if (type === 'generateWordLadderChallenge') {
+            return { statusCode: 200, body: JSON.stringify(apiResponse) };
+        }
+        // --- END OF FIX ---
+        
         if (type === 'generateExample') {
             responseData = apiResponse;
         } else {
