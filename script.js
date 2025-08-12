@@ -17,6 +17,12 @@ let gameData = {
     steps: 0
 };
 
+const phrasalVerbParticles = new Set([
+    'about', 'across', 'after', 'along', 'around', 'away', 'back', 'by', 
+    'down', 'for', 'in', 'into', 'off', 'on', 'out', 'over', 
+    'through', 'to', 'up', 'with'
+]);
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
     const languageModal = document.getElementById('language-modal');
@@ -877,23 +883,56 @@ nodeGroups.each(function(d) {
     const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
     d3Element.html("");
     const lines = text.split('\n');
+
     lines.forEach((line, lineIndex) => {
         if (lineIndex > 0 && !isSvg) d3Element.append("br");
-        
-        // FIX: Expanded the regex to treat slashes and brackets as delimiters.
-        // The original was: /(\s+|[.,!?;:"])/g
-        const tokens = line.split(/(\s+|[.,!?;:"/()\[\]])/g).filter(t => t);
+             
+        // 1. Initial split into words and spaces/punctuation
+        const initialTokens = line.split(/(\s+)/);
+        const processedTokens = [];
+
+        // 2. Use a look-ahead loop to combine phrasal verbs
+        for (let i = 0; i < initialTokens.length; i++) {
+            const currentToken = initialTokens[i];
+            const nextToken = initialTokens[i + 2]; // Skip the space token in between
+
+            const cleanedCurrent = currentToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
+            const cleanedNext = nextToken ? nextToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '') : null;
+
+            // Check if the next word is a phrasal verb particle and the current word is a plausible verb
+            if (cleanedNext && phrasalVerbParticles.has(cleanedNext) && cleanedCurrent.length > 1) {
+                // It's likely a phrasal verb. Combine them.
+                processedTokens.push(currentToken + initialTokens[i + 1] + nextToken);
+                i += 2; // Skip the next two tokens (space and particle)
+            } else {
+                processedTokens.push(currentToken);
+            }
+        }
         
         const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
         
-        tokens.forEach(token => {
-            // FIX: Expanded the regex to strip slashes and brackets before validation.
-            // The original was: /[.,!?;:"]+/g
-            const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
+        // 3. Render using the newly processed tokens
+        processedTokens.forEach(token => {
+            // Split token into word and its trailing punctuation for accurate clickability
+            const match = token.match(/^([\w\s'-]+)([.,!?;:"/()\[\]]*)$/);
+            const wordPart = match ? match[1] : token;
+            const punctuationPart = match ? match[2] : '';
             
-            if (cleanedToken.length > 1 && /^[a-z']+$/.test(cleanedToken)) {
-                lineContainer.append('span').attr('class', 'interactive-word').text(token).on('click', (event) => { event.stopPropagation(); if(token) onWordClick(token); });
+            const cleanedWord = wordPart.trim().toLowerCase();
+
+            // Check if the cleaned word is a valid, clickable term (single word or phrasal verb)
+            if (cleanedWord.length > 1 && /^[a-z'\s]+$/.test(cleanedWord)) {
+                lineContainer.append('span')
+                    .attr('class', 'interactive-word')
+                    .text(wordPart) // Display original casing
+                    .on('click', (event) => { event.stopPropagation(); if(wordPart) onWordClick(wordPart); });
+                
+                // Append the punctuation as a separate, non-clickable span
+                if (punctuationPart) {
+                    lineContainer.append('span').text(punctuationPart);
+                }
             } else {
+                // Not a clickable word, render the whole token as is
                 lineContainer.append('span').text(token);
             }
         });
