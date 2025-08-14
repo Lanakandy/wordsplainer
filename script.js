@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentActiveCentral = null;
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
-    let activeTour = null; // FIXED: Variable declared before use.
+    let activeTour = null;
 
     // --- Onboarding Logic ---
     function createTour(options = {}) {
@@ -115,7 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startComprehensiveTour(force = false) {
-        // Don't run if the user has already seen it, unless forced by the help button.
         if (!force && localStorage.getItem('wordsplainer_comprehensive_tour_complete')) {
             return;
         }
@@ -146,8 +145,15 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
+            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic, business), proficiency level (higher or lower), and audience (teens or adults).',
             attachTo: { element: '#canvas-controls', on: 'left' },
+        });
+
+        tour.addStep({
+            id: 'step5-game',
+            title: 'Word Path Challenge',
+            text: 'Ready for a game? Try to find a path from a <b>START</b> word to a <b>TARGET</b> word in the fewest steps!',
+            attachTo: { element: '#play-game-btn', on: 'top' },
             buttons: [
                 { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
                 { action() { this.complete(); }, text: 'Got it!' }
@@ -163,32 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showHelpTour() {
         startComprehensiveTour(true);
-    }
-
-    function initGameOnboarding() {
-        if (localStorage.getItem('wordsplainer_game_tour_complete')) {
-            startGame();
-            return;
-        }
-        const tour = createTour({ cancelIcon: { enabled: false } });
-        tour.addStep({
-            title: 'Word Path Challenge!',
-            text: `<b>How to Play:</b>
-                   <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
-                     <li>We give you a <b>START</b> word and a <b>TARGET</b> word.</li>
-                     <li>Your goal is to get from START to TARGET in the fewest steps.</li>
-                     <li>Explore the graph and click related words to find your path!</li>
-                   </ul>`,
-            buttons: [{
-                text: "Let's Go!",
-                action() {
-                    localStorage.setItem('wordsplainer_game_tour_complete', 'true');
-                    this.complete();
-                }
-            }]
-        });
-        tour.on('complete', startGame);
-        tour.start();
     }
 
     // --- Helper Functions ---
@@ -1268,14 +1248,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     renderInitialPrompt();
-    startComprehensiveTour(); // Call the tour on page load
+    startComprehensiveTour();
     controlsDock.addEventListener('click', handleDockClick);
     zoomControls.addEventListener('click', handleZoomControlsClick);
     registerToggleBtn.addEventListener('click', handleRegisterToggle);
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
     ageToggleBtn.addEventListener('click', handleAgeToggle);
     layoutToggleBtn.addEventListener('click', handleLayoutToggle);
-    playGameBtn.addEventListener('click', initGameOnboarding);
+    playGameBtn.addEventListener('click', startGame); // FIXED
     onboardingHelpBtn.addEventListener('click', showHelpTour);
     endGameBtn.addEventListener('click', endGame);
     playAgainBtn.addEventListener('click', () => {
