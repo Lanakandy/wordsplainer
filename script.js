@@ -1,4 +1,3 @@
-
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -287,7 +286,7 @@ nodeGroups.each(function(d) {
     } else {
         const isExample = d.type === 'example';
             if (!isExample) {
-                // FIX #2: Use .attr() for fill, which is more robust for SVG.
+                // FIX: Use .attr() for fill, which is more robust for SVG.
                 selection.append("circle").attr("r", 18)
                     .attr("fill", colorMap[d.type] || 'var(--text-muted)');
             }
