@@ -871,9 +871,17 @@ header h1 {
     .utility-btn { width: 70px; height: 70px; }
 }
 
+.shepherd-modal-overlay {
+    background: rgba(26, 37, 47, 0.7); /* var(--primary-dark) with transparency */
+    backdrop-filter: blur(5px);
+    transition: opacity 0.3s ease;
+    z-index: 11000; /* Extremely high z-index */
+}
+
+/* FIX: The tour element needs an EVEN HIGHER z-index than the overlay. 
+   This makes its buttons clickable and ensures it's visible in full-screen. */
 .shepherd-element.wordsplainer-tour {
-    /* FIX: High z-index to appear correctly in full-screen mode */
-    z-index: 1001; 
+    z-index: 11001; /* Must be higher than the overlay */
     
     /* STYLE: Improved glassmorphism */
     background: rgba(30, 42, 54, 0.8); /* Darker, less blue, more transparent */
@@ -964,11 +972,4 @@ header h1 {
 .shepherd-element.wordsplainer-tour .shepherd-button.shepherd-button-secondary:hover {
     background: rgba(255, 255, 255, 0.2);
     color: var(--accent-white);
-}
-
-/* Modal Overlay */
-.shepherd-modal-overlay {
-    background: rgba(26, 37, 47, 0.7); /* var(--primary-dark) with transparency */
-    backdrop-filter: blur(5px);
-    transition: opacity 0.3s ease;
 }
