@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gameOverMessage = document.getElementById('game-over-message');
     const playAgainBtn = document.getElementById('play-again-btn');
     const confettiCanvas = document.getElementById('confetti-canvas');
-    const onboardingHelpBtn = document.getElementById('onboarding-help-btn'); // New button ref
+    const onboardingHelpBtn = document.getElementById('onboarding-help-btn');
 
      const colorMap = {
         meaning: 'var(--meaning-color)',
@@ -97,8 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     
         const tour = new Shepherd.Tour({
-            // FIX: This is the crucial fix for full-screen mode.
-            // It ensures the tour is created *inside* the main app wrapper.
             container: document.querySelector('#app-wrapper'), 
             useModalOverlay: true,
             defaultStepOptions: {
@@ -124,24 +122,52 @@ document.addEventListener('DOMContentLoaded', () => {
         return tour;
     }
 
-    // FIX: Add a `force` parameter to allow re-triggering.
-    function initMainOnboarding(force = false) {
+      function showHelpTour() {
+        // If there are no nodes on the graph yet...
+        if (centralNodes.length === 0) {
+            promptForFirstWordTour(); // ...show the simple prompt tour.
+        } else {
+            initMainOnboarding(true); // ...otherwise, show the full tour.
+        }
+    }
+
+    function promptForFirstWordTour() {
+        const tour = createTour({
+            buttons: [{ action() { this.complete(); promptForInitialWord(); }, text: 'Let\'s Add One!' }]
+        });
+        tour.addStep({
+            id: 'prompt-first',
+            title: 'Welcome to Wordsplainer!',
+            text: 'To get started, you need to add a word to explore. The main tour will begin after you add your first word.',
+            attachTo: { element: '.node.central-node', on: 'bottom' }
+        });
+        tour.start();
+    }
+
+   function initMainOnboarding(force = false) {
         if (!force && localStorage.getItem('wordsplainer_main_tour_complete')) return;
+        
+        // Failsafe: Don't run this multi-step tour if there's no graph to attach to.
+        if (centralNodes.length === 0) return;
+
         const tour = createTour();
         tour.addStep({
             id: 'step1-views',
-            text: 'Switch views to discover different relationships, like synonyms or real-world context.',
+            title: 'Step 1: Change Views',
+            text: 'Use these buttons to explore different relationships, like synonyms, idioms, or real-world context.',
             attachTo: { element: '#controls-dock', on: 'top' },
         });
         tour.addStep({
             id: 'step2-navigate',
-            text: 'Click any word in a bubble to make it the center of a new exploration. This is how you navigate!',
+            title: 'Step 2: Explore',
+            text: 'Click any word inside a bubble to make it the center of a new exploration. This is how you navigate!',
             attachTo: { element: 'g.node:not(.central-node) .node-html-content', on: 'right' },
             when: { show: () => { if (!document.querySelector('g.node:not(.central-node)')) tour.cancel(); } }
         });
         tour.addStep({
             id: 'step3-example',
-            text: 'Click the colored circle to see the word used in a sentence.',
+            title: 'Step 3: Get Examples',
+            text: 'Click the colored circle of any node to get an example sentence.',
             attachTo: { element: 'g.node:not(.central-node) circle', on: 'right' },
             buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
         });
@@ -152,12 +178,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function initSettingsOnboarding() {
         if (localStorage.getItem('wordsplainer_settings_tour_complete')) return;
         const tour = createTour({
-            buttons: [{ action() { return this.complete(); }, text: 'Awesome!' }]
+            buttons: [{ action() { return this.complete(); }, text: 'Great!' }]
         });
         tour.addStep({
             id: 'step-settings',
             title: 'Customize Your Results',
-            text: 'Use these toggles to tailor the language style (e.g., academic), proficiency level, and target audience. The graph will update automatically!',
+            text: 'Use these toggles to tailor the language style (e.g., conversational, academic, or business), proficiency level (higher or lower), and target audience (teens or adults). The graph will update automatically!',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
         tour.on('complete', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
@@ -171,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const tour = createTour({ cancelIcon: { enabled: false } });
         tour.addStep({
-            title: 'Word Ladder Challenge!',
+            title: 'Word Path Challenge!',
             text: `<b>How to Play:</b>
                    <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
                      <li>We give you a <b>START</b> word and a <b>TARGET</b> word.</li>
@@ -191,7 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
       
     // --- Helper Functions ---
-    // ... (rest of helper functions: getViewportCenter, speak, etc. are unchanged)
     function getViewportCenter() {
         const { width, height } = graphContainer.getBoundingClientRect();
         const transform = d3.zoomTransform(svg.node());
@@ -652,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (isNewCentral) {
             if (isFirstSubmission) {
-                initMainOnboarding();
+                initMainOnboarding(false); 
             } else if (currentSubmissionCount === 3) {
                 initSettingsOnboarding();
             }
@@ -1290,8 +1315,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ageToggleBtn.addEventListener('click', handleAgeToggle);
     layoutToggleBtn.addEventListener('click', handleLayoutToggle);    
     playGameBtn.addEventListener('click', initGameOnboarding);
-    // Add event listener for the new help button
-    onboardingHelpBtn.addEventListener('click', () => initMainOnboarding(true));
+    onboardingHelpBtn.addEventListener('click', showHelpTour);
     endGameBtn.addEventListener('click', endGame);
     playAgainBtn.addEventListener('click', () => {
         gameOverModal.classList.remove('visible');
