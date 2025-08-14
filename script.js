@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentActiveCentral = null;
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
+    let activeTour = null; // FIX: Variable to track the currently active tour
     
     // --- Onboarding Logic ---
     function getSubmissionCount() {
@@ -89,7 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('wordsplainer_submission_count', count + 1);
     }
 
+    // FIX: This function now manages the active tour state to prevent conflicts.
     function createTour(options = {}) {
+        // If another tour is running, cancel it before starting a new one.
+        if (activeTour && activeTour.isActive()) {
+            activeTour.cancel();
+        }
+    
         const tour = new Shepherd.Tour({
             container: document.querySelector('#app-wrapper'),
             useModalOverlay: true,
@@ -97,19 +104,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 classes: 'wordsplainer-tour',
                 cancelIcon: { enabled: true },
                 buttons: [
-                    {
-                        action() { return this.back(); },
-                        classes: 'shepherd-button-secondary',
-                        text: 'Back',
-                    },
-                    {
-                        action() { return this.next(); },
-                        text: 'Next',
-                    },
+                    { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
+                    { action() { return this.next(); }, text: 'Next' },
                 ],
                 ...options
             },
         });
+
+        // Track the new tour as the active one.
+        activeTour = tour;
+
+        // When the tour is finished (completed or canceled), reset the tracker.
+        const cleanup = () => {
+            if (activeTour === tour) {
+                activeTour = null;
+            }
+        };
+        tour.on('complete', cleanup);
+        tour.on('cancel', cleanup);
+
         return tour;
     }
 
@@ -125,12 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: 'step2-navigate',
             text: 'Click any word in a bubble to make it the center of a new exploration. This is how you navigate!',
             attachTo: { element: 'g.node:not(.central-node) .node-html-content', on: 'right' },
-            when: {
-                show: () => {
-                    const node = document.querySelector('g.node:not(.central-node)');
-                    if (!node) tour.cancel();
-                }
-            }
+            when: { show: () => { if (!document.querySelector('g.node:not(.central-node)')) tour.cancel(); } }
         });
         tour.addStep({
             id: 'step3-example',
@@ -139,7 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
             buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
         });
         tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
-        tour.on('cancel', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
         setTimeout(() => tour.start(), 1200);
     }
 
@@ -155,7 +162,6 @@ document.addEventListener('DOMContentLoaded', () => {
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
         tour.on('complete', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
-        tour.on('cancel', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
         tour.start();
     }
 
@@ -593,36 +599,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-        // FIX: Define lowerWord at the top. This resolves the ReferenceError.
         const lowerWord = word.toLowerCase();
-    
-        // --- Onboarding Logic ---
         const isFirstSubmission = getSubmissionCount() === 0;
         if (isNewCentral) {
            incrementSubmissionCount();
         }
         const currentSubmissionCount = getSubmissionCount();
     
-        // --- Game Logic ---
         if (isGameMode && isNewCentral) {
             gameData.steps++;
             updateGameUI();
             if (lowerWord === gameData.targetWord) {
                 handleWin();
-                return; // Exit early if the game is won
+                return;
             }
         }
     
-        // --- Core Graph Logic ---
         if (isNewCentral) {
-            // Check if the node already exists
             if (centralNodes.some(c => c.word === lowerWord)) {
                 const existingNode = centralNodes.find(n => n.word === lowerWord);
                 if(existingNode) focusOnCentralNode(existingNode.clusterId);
-                return; // Exit if we're just focusing on an existing node
+                return;
             }
     
-            // Create new central node data
             const centralNodeData = { 
                 word: lowerWord, id: `central-${lowerWord}`, 
                 isCentral: true, type: 'central', clusterId: lowerWord,
@@ -651,13 +650,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
         await generateGraphForView(currentView);
         
-        // --- ONBOARDING TRIGGERS (run after graph is rendered) ---
         if (isNewCentral) {
             if (isFirstSubmission) {
                 initMainOnboarding();
-            } 
-            // Trigger settings tour on the 3rd new word submission
-            else if (currentSubmissionCount === 3) {
+            } else if (currentSubmissionCount === 3) {
                 initSettingsOnboarding();
             }
         }
