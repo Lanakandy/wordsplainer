@@ -145,36 +145,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
    function initMainOnboarding(force = false) {
-        if (!force && localStorage.getItem('wordsplainer_main_tour_complete')) return;
-        
-        // Failsafe: Don't run this multi-step tour if there's no graph to attach to.
-        if (centralNodes.length === 0) return;
+    if (!force && localStorage.getItem('wordsplainer_main_tour_complete')) return;
 
-        const tour = createTour();
-        tour.addStep({
-            id: 'step1-views',
-            title: 'Step 1: Change Views',
-            text: 'Use these buttons to explore different relationships, like synonyms, idioms, or real-world context.',
-            attachTo: { element: '#controls-dock', on: 'top' },
-        });
-        tour.addStep({
-            id: 'step2-navigate',
-            title: 'Step 2: Explore',
-            text: 'Click any word inside a bubble to make it the center of a new exploration. This is how you navigate!',
-            attachTo: { element: 'g.node:not(.central-node) .node-html-content', on: 'right' },
-            when: { show: () => { if (!document.querySelector('g.node:not(.central-node)')) tour.cancel(); } }
-        });
-        tour.addStep({
-            id: 'step3-example',
-            title: 'Step 3: Get Examples',
-            text: 'Click the colored circle of any node to get an example sentence.',
-            attachTo: { element: 'g.node:not(.central-node) circle', on: 'right' },
-            buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
-        });
-        tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
-        tour.start();
-    }
+    // Failsafe: Don't run this multi-step tour if there's no graph to attach to.
+    if (centralNodes.length === 0) return;
 
+    const tour = createTour();
+    tour.addStep({
+        id: 'step1-views',
+        title: 'Step 1: Change Views',
+        text: 'Use these buttons to explore different relationships, like synonyms, idioms, or real-world context.',
+        attachTo: { element: '#controls-dock', on: 'top' },
+    });
+
+    tour.addStep({
+        id: 'step2-navigate',
+        title: 'Step 2: Explore',
+        text: 'Click any word inside a bubble to make it the center of a new exploration. This is how you navigate!',
+        // FIXED: This selector is much more reliable
+        attachTo: { element: 'g.node:not(.central-node):not(.node-add)', on: 'right' },
+        when: {
+            show: () => {
+                // Also update the 'when' condition to match
+                if (!document.querySelector('g.node:not(.central-node):not(.node-add)')) {
+                    tour.cancel();
+                }
+            }
+        }
+    });
+
+    tour.addStep({
+        id: 'step3-example',
+        title: 'Step 3: Get Examples',
+        text: 'Click the colored circle of any node to get an example sentence.',
+        // FIXED: This selector avoids nodes (like 'example') that don't have a circle.
+        attachTo: { element: 'g.node:not(.central-node):not(.node-example) circle', on: 'right' },
+        buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
+        when: {
+            show: () => {
+                 if (!document.querySelector('g.node:not(.central-node):not(.node-example) circle')) {
+                    tour.cancel();
+                }
+            }
+        }
+    });
+
+    tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
+    tour.start();
+}
     function initSettingsOnboarding() {
         if (localStorage.getItem('wordsplainer_settings_tour_complete')) return;
         const tour = createTour({
