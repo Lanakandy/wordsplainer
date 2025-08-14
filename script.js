@@ -520,8 +520,12 @@ nodeGroups.each(function(d) {
     }
     
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-    const isFirstTime = !localStorage.getItem('wordsplainer_main_tour_complete');
-        const lowerWord = word.toLowerCase();
+    const isFirstSubmission = getSubmissionCount() === 0;
+
+    if (isNewCentral) {
+       incrementSubmissionCount();
+    }
+    const currentSubmissionCount = getSubmissionCount();
         
          if (isGameMode && isNewCentral) {
         gameData.steps++;
@@ -563,9 +567,18 @@ nodeGroups.each(function(d) {
         currentView = 'meaning';
         viewState = { offset: 0, hasMore: true };
         updateActiveButton();
-        await generateGraphForView(currentView);
-        if (isFirstTime && isNewCentral) {
-        initMainOnboarding();
+
+    await generateGraphForView(currentView);
+    
+    // --- ONBOARDING TRIGGERS ---
+    if (isNewCentral) {
+        if (isFirstSubmission) {
+            initMainOnboarding();
+        } 
+        // Trigger settings tour on the 3rd new word submission
+        else if (currentSubmissionCount === 3) {
+            initSettingsOnboarding();
+        }
     }
 }
     
@@ -1249,16 +1262,21 @@ layoutToggleBtn.addEventListener('click', handleLayoutToggle);
         }
     }
 
-function initMainOnboarding() {
-    // Don't show if the user has already seen it
-    if (localStorage.getItem('wordsplainer_main_tour_complete')) {
-        return;
-    }
+function getSubmissionCount() {
+    return parseInt(localStorage.getItem('wordsplainer_submission_count') || '0', 10);
+}
+function incrementSubmissionCount() {
+    const count = getSubmissionCount();
+    localStorage.setItem('wordsplainer_submission_count', count + 1);
+}
 
+function createTour(options = {}) {
     const tour = new Shepherd.Tour({
+        // FIX: Attach the tour inside the full-screen element to solve the visibility bug.
+        container: document.querySelector('#app-wrapper'),
         useModalOverlay: true,
         defaultStepOptions: {
-            classes: 'shepherd-theme-arrows',
+            classes: 'wordsplainer-tour', // Use a custom class for styling
             cancelIcon: {
                 enabled: true
             },
@@ -1277,75 +1295,92 @@ function initMainOnboarding() {
                     text: 'Next',
                 },
             ],
+            ...options // Allow overriding defaults
         },
     });
+    return tour;
+}
+
+
+function initMainOnboarding() {
+    if (localStorage.getItem('wordsplainer_main_tour_complete')) return;
+
+    const tour = createTour();
 
     tour.addStep({
         id: 'step1-views',
         text: 'Switch views to discover different relationships, like synonyms or real-world context.',
-        attachTo: { element: '#controls-dock .category-btn[data-type="synonyms"]', on: 'bottom' },
+        attachTo: { element: '#controls-dock', on: 'top' },
     });
 
     tour.addStep({
         id: 'step2-navigate',
-        text: 'Click any word to make it the center of a new exploration. This is how you navigate!',
-        attachTo: { element: '.node-derivatives .interactive-word', on: 'right' },
-        // We wait for the node to be drawn before attaching
+        // FIX: Target a more generic element that is guaranteed to exist.
+        text: 'Click any word in a bubble to make it the center of a new exploration. This is how you navigate!',
+        attachTo: { element: 'g.node:not(.central-node) .node-html-content', on: 'right' },
         when: {
             show: () => {
-                const node = document.querySelector('.node-derivatives');
-                if (!node) tour.cancel(); // Failsafe if the node doesn't exist
+                const node = document.querySelector('g.node:not(.central-node)');
+                if (!node) tour.cancel(); // Failsafe if no peripheral nodes exist
             }
         }
     });
 
     tour.addStep({
         id: 'step3-example',
-        text: 'Click the circle to see the word used in a sentence. Try it now!',
-        attachTo: { element: '.node-derivatives circle', on: 'right' },
-        buttons: [
-            {
-                action() {
-                    return this.complete();
-                },
-                text: 'Got it!',
-            },
-        ],
-    });
-
-    tour.on('complete', () => {
-        localStorage.setItem('wordsplainer_main_tour_complete', 'true');
+        text: 'Click the colored circle to see the word used in a sentence.',
+        attachTo: { element: 'g.node:not(.central-node) circle', on: 'right' },
+         buttons: [{
+            action() { return this.complete(); },
+            text: 'Got it!'
+        }],
     });
     
-    tour.on('cancel', () => {
-        localStorage.setItem('wordsplainer_main_tour_complete', 'true');
-    });
+    tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
+    tour.on('cancel', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
 
-    // A short delay to ensure the graph is rendered and settled
-    setTimeout(() => tour.start(), 1500);
+    setTimeout(() => tour.start(), 1200);
 }
 
+// FIX: New tour for the settings toggles
+function initSettingsOnboarding() {
+    if (localStorage.getItem('wordsplainer_settings_tour_complete')) return;
+
+    const tour = createTour({
+         buttons: [{
+            action() { return this.complete(); },
+            text: 'Awesome!'
+        }]
+    });
+    
+    tour.addStep({
+        id: 'step-settings',
+        title: 'Customize Your Results',
+        text: 'Use these toggles to tailor the language style (e.g., academic), proficiency level, and target audience. The graph will update automatically!',
+        attachTo: { element: '#canvas-controls', on: 'left' },
+    });
+
+    tour.on('complete', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
+    tour.on('cancel', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
+    
+    tour.start();
+}
+
+
 function initGameOnboarding() {
-    // Don't show if the user has already seen it
     if (localStorage.getItem('wordsplainer_game_tour_complete')) {
-        startGame(); // Just start the game if they know how to play
+        startGame();
         return;
     }
 
-    const tour = new Shepherd.Tour({
-        useModalOverlay: true,
-        defaultStepOptions: {
-            classes: 'shepherd-theme-arrows',
-            cancelIcon: {
-              enabled: false
-            },
-        },
+    const tour = createTour({
+        cancelIcon: { enabled: false }
     });
 
     tour.addStep({
         title: 'Word Ladder Challenge!',
         text: `<b>How to Play:</b>
-               <ul style="text-align: left; margin-top: 10px;">
+               <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
                  <li>We give you a <b>START</b> word and a <b>TARGET</b> word.</li>
                  <li>Your goal is to get from START to TARGET in the fewest steps.</li>
                  <li>Explore the graph and click related words to find your path!</li>
@@ -1359,8 +1394,7 @@ function initGameOnboarding() {
         }]
     });
     
-    tour.on('complete', startGame); // Start the game after the modal is closed
-    
+    tour.on('complete', startGame);
     tour.start();
 }
 

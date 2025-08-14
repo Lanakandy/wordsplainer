@@ -871,98 +871,104 @@ header h1 {
     .utility-btn { width: 70px; height: 70px; }
 }
 
-/* --- Shepherd.js Onboarding Tour Theme --- */
-/* This block styles the Shepherd tour pop-ups to match the app's aesthetic. */
-
-.shepherd-element {
-    background: rgba(44, 62, 80, 0.9); /* var(--primary-navy) with transparency */
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 107, 71, 0.3); /* var(--btn-border) */
-    border-radius: 16px;
-    box-shadow: 0 10px 40px var(--dock-shadow);
-    max-width: 350px;
+.shepherd-element.wordsplainer-tour {
+    /* FIX: High z-index to appear correctly in full-screen mode */
+    z-index: 1001; 
+    
+    /* STYLE: Improved glassmorphism */
+    background: rgba(30, 42, 54, 0.8); /* Darker, less blue, more transparent */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px); /* For Safari */
+    border-radius: 18px;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.4), 
+                inset 0 0 0 1.5px rgba(255, 255, 255, 0.1); /* Glassy edge highlight */
+    max-width: 380px;
+    filter: drop-shadow(0 0 15px rgba(0,0,0,0.5));
 }
 
-.shepherd-element .shepherd-arrow::before {
-    background: rgba(44, 62, 80, 0.9);
+.shepherd-element.wordsplainer-tour .shepherd-arrow::before {
+    background: rgba(30, 42, 54, 0.8);
 }
 
-.shepherd-header {
-    padding: 1em 1em 0.5em;
+.shepherd-element.wordsplainer-tour .shepherd-header {
+    padding: 1.2em 1.2em 0.8em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.shepherd-title {
+.shepherd-element.wordsplainer-tour .shepherd-title {
     color: var(--primary-coral);
     font-weight: 700;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
-.shepherd-cancel-icon {
+.shepherd-element.wordsplainer-tour .shepherd-cancel-icon {
     color: var(--text-secondary);
-    transition: color 0.2s ease;
+    transition: all 0.2s ease;
 }
-.shepherd-cancel-icon:hover {
+.shepherd-element.wordsplainer-tour .shepherd-cancel-icon:hover {
     color: var(--accent-white);
+    transform: scale(1.1);
 }
 
-.shepherd-text {
+.shepherd-element.wordsplainer-tour .shepherd-text {
     color: var(--accent-light);
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1.6;
-    padding: 0.5em 1em;
+    padding: 1.2em;
 }
 
-.shepherd-text b {
+.shepherd-element.wordsplainer-tour .shepherd-text b {
     color: var(--primary-coral);
     font-weight: 600;
 }
 
-.shepherd-text ul {
-    padding-left: 20px;
-    margin-top: 10px;
-}
-
-.shepherd-footer {
-    padding: 0 1em 1em;
+.shepherd-element.wordsplainer-tour .shepherd-footer {
+    padding: 0 1.2em 1.2em;
     display: flex;
-    justify-content: flex-end; /* Align buttons to the right */
-    gap: 8px;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
-.shepherd-button {
+.shepherd-element.wordsplainer-tour .shepherd-button {
     border: none;
     border-radius: 12px;
-    padding: 10px 20px;
+    padding: 12px 24px;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
+    /* FIX: Remove default blue focus outline */
+    outline: none;
+    box-shadow: none;
 }
 
-/* Primary Action Button (Next, Complete, etc.) */
-.shepherd-button:not(.shepherd-button-secondary) {
+/* Primary Action Button (Next, Let's Go) */
+.shepherd-element.wordsplainer-tour .shepherd-button:not(.shepherd-button-secondary) {
     background: var(--primary-coral);
     color: white;
-    box-shadow: 0 4px 15px rgba(255, 107, 71, 0.2);
+    box-shadow: 0 5px 20px rgba(255, 107, 71, 0.25), 
+                inset 0 -2px 0 rgba(0,0,0,0.15); /* Subtle 3D effect */
 }
-.shepherd-button:not(.shepherd-button-secondary):hover {
+.shepherd-element.wordsplainer-tour .shepherd-button:not(.shepherd-button-secondary):hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 107, 71, 0.3);
+    box-shadow: 0 8px 25px rgba(255, 107, 71, 0.35),
+                inset 0 -2px 0 rgba(0,0,0,0.15);
 }
 
 /* Secondary Action Button (Back) */
-.shepherd-button.shepherd-button-secondary {
+.shepherd-element.wordsplainer-tour .shepherd-button.shepherd-button-secondary {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-secondary);
 }
-.shepherd-button.shepherd-button-secondary:hover {
+.shepherd-element.wordsplainer-tour .shepherd-button.shepherd-button-secondary:hover {
     background: rgba(255, 255, 255, 0.2);
     color: var(--accent-white);
 }
 
 /* Modal Overlay */
 .shepherd-modal-overlay {
-    background: rgba(44, 62, 80, 0.7);
+    background: rgba(26, 37, 47, 0.7); /* var(--primary-dark) with transparency */
     backdrop-filter: blur(5px);
     transition: opacity 0.3s ease;
 }
