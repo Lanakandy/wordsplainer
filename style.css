@@ -522,6 +522,12 @@ header h1 {
     border-color: var(--primary-coral);
     color: var(--primary-coral);
 }
+
+#onboarding-help-btn {
+    width: 38px;      
+    margin-top: 20px; 
+}
+
 #register-toggle-btn {
     position: relative; overflow: hidden; width: 38px;
     transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);

@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gameOverMessage = document.getElementById('game-over-message');
     const playAgainBtn = document.getElementById('play-again-btn');
     const confettiCanvas = document.getElementById('confetti-canvas');
+    const onboardingHelpBtn = document.getElementById('onboarding-help-btn'); // New button ref
 
      const colorMap = {
         meaning: 'var(--meaning-color)',
@@ -79,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentActiveCentral = null;
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
-    let activeTour = null; // FIX: Variable to track the currently active tour
+    let activeTour = null;
     
     // --- Onboarding Logic ---
     function getSubmissionCount() {
@@ -90,15 +91,15 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('wordsplainer_submission_count', count + 1);
     }
 
-    // FIX: This function now manages the active tour state to prevent conflicts.
     function createTour(options = {}) {
-        // If another tour is running, cancel it before starting a new one.
         if (activeTour && activeTour.isActive()) {
             activeTour.cancel();
         }
     
         const tour = new Shepherd.Tour({
-            container: document.querySelector('#app-wrapper'),
+            // FIX: This is the crucial fix for full-screen mode.
+            // It ensures the tour is created *inside* the main app wrapper.
+            container: document.querySelector('#app-wrapper'), 
             useModalOverlay: true,
             defaultStepOptions: {
                 classes: 'wordsplainer-tour',
@@ -111,10 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         });
 
-        // Track the new tour as the active one.
         activeTour = tour;
-
-        // When the tour is finished (completed or canceled), reset the tracker.
         const cleanup = () => {
             if (activeTour === tour) {
                 activeTour = null;
@@ -126,8 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return tour;
     }
 
-    function initMainOnboarding() {
-        if (localStorage.getItem('wordsplainer_main_tour_complete')) return;
+    // FIX: Add a `force` parameter to allow re-triggering.
+    function initMainOnboarding(force = false) {
+        if (!force && localStorage.getItem('wordsplainer_main_tour_complete')) return;
         const tour = createTour();
         tour.addStep({
             id: 'step1-views',
@@ -147,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
             buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
         });
         tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
-        setTimeout(() => tour.start(), 1200);
+        tour.start();
     }
 
     function initSettingsOnboarding() {
@@ -192,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
       
     // --- Helper Functions ---
+    // ... (rest of helper functions: getViewportCenter, speak, etc. are unchanged)
     function getViewportCenter() {
         const { width, height } = graphContainer.getBoundingClientRect();
         const transform = d3.zoomTransform(svg.node());
@@ -658,6 +658,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
+    
+    // ... (All other functions from panToNode to dragended are unchanged and correct)
     
     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
@@ -1288,6 +1290,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ageToggleBtn.addEventListener('click', handleAgeToggle);
     layoutToggleBtn.addEventListener('click', handleLayoutToggle);    
     playGameBtn.addEventListener('click', initGameOnboarding);
+    // Add event listener for the new help button
+    onboardingHelpBtn.addEventListener('click', () => initMainOnboarding(true));
     endGameBtn.addEventListener('click', endGame);
     playAgainBtn.addEventListener('click', () => {
         gameOverModal.classList.remove('visible');
