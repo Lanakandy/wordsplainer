@@ -46,8 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const playAgainBtn = document.getElementById('play-again-btn');
     const confettiCanvas = document.getElementById('confetti-canvas');
     const onboardingHelpBtn = document.getElementById('onboarding-help-btn');
-    const MAX_ACTIVE_CLUSTERS = 3;
-    const HISTORY_CLUSTER_ID = 'history-cluster';
 
     const colorMap = {
         meaning: 'var(--meaning-color)',
@@ -83,14 +81,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
     let activeTour = null;
-
-    graphClusters.set(HISTORY_CLUSTER_ID, {
-        nodes: [],
-        links: [],
-        center: { x: 0, y: 0 },
-        isHistory: true, // A flag to identify it easily
-        currentView: 'history'
-    });
 
     // --- Onboarding Logic ---
     function createTour(options = {}) {
@@ -155,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic, business), proficiency level (higher or lower), and audience (teens or adults).',
+            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
@@ -357,23 +347,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const selection = d3.select(this);
             selection.selectAll("circle, rect, foreignObject, text").remove();
 
-            // Correctly structured if/else if/else block
-            if (d.isCentral) { // Handles active central nodes and the History master node
-                const r = d.isHistoryMaster ? 60 : 45;
-                const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
-                selection.append("circle").attr("r", r).style("filter", shadow);
-                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
-
-            } else if (d.type === 'history') { // Handles archived history nodes
-                selection.append("circle").attr("r", 25);
-                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
-                selection.style("cursor", "pointer");
-
-            } else if (d.type === 'add') { // Handles the '+' button
+            if (d.isCentral) {
+                selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
+            } else if (d.type === 'add') {
                 selection.append("circle").attr("r", 20);
                 selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-
-            } else { // Handles all other peripheral nodes (synonyms, idioms, examples, etc.)
+            } else {
                 const isExample = d.type === 'example';
                 if (!isExample) {
                     selection.append("circle").attr("r", 18)
@@ -571,110 +551,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNodeClick(event, d) {
-    if (event.defaultPrevented) return;
-    event.stopPropagation();
+        if (event.defaultPrevented) return;
+        event.stopPropagation();
 
-    const selection = d3.select(event.currentTarget);
-    selection.transition()
-        .duration(150)
-        .ease(d3.easeCircleOut)
-        .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
-        .transition()
-        .duration(150)
-        .ease(d3.easeCircleOut)
-        .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+        const selection = d3.select(event.currentTarget);
+        selection.transition()
+            .duration(150)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
+            .transition()
+            .duration(150)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
 
-    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
+        const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
 
-    if (d.type === 'history') { // <-- ADD THIS BLOCK
-        handleWordSubmitted(d.word, true);
-    } else if (exampleTypes.includes(d.type)) {
-        toggleExampleForNode(d);
-    } else if (d.isCentral && !d.isHistoryMaster) { // Prevent focusing on the "History" master node
-        focusOnCentralNode(d.clusterId);
-    } else if (d.type === 'add') {
-        if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
-            return;
+        if (exampleTypes.includes(d.type)) {
+            toggleExampleForNode(d);
+        } else if (d.isCentral) {
+            focusOnCentralNode(d.clusterId);
+        } else if (d.type === 'add') {
+            if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
+                return;
+            }
+            fetchMoreNodes();
         }
-        fetchMoreNodes();
     }
-}
 
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-    const lowerWord = word.toLowerCase();
+        const lowerWord = word.toLowerCase();
 
-    if (isGameMode && isNewCentral) {
-        gameData.steps++;
-        updateGameUI();
-        if (lowerWord === gameData.targetWord) {
-            handleWin();
-            return;
-        }
-    }
-
-    if (isNewCentral) {
-        // --- Check if the node is in the history cluster ---
-        const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
-        const nodeInHistory = historyCluster.nodes.find(n => n.word === lowerWord);
-        if (nodeInHistory) {
-            // "Promote" it from history back to an active cluster
-            console.log(`Promoting "${lowerWord}" from history.`);
-            historyCluster.nodes = historyCluster.nodes.filter(n => n.word !== lowerWord);
-            // We just let the rest of the function create it as a new active cluster.
-        } else if (centralNodes.some(c => c.word === lowerWord)) {
-            // It's already an active cluster, just focus it.
-            const existingNode = centralNodes.find(n => n.word === lowerWord);
-            if (existingNode) focusOnCentralNode(existingNode.clusterId);
-            return;
-        }
-        
-        // --- Archiving Logic ---
-        if (centralNodes.length >= MAX_ACTIVE_CLUSTERS) {
-            const oldestNodeToArchive = centralNodes.shift(); // Get the oldest active central node
-            if (oldestNodeToArchive) {
-                console.log(`Max active clusters reached. Archiving "${oldestNodeToArchive.word}" to history.`);
-                
-                // Remove the full cluster from the main graph
-                graphClusters.delete(oldestNodeToArchive.word);
-                
-                // Add its central node to the history cluster
-                const historyNode = {
-                    ...oldestNodeToArchive,
-                    isCentral: false, // It's no longer a central point of a full graph
-                    type: 'history', // Give it a unique type for styling
-                    clusterId: HISTORY_CLUSTER_ID, // Assign it to the history cluster
-                    fx: null, // Let it be positioned by the simulation
-                    fy: null
-                };
-                historyCluster.nodes.push(historyNode);
+        if (isGameMode && isNewCentral) {
+            gameData.steps++;
+            updateGameUI();
+            if (lowerWord === gameData.targetWord) {
+                handleWin();
+                return;
             }
         }
-        
-        // --- Create the new active cluster (same as before) ---
-        const centralNodeData = {
-            word: lowerWord, id: `central-${lowerWord}`,
-            isCentral: true, type: 'central', clusterId: lowerWord,
-            visible: true
-        };
 
-        centralNodes.push(centralNodeData);
-        graphClusters.set(lowerWord, {
-            nodes: [centralNodeData],
-            links: [],
-            center: { x: 0, y: 0 },
-            currentView: 'meaning'
-        });
+        if (isNewCentral) {
+            if (centralNodes.some(c => c.word === lowerWord)) {
+                const existingNode = centralNodes.find(n => n.word === lowerWord);
+                if (existingNode) focusOnCentralNode(existingNode.clusterId);
+                return;
+            }
 
-        repositionAllClusters(); // Reposition both active and history clusters
+            const centralNodeData = {
+                word: lowerWord, id: `central-${lowerWord}`,
+                isCentral: true, type: 'central', clusterId: lowerWord,
+                visible: true
+            };
+
+            centralNodes.push(centralNodeData);
+            graphClusters.set(lowerWord, {
+                nodes: [centralNodeData],
+                links: [],
+                center: { x: 0, y: 0 },
+                currentView: 'meaning'
+            });
+
+            const newClusterCenter = repositionAllClusters();
+
+            if (newClusterCenter) {
+                panToNode(newClusterCenter, 1.2);
+            }
+        }
+
+        currentActiveCentral = lowerWord;
+        currentView = 'meaning';
+        viewState = { offset: 0, hasMore: true };
+        updateActiveButton();
+
+        await generateGraphForView(currentView);
     }
-
-    currentActiveCentral = lowerWord;
-    currentView = 'meaning';
-    viewState = { offset: 0, hasMore: true };
-    updateActiveButton();
-
-    await generateGraphForView(currentView);
-}
 
     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
@@ -1031,60 +981,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
-    if (centralNodes.length === 0 && graphClusters.get(HISTORY_CLUSTER_ID).nodes.length === 0) return null;
-
-    const { width, height } = graphContainer.getBoundingClientRect();
-    const currentTransform = d3.zoomTransform(svg.node());
-    const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
-    const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
-
-    // Position the history cluster to the left
-    const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
-    if (historyCluster) {
-        const historyX = viewCenterX - ((centralNodes.length) * CLUSTER_SPACING / 2) - CLUSTER_SPACING;
-        historyCluster.center.x = historyX;
-        historyCluster.center.y = viewCenterY;
-        // Add a "master" node for the history cluster to link to
-        if (!historyCluster.nodes.find(n => n.isHistoryMaster)) {
-             historyCluster.nodes.unshift({ 
-                 id: HISTORY_CLUSTER_ID, 
-                 word: 'History', 
-                 isHistoryMaster: true,
-                 isCentral: true, // Treat it like a central node for physics
-                 clusterId: HISTORY_CLUSTER_ID,
-                 fx: historyX,
-                 fy: viewCenterY,
-                 visible: true,
-                 type: 'history_master'
-            });
-        } else {
-             const master = historyCluster.nodes.find(n => n.isHistoryMaster);
-             master.fx = historyX;
-             master.fy = viewCenterY;
-        }
-
-        // Link all history items to the master history node
-        historyCluster.links = historyCluster.nodes
-            .filter(n => !n.isHistoryMaster)
-            .map(n => ({ source: HISTORY_CLUSTER_ID, target: n.id }));
+        if (centralNodes.length === 0) return null;
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const currentTransform = d3.zoomTransform(svg.node());
+        const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
+        const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
+        const lastNodeIndex = centralNodes.length - 1;
+        let lastNodeCenter = null;
+        centralNodes.forEach((node, i) => {
+            const cluster = graphClusters.get(node.clusterId);
+            if (cluster) {
+                const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
+                const targetY = viewCenterY;
+                node.fx = targetX;
+                node.fy = targetY;
+                cluster.center.x = targetX;
+                cluster.center.y = targetY;
+                if (i === lastNodeIndex) lastNodeCenter = { x: targetX, y: targetY };
+            }
+        });
+        simulation.alpha(0.5).restart();
+        return lastNodeCenter;
     }
-
-    // Position the active clusters to the right of center
-    centralNodes.forEach((node, i) => {
-        const cluster = graphClusters.get(node.clusterId);
-        if (cluster) {
-            const targetX = viewCenterX + ((i - (centralNodes.length - 1) / 2) * CLUSTER_SPACING);
-            const targetY = viewCenterY;
-            node.fx = targetX;
-            node.fy = targetY;
-            cluster.center.x = targetX;
-            cluster.center.y = targetY;
-        }
-    });
-
-    simulation.alpha(0.6).restart();
-    return null;
-}
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
