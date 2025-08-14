@@ -58,6 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
         translation: 'var(--translation-color)'
     };
 
+    startComprehensiveTour();
+
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
     }
@@ -122,93 +124,60 @@ document.addEventListener('DOMContentLoaded', () => {
         return tour;
     }
 
-      function showHelpTour() {
-        // If there are no nodes on the graph yet...
-        if (centralNodes.length === 0) {
-            promptForFirstWordTour(); // ...show the simple prompt tour.
-        } else {
-            initMainOnboarding(true); // ...otherwise, show the full tour.
-        }
+function startComprehensiveTour(force = false) {
+    // Don't run if the user has already seen it, unless forced by the help button.
+    if (!force && localStorage.getItem('wordsplainer_comprehensive_tour_complete')) {
+        return;
     }
-
-    function promptForFirstWordTour() {
-        const tour = createTour({
-            buttons: [{ action() { this.complete(); promptForInitialWord(); }, text: 'Let\'s Add One!' }]
-        });
-        tour.addStep({
-            id: 'prompt-first',
-            title: 'Welcome to Wordsplainer!',
-            text: 'To get started, you need to add a word to explore. The main tour will begin after you add your first word.',
-            attachTo: { element: '.node.central-node', on: 'bottom' }
-        });
-        tour.start();
-    }
-
-   function initMainOnboarding(force = false) {
-    if (!force && localStorage.getItem('wordsplainer_main_tour_complete')) return;
-
-    // Failsafe: Don't run this multi-step tour if there's no graph to attach to.
-    if (centralNodes.length === 0) return;
 
     const tour = createTour();
+
     tour.addStep({
-        id: 'step1-views',
-        title: 'Step 1: Change Views',
-        text: 'Use these buttons to explore different relationships, like synonyms, idioms, or real-world context.',
+        id: 'step1-welcome',
+        title: 'Welcome to Wordsplainer!',
+        text: 'This is an interactive map for words. To begin, click the central plus icon to add your first word.',
+        // This selector works whether the graph is empty or not.
+        attachTo: { element: '.node.central-node', on: 'bottom' },
+    });
+
+    tour.addStep({
+        id: 'step2-views',
+        title: 'Change Your View',
+        text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
         attachTo: { element: '#controls-dock', on: 'top' },
     });
 
     tour.addStep({
-        id: 'step2-navigate',
-        title: 'Step 2: Explore',
-        text: 'Click any word inside a bubble to make it the center of a new exploration. This is how you navigate!',
-        // FIXED: This selector is much more reliable
-        attachTo: { element: 'g.node:not(.central-node):not(.node-add)', on: 'right' },
-        when: {
-            show: () => {
-                // Also update the 'when' condition to match
-                if (!document.querySelector('g.node:not(.central-node):not(.node-add)')) {
-                    tour.cancel();
-                }
-            }
-        }
+        id: 'step3-explore',
+        title: 'Navigate the Graph',
+        text: 'New words will appear in bubbles around the center. <b>Click any word in a bubble to make it the new center.</b> This is how you find connections!',
+        // Attaching to the whole graph container makes this a general, conceptual step.
+        attachTo: { element: '#graph-container', on: 'top' }
     });
 
     tour.addStep({
-        id: 'step3-example',
-        title: 'Step 3: Get Examples',
-        text: 'Click the colored circle of any node to get an example sentence.',
-        // FIXED: This selector avoids nodes (like 'example') that don't have a circle.
-        attachTo: { element: 'g.node:not(.central-node):not(.node-example) circle', on: 'right' },
-        buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
-        when: {
-            show: () => {
-                 if (!document.querySelector('g.node:not(.central-node):not(.node-example) circle')) {
-                    tour.cancel();
-                }
-            }
-        }
+        id: 'step4-settings',
+        title: 'Customize Your Results',
+        text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
+        attachTo: { element: '#canvas-controls', on: 'left' },
+        buttons: [
+            { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
+            { action() { this.complete(); }, text: 'Got it!' }
+        ]
     });
 
-    tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
-    tour.start();
-}
-    function initSettingsOnboarding() {
-        if (localStorage.getItem('wordsplainer_settings_tour_complete')) return;
-        const tour = createTour({
-            buttons: [{ action() { return this.complete(); }, text: 'Great!' }]
-        });
-        tour.addStep({
-            id: 'step-settings',
-            title: 'Customize Your Results',
-            text: 'Use these toggles to tailor the language style (e.g., conversational, academic, or business), proficiency level (higher or lower), and target audience (teens or adults). The graph will update automatically!',
-            attachTo: { element: '#canvas-controls', on: 'left' },
-        });
-        tour.on('complete', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
-        tour.start();
-    }
+    tour.on('complete', () => {
+        localStorage.setItem('wordsplainer_comprehensive_tour_complete', 'true');
+    });
 
-    function initGameOnboarding() {
+    tour.start();
+}      
+
+    function showHelpTour() {
+    startComprehensiveTour(true);
+}
+
+      function initGameOnboarding() {
         if (localStorage.getItem('wordsplainer_game_tour_complete')) {
             startGame();
             return;
@@ -693,17 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
         await generateGraphForView(currentView);
         
-        if (isNewCentral) {
-            if (isFirstSubmission) {
-                initMainOnboarding(false); 
-            } else if (currentSubmissionCount === 3) {
-                initSettingsOnboarding();
-            }
         }
-    }
     
-    // ... (All other functions from panToNode to dragended are unchanged and correct)
-    
+     
     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
             console.error("panToNode called with invalid target:", target);
