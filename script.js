@@ -924,28 +924,43 @@ nodeGroups.each(function(d) {
         
         const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
         
-        // 3. Render using the newly processed tokens
+        // 3. Render using the newly processed tokens with improved logic
         processedTokens.forEach(token => {
-            // Split token into word and its trailing punctuation for accurate clickability
-            const match = token.match(/^([\w\s'-]+)([.,!?;:"/()\[\]]*)$/);
-            const wordPart = match ? match[1] : token;
-            const punctuationPart = match ? match[2] : '';
-            
-            const cleanedWord = wordPart.trim().toLowerCase();
+            // Regex to find a "word", which can be a single word, hyphenated, with slashes, or a phrasal verb.
+            // \b ensures we match whole words. [a-zA-Z0-9\s'/-]+ defines what a "word" can contain.
+            const wordRegex = /\b[a-zA-Z0-9\s'/-]+\b/;
+            const match = token.match(wordRegex);
 
-            // Check if the cleaned word is a valid, clickable term (single word or phrasal verb)
-            if (cleanedWord.length > 1 && /^[a-z'\s]+$/.test(cleanedWord)) {
-                lineContainer.append('span')
-                    .attr('class', 'interactive-word')
-                    .text(wordPart) // Display original casing
-                    .on('click', (event) => { event.stopPropagation(); if(wordPart) onWordClick(wordPart); });
-                
-                // Append the punctuation as a separate, non-clickable span
-                if (punctuationPart) {
-                    lineContainer.append('span').text(punctuationPart);
+            if (match) {
+                const wordPart = match[0];
+                const wordStartIndex = match.index;
+                const wordEndIndex = wordStartIndex + wordPart.length;
+
+                const leadingPart = token.substring(0, wordStartIndex);
+                const trailingPart = token.substring(wordEndIndex);
+
+                const cleanedWord = wordPart.trim();
+                // A simple validation to ensure the matched part is substantial.
+                if (cleanedWord.length > 1) {
+                    // Render the parts: non-clickable punctuation, the clickable word, and more non-clickable punctuation.
+                    if (leadingPart) {
+                        lineContainer.append('span').text(leadingPart);
+                    }
+                    
+                    lineContainer.append('span')
+                        .attr('class', 'interactive-word')
+                        .text(wordPart)
+                        .on('click', (event) => { event.stopPropagation(); onWordClick(wordPart); });
+
+                    if (trailingPart) {
+                        lineContainer.append('span').text(trailingPart);
+                    }
+                } else {
+                    // The found "word" wasn't long enough (e.g., a single letter), so render the whole token as non-clickable.
+                    lineContainer.append('span').text(token);
                 }
             } else {
-                // Not a clickable word, render the whole token as is
+                // No word-like part found in the token (e.g., it's just punctuation like '!!' or '...').
                 lineContainer.append('span').text(token);
             }
         });
