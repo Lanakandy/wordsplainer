@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 initMainOnboarding();
             } 
             // Trigger settings tour on the 3rd new word submission
-            else if (currentSubmissionCount === 2) {
+            else if (currentSubmissionCount === 3) {
                 initSettingsOnboarding();
             }
         }
