@@ -904,7 +904,7 @@ nodeGroups.each(function(d) {
         const initialTokens = line.split(/(\s+)/);
         const processedTokens = [];
 
-        // 2. Use a look-ahead loop to combine phrasal verbs
+        // 2. Use a look-ahead loop to combine phrasal verbs (KEEPING THIS LOGIC)
         for (let i = 0; i < initialTokens.length; i++) {
             const currentToken = initialTokens[i];
             const nextToken = initialTokens[i + 2]; // Skip the space token in between
@@ -912,11 +912,9 @@ nodeGroups.each(function(d) {
             const cleanedCurrent = currentToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
             const cleanedNext = nextToken ? nextToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '') : null;
 
-            // Check if the next word is a phrasal verb particle and the current word is a plausible verb
             if (cleanedNext && phrasalVerbParticles.has(cleanedNext) && cleanedCurrent.length > 1) {
-                // It's likely a phrasal verb. Combine them.
                 processedTokens.push(currentToken + initialTokens[i + 1] + nextToken);
-                i += 2; // Skip the next two tokens (space and particle)
+                i += 2;
             } else {
                 processedTokens.push(currentToken);
             }
@@ -924,44 +922,43 @@ nodeGroups.each(function(d) {
         
         const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
         
-        // 3. Render using the newly processed tokens with improved logic
+        // 3. Render using a more robust regex-based loop
         processedTokens.forEach(token => {
-            // Regex to find a "word", which can be a single word, hyphenated, with slashes, or a phrasal verb.
-            // \b ensures we match whole words. [a-zA-Z0-9\s'/-]+ defines what a "word" can contain.
-            const wordRegex = /\b[a-zA-Z0-9\s'/-]+\b/;
-            const match = token.match(wordRegex);
+            // This regex finds:
+            // 1. Common abbreviations like "Mrs." or "Dr."
+            // 2. Words containing letters, numbers, spaces (for phrasal verbs), apostrophes, hyphens, or slashes.
+            // The 'g' flag is crucial for finding all matches within a token.
+            const wordRegex = /\b([A-Z][a-z]{1,3}\.|[a-zA-Z0-9\s'/-]+)\b/g;
 
-            if (match) {
+            let lastIndex = 0;
+            let match;
+
+            // Loop through all word-like matches found in the token
+            while ((match = wordRegex.exec(token)) !== null) {
+                // Append any preceding non-word text (e.g., punctuation, em-dashes)
+                if (match.index > lastIndex) {
+                    lineContainer.append('span').text(token.substring(lastIndex, match.index));
+                }
+
                 const wordPart = match[0];
-                const wordStartIndex = match.index;
-                const wordEndIndex = wordStartIndex + wordPart.length;
 
-                const leadingPart = token.substring(0, wordStartIndex);
-                const trailingPart = token.substring(wordEndIndex);
-
-                const cleanedWord = wordPart.trim();
-                // A simple validation to ensure the matched part is substantial.
-                if (cleanedWord.length > 1) {
-                    // Render the parts: non-clickable punctuation, the clickable word, and more non-clickable punctuation.
-                    if (leadingPart) {
-                        lineContainer.append('span').text(leadingPart);
-                    }
-                    
+                // Check if the matched part is a valid, clickable term
+                if (wordPart.trim().length > 1) {
                     lineContainer.append('span')
                         .attr('class', 'interactive-word')
                         .text(wordPart)
                         .on('click', (event) => { event.stopPropagation(); onWordClick(wordPart); });
-
-                    if (trailingPart) {
-                        lineContainer.append('span').text(trailingPart);
-                    }
                 } else {
-                    // The found "word" wasn't long enough (e.g., a single letter), so render the whole token as non-clickable.
-                    lineContainer.append('span').text(token);
+                    // Not a clickable word (e.g., a single letter), render as plain text
+                    lineContainer.append('span').text(wordPart);
                 }
-            } else {
-                // No word-like part found in the token (e.g., it's just punctuation like '!!' or '...').
-                lineContainer.append('span').text(token);
+                
+                lastIndex = wordRegex.lastIndex;
+            }
+
+            // Append any remaining text after the last match (e.g., trailing punctuation)
+            if (lastIndex < token.length) {
+                lineContainer.append('span').text(token.substring(lastIndex));
             }
         });
     });
