@@ -72,20 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const graphGroup = svg.append("g");
     const iconGroup = svg.append("g").attr("class", "icon-layer");
 
-    playGameBtn.addEventListener('click', initGameOnboarding);
-    endGameBtn.addEventListener('click', endGame);
-    playAgainBtn.addEventListener('click', () => {
-    gameOverModal.classList.remove('visible');
-    startGame(); // Start a new game immediately
-});
-
-// Also allow closing the modal by clicking the background
-gameOverModal.addEventListener('click', (event) => {
-    if (event.target === gameOverModal) {
-        gameOverModal.classList.remove('visible');
-    }
-});
-
     // --- Enhanced State Management ---
     let centralNodes = [];
     let graphClusters = new Map();
@@ -94,24 +80,126 @@ gameOverModal.addEventListener('click', (event) => {
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
     
+    // --- Onboarding Logic ---
+    function getSubmissionCount() {
+        return parseInt(localStorage.getItem('wordsplainer_submission_count') || '0', 10);
+    }
+    function incrementSubmissionCount() {
+        const count = getSubmissionCount();
+        localStorage.setItem('wordsplainer_submission_count', count + 1);
+    }
+
+    function createTour(options = {}) {
+        const tour = new Shepherd.Tour({
+            container: document.querySelector('#app-wrapper'),
+            useModalOverlay: true,
+            defaultStepOptions: {
+                classes: 'wordsplainer-tour',
+                cancelIcon: { enabled: true },
+                buttons: [
+                    {
+                        action() { return this.back(); },
+                        classes: 'shepherd-button-secondary',
+                        text: 'Back',
+                    },
+                    {
+                        action() { return this.next(); },
+                        text: 'Next',
+                    },
+                ],
+                ...options
+            },
+        });
+        return tour;
+    }
+
+    function initMainOnboarding() {
+        if (localStorage.getItem('wordsplainer_main_tour_complete')) return;
+        const tour = createTour();
+        tour.addStep({
+            id: 'step1-views',
+            text: 'Switch views to discover different relationships, like synonyms or real-world context.',
+            attachTo: { element: '#controls-dock', on: 'top' },
+        });
+        tour.addStep({
+            id: 'step2-navigate',
+            text: 'Click any word in a bubble to make it the center of a new exploration. This is how you navigate!',
+            attachTo: { element: 'g.node:not(.central-node) .node-html-content', on: 'right' },
+            when: {
+                show: () => {
+                    const node = document.querySelector('g.node:not(.central-node)');
+                    if (!node) tour.cancel();
+                }
+            }
+        });
+        tour.addStep({
+            id: 'step3-example',
+            text: 'Click the colored circle to see the word used in a sentence.',
+            attachTo: { element: 'g.node:not(.central-node) circle', on: 'right' },
+            buttons: [{ action() { return this.complete(); }, text: 'Got it!' }],
+        });
+        tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
+        tour.on('cancel', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
+        setTimeout(() => tour.start(), 1200);
+    }
+
+    function initSettingsOnboarding() {
+        if (localStorage.getItem('wordsplainer_settings_tour_complete')) return;
+        const tour = createTour({
+            buttons: [{ action() { return this.complete(); }, text: 'Awesome!' }]
+        });
+        tour.addStep({
+            id: 'step-settings',
+            title: 'Customize Your Results',
+            text: 'Use these toggles to tailor the language style (e.g., academic), proficiency level, and target audience. The graph will update automatically!',
+            attachTo: { element: '#canvas-controls', on: 'left' },
+        });
+        tour.on('complete', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
+        tour.on('cancel', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
+        tour.start();
+    }
+
+    function initGameOnboarding() {
+        if (localStorage.getItem('wordsplainer_game_tour_complete')) {
+            startGame();
+            return;
+        }
+        const tour = createTour({ cancelIcon: { enabled: false } });
+        tour.addStep({
+            title: 'Word Ladder Challenge!',
+            text: `<b>How to Play:</b>
+                   <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
+                     <li>We give you a <b>START</b> word and a <b>TARGET</b> word.</li>
+                     <li>Your goal is to get from START to TARGET in the fewest steps.</li>
+                     <li>Explore the graph and click related words to find your path!</li>
+                   </ul>`,
+            buttons: [{
+                text: "Let's Go!",
+                action() {
+                    localStorage.setItem('wordsplainer_game_tour_complete', 'true');
+                    this.complete();
+                }
+            }]
+        });
+        tour.on('complete', startGame);
+        tour.start();
+    }
       
     // --- Helper Functions ---
     function getViewportCenter() {
         const { width, height } = graphContainer.getBoundingClientRect();
         const transform = d3.zoomTransform(svg.node());
-        // Use the transform's `invert` method to find the SVG coordinate
-        // that corresponds to the screen's center point.
         const [svgX, svgY] = transform.invert([width / 2, height / 2]);
         return { x: svgX, y: svgY };
     }
 
-      function stopRegisterButtonAnimation() {
+    function stopRegisterButtonAnimation() {
         if (registerToggleBtn) {
             registerToggleBtn.classList.remove('needs-attention');
         }
     }
 
-      function speak(text, lang = 'en-US') {
+    function speak(text, lang = 'en-US') {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
@@ -221,7 +309,7 @@ gameOverModal.addEventListener('click', (event) => {
                 const y = d.y - (d.height / 2) + 10;
                 return `translate(${x}, ${y})`;
             }
-            return `translate(-1000, -1000)`; // Hide icon until position is known
+            return `translate(-1000, -1000)`;
         });
     });
     
@@ -241,99 +329,85 @@ gameOverModal.addEventListener('click', (event) => {
         );
 
         const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id)
-    .join(
-        enter => enter.append("g")
-            .style("opacity", 0)
-            .attr("transform", d => {
-                const cluster = graphClusters.get(d.clusterId);
-                const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
-                // Start new nodes from their cluster center and scaled down
-                return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
-            })
-            .call(g => g.transition().duration(600)
-                .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
-                .ease(d3.easeBackOut.overshoot(1.2))
-                .style("opacity", 1)
-                .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
-            ),
-        update => update, // No special logic needed for update here
-        exit => exit.transition().duration(400).ease(d3.easeCircleIn)
-            .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
-            .style("opacity", 0)
-            .remove()
-    );
+            .join(
+                enter => enter.append("g")
+                    .style("opacity", 0)
+                    .attr("transform", d => {
+                        const cluster = graphClusters.get(d.clusterId);
+                        const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
+                        return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
+                    })
+                    .call(g => g.transition().duration(600)
+                        .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
+                        .ease(d3.easeBackOut.overshoot(1.2))
+                        .style("opacity", 1)
+                        .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
+                    ),
+                update => update,
+                exit => exit.transition().duration(400).ease(d3.easeCircleIn)
+                    .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
+                    .style("opacity", 0)
+                    .remove()
+            );
 
-// Apply these attributes and event handlers to ALL nodes (both entering and updating)
-nodeGroups
-    .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
-    .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
-    .on("mouseover", handleMouseOver)
-    .on("mouseout", handleMouseOut)
-    .on("click", handleNodeClick);
+        nodeGroups
+            .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
+            .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut)
+            .on("click", handleNodeClick);
 
-// Now, populate the content for all nodes
-nodeGroups.each(function(d) {
-    const selection = d3.select(this);
-    // Clear previous contents
-    selection.selectAll("circle, rect, foreignObject, text").remove();
+        nodeGroups.each(function(d) {
+            const selection = d3.select(this);
+            selection.selectAll("circle, rect, foreignObject, text").remove();
 
-    if (d.isCentral) {
-        selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-        selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
-    } else if (d.type === 'add') {
-        selection.append("circle").attr("r", 20);
-        selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-    } else {
-        const isExample = d.type === 'example';
-            if (!isExample) {
-                // FIX: Use .attr() for fill, which is more robust for SVG.
-                selection.append("circle").attr("r", 18)
-                    .attr("fill", colorMap[d.type] || 'var(--text-muted)');
-            }
-            const textWidth = isExample ? 220 : 200;
-        const PADDING = isExample ? 0 : 12;
-        const circleRadius = isExample ? 0 : 18;
-
-        const foreignObject = selection.append("foreignObject")
-            .attr("class", "node-html-wrapper")
-            .attr("width", textWidth)
-            .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
-            .style("opacity", 0)
-            // FIX: Set a minimum height initially so it's not zero.
-            .attr("height", 20); 
-
-        const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
-        createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
-        
-        // FIX: Decouple the visibility transition from the height calculation.
-        // Make the object visible first.
-        foreignObject.transition().duration(400).style("opacity", 1);
-
-        setTimeout(() => {
-            // FIX: Add a defensive check to ensure the node still exists in the DOM.
-            if (div.node()) {
-                // Now, measure the height.
-                let textHeight = div.node().scrollHeight;
-                
-                // FIX: If height is still 0 (edge case), use a fallback.
-                if (textHeight === 0) {
-                    console.warn(`Could not calculate height for node text: "${d.text.substring(0, 20)}...". Using fallback.`);
-                    textHeight = 20; // A small fallback height.
+            if (d.isCentral) {
+                selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
+                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
+            } else if (d.type === 'add') {
+                selection.append("circle").attr("r", 20);
+                selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
+            } else {
+                const isExample = d.type === 'example';
+                if (!isExample) {
+                    selection.append("circle").attr("r", 18)
+                        .attr("fill", colorMap[d.type] || 'var(--text-muted)');
                 }
+                const textWidth = isExample ? 220 : 200;
+                const PADDING = isExample ? 0 : 12;
+                const circleRadius = isExample ? 0 : 18;
 
-                foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
-                d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
-                d.height = Math.max(circleRadius * 2, textHeight);
+                const foreignObject = selection.append("foreignObject")
+                    .attr("class", "node-html-wrapper")
+                    .attr("width", textWidth)
+                    .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
+                    .style("opacity", 0)
+                    .attr("height", 20); 
+
+                const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
+                createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
                 
-                // Nudge the simulation to re-evaluate collisions with the new, correct size.
-                if (simulation.alpha() < 0.1) {
-                    simulation.alpha(0.1).restart();
-                }
+                foreignObject.transition().duration(400).style("opacity", 1);
+
+                setTimeout(() => {
+                    if (div.node()) {
+                        let textHeight = div.node().scrollHeight;
+                        if (textHeight === 0) {
+                            console.warn(`Could not calculate height for node text: "${d.text.substring(0, 20)}...". Using fallback.`);
+                            textHeight = 20;
+                        }
+                        foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+                        d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                        d.height = Math.max(circleRadius * 2, textHeight);
+                        
+                        if (simulation.alpha() < 0.1) {
+                            simulation.alpha(0.1).restart();
+                        }
+                    }
+                }, 50);
+                selection.style("cursor", "pointer");
             }
-        }, 50); // The delay is still useful, but now it's not critical for visibility.
-        selection.style("cursor", "pointer");
-    }
-});
+        });
 
         const iconData = visibleNodes.filter(d => d.isCentral || d.type === 'example');
         iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
@@ -390,21 +464,20 @@ nodeGroups.each(function(d) {
     }
 
     function handleRegisterToggle() {
-    stopRegisterButtonAnimation();
-    const registers = ['conversational', 'academic', 'business'];
-    const currentIndex = registers.indexOf(currentRegister);
-    const nextIndex = (currentIndex + 1) % registers.length;
-    currentRegister = registers[nextIndex];
-    console.log(`Register is now: ${currentRegister}`); // For debugging
-    registerToggleBtn.classList.remove('is-academic', 'is-business'); // Clear old state classes
-    if (currentRegister === 'academic') {
-        registerToggleBtn.classList.add('is-academic');
-    } else if (currentRegister === 'business') {
-        registerToggleBtn.classList.add('is-business');
+        stopRegisterButtonAnimation();
+        const registers = ['conversational', 'academic', 'business'];
+        const currentIndex = registers.indexOf(currentRegister);
+        const nextIndex = (currentIndex + 1) % registers.length;
+        currentRegister = registers[nextIndex];
+        registerToggleBtn.classList.remove('is-academic', 'is-business');
+        if (currentRegister === 'academic') {
+            registerToggleBtn.classList.add('is-academic');
+        } else if (currentRegister === 'business') {
+            registerToggleBtn.classList.add('is-business');
+        }
+        refetchCurrentView();
     }
-   
-    refetchCurrentView();
-}
+
     function handleProficiencyToggle() {
         currentProficiency = (currentProficiency === 'high') ? 'low' : 'high';
         proficiencyToggleBtn.classList.toggle('is-high', currentProficiency === 'high');
@@ -520,28 +593,36 @@ nodeGroups.each(function(d) {
     }
     
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-    const isFirstSubmission = getSubmissionCount() === 0;
-
-    if (isNewCentral) {
-       incrementSubmissionCount();
-    }
-    const currentSubmissionCount = getSubmissionCount();
-        
-         if (isGameMode && isNewCentral) {
-        gameData.steps++;
-        updateGameUI();
-        if (lowerWord === gameData.targetWord) {
-            handleWin();
-            return;
-        }
-    }
+        // FIX: Define lowerWord at the top. This resolves the ReferenceError.
+        const lowerWord = word.toLowerCase();
+    
+        // --- Onboarding Logic ---
+        const isFirstSubmission = getSubmissionCount() === 0;
         if (isNewCentral) {
+           incrementSubmissionCount();
+        }
+        const currentSubmissionCount = getSubmissionCount();
+    
+        // --- Game Logic ---
+        if (isGameMode && isNewCentral) {
+            gameData.steps++;
+            updateGameUI();
+            if (lowerWord === gameData.targetWord) {
+                handleWin();
+                return; // Exit early if the game is won
+            }
+        }
+    
+        // --- Core Graph Logic ---
+        if (isNewCentral) {
+            // Check if the node already exists
             if (centralNodes.some(c => c.word === lowerWord)) {
                 const existingNode = centralNodes.find(n => n.word === lowerWord);
                 if(existingNode) focusOnCentralNode(existingNode.clusterId);
-                return;
+                return; // Exit if we're just focusing on an existing node
             }
-
+    
+            // Create new central node data
             const centralNodeData = { 
                 word: lowerWord, id: `central-${lowerWord}`, 
                 isCentral: true, type: 'central', clusterId: lowerWord,
@@ -555,34 +636,34 @@ nodeGroups.each(function(d) {
                 center: { x: 0, y: 0 }, 
                 currentView: 'meaning' 
             });
-
+    
             const newClusterCenter = repositionAllClusters();
             
             if (newClusterCenter) {
                 panToNode(newClusterCenter, 1.2);
             }
         }
-
+    
         currentActiveCentral = lowerWord;
         currentView = 'meaning';
         viewState = { offset: 0, hasMore: true };
         updateActiveButton();
-
-    await generateGraphForView(currentView);
     
-    // --- ONBOARDING TRIGGERS ---
-    if (isNewCentral) {
-        if (isFirstSubmission) {
-            initMainOnboarding();
-        } 
-        // Trigger settings tour on the 3rd new word submission
-        else if (currentSubmissionCount === 3) {
-            initSettingsOnboarding();
+        await generateGraphForView(currentView);
+        
+        // --- ONBOARDING TRIGGERS (run after graph is rendered) ---
+        if (isNewCentral) {
+            if (isFirstSubmission) {
+                initMainOnboarding();
+            } 
+            // Trigger settings tour on the 3rd new word submission
+            else if (currentSubmissionCount === 2) {
+                initSettingsOnboarding();
+            }
         }
     }
-}
     
-     function panToNode(target, scale = 1.2) {
+    function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
             console.error("panToNode called with invalid target:", target);
             return;
@@ -602,7 +683,7 @@ nodeGroups.each(function(d) {
     }
     
     function renderLoading(message) {
-        const center = getViewportCenter(); // Get the correct center
+        const center = getViewportCenter();
         graphGroup.selectAll("*").remove();
         iconGroup.selectAll("*").remove();
         const loadingGroup = graphGroup.append("g");
@@ -615,7 +696,7 @@ nodeGroups.each(function(d) {
     }
 
     function renderError(message) {
-        const center = getViewportCenter(); // Get the correct center
+        const center = getViewportCenter();
         graphGroup.selectAll("*").remove();
         iconGroup.selectAll("*").remove();
         graphGroup.append("text").attr("class", "status-text error-text")
@@ -774,95 +855,69 @@ nodeGroups.each(function(d) {
     }
 
     function promptForInitialWord() {
-    const inputOverlay = document.getElementById('input-overlay');
-    const overlayInput = document.getElementById('overlay-input');
-    const voiceInputBtn = document.getElementById('voice-input-btn');
+        const inputOverlay = document.getElementById('input-overlay');
+        const overlayInput = document.getElementById('overlay-input');
+        const voiceInputBtn = document.getElementById('voice-input-btn');
 
-    overlayInput.placeholder = "Type a word or use the mic...";
-    inputOverlay.classList.add('visible');
-    overlayInput.focus();
-    overlayInput.value = '';
+        overlayInput.placeholder = "Type a word or use the mic...";
+        inputOverlay.classList.add('visible');
+        overlayInput.focus();
+        overlayInput.value = '';
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
 
-    // Check if the browser supports the API
-    if (SpeechRecognition) {
-        voiceInputBtn.style.display = 'flex'; // Show the button
-        recognition = new SpeechRecognition();
-        recognition.continuous = false; // We only need one result
-        recognition.lang = 'en-US';
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
+        if (SpeechRecognition) {
+            voiceInputBtn.style.display = 'flex';
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
 
-        voiceInputBtn.onclick = () => {
-            recognition.start();
-            console.log("Voice recognition started. Try speaking into the microphone.");
+            voiceInputBtn.onclick = () => {
+                recognition.start();
+            };
+
+            recognition.onstart = () => voiceInputBtn.classList.add('listening');
+            recognition.onend = () => voiceInputBtn.classList.remove('listening');
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.trim();
+                const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                if (cleanedTranscript) {
+                    overlayInput.value = cleanedTranscript;
+                    handleWordSubmitted(cleanedTranscript, true);
+                    closeOverlay();
+                }
+            };
+            recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+        } else {
+            voiceInputBtn.style.display = 'none';
+            overlayInput.placeholder = "Type a word and press Enter...";
+        }
+
+        const closeOverlay = () => {
+            inputOverlay.classList.remove('visible');
+            overlayInput.removeEventListener('keydown', handleKeyDown);
+            overlayInput.removeEventListener('blur', handleBlur);
+            if (recognition) recognition.stop();
         };
 
-        recognition.onstart = () => {
-            voiceInputBtn.classList.add('listening');
-        };
-
-        recognition.onend = () => {
-            voiceInputBtn.classList.remove('listening');
-            console.log("Voice recognition ended.");
-        };
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript.trim();
-            console.log('Result received: ' + transcript);
-            
-            // Clean up punctuation that speech recognition sometimes adds
-            const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
-
-            if (cleanedTranscript) {
-                overlayInput.value = cleanedTranscript; // Show the result in the input
-                handleWordSubmitted(cleanedTranscript, true);
-                closeOverlay(); // Close the overlay after successful submission
+        const handleKeyDown = (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                const value = overlayInput.value.trim();
+                if (value) handleWordSubmitted(value, true);
+                closeOverlay();
             }
         };
 
-        recognition.onerror = (event) => {
-            console.error("Speech recognition error:", event.error);
-            voiceInputBtn.classList.remove('listening');
-        };
+        const handleBlur = () => closeOverlay();
 
-    } else {
-        // If not supported, hide the button and adjust placeholder
-        voiceInputBtn.style.display = 'none';
-        overlayInput.placeholder = "Type a word and press Enter...";
-        console.log("Speech recognition not supported in this browser.");
+        overlayInput.addEventListener('keydown', handleKeyDown);
+        overlayInput.addEventListener('blur', handleBlur);
     }
-    // --- End of Voice Recognition Setup ---
-
-    const closeOverlay = () => {
-        inputOverlay.classList.remove('visible');
-        overlayInput.removeEventListener('keydown', handleKeyDown);
-        overlayInput.removeEventListener('blur', handleBlur);
-        if (recognition) {
-            recognition.stop(); // Ensure recognition is stopped when overlay closes
-        }
-    };
-
-    const handleKeyDown = (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            const value = overlayInput.value.trim();
-            if (value) {
-                handleWordSubmitted(value, true);
-            }
-            closeOverlay();
-        }
-    };
-
-    const handleBlur = () => {
-        closeOverlay();
-    };
-
-    overlayInput.addEventListener('keydown', handleKeyDown);
-    overlayInput.addEventListener('blur', handleBlur);
-}
           
     function handleDockClick(event) {
         const button = event.target.closest('button');
@@ -875,9 +930,9 @@ nodeGroups.each(function(d) {
         } else {
             switch (button.id) {
                 case 'clear-btn':
-            previousChallengeWords = [];
-            renderInitialPrompt(); 
-            break;
+                    previousChallengeWords = [];
+                    renderInitialPrompt(); 
+                    break;
                 case 'save-btn': saveAsPng(); break;
                 case 'fullscreen-btn': toggleFullScreen(); break;
                 case 'theme-toggle-btn': toggleTheme(); break;
@@ -910,76 +965,56 @@ nodeGroups.each(function(d) {
     }
 
     function createInteractiveText(d3Element, text, onWordClick) {
-    const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
-    d3Element.html("");
-    const lines = text.split('\n');
+        const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
+        d3Element.html("");
+        const lines = text.split('\n');
 
-    lines.forEach((line, lineIndex) => {
-        if (lineIndex > 0 && !isSvg) d3Element.append("br");
-             
-        // 1. Initial split into words and spaces/punctuation
-        const initialTokens = line.split(/(\s+)/);
-        const processedTokens = [];
+        lines.forEach((line, lineIndex) => {
+            if (lineIndex > 0 && !isSvg) d3Element.append("br");
+            
+            const initialTokens = line.split(/(\s+)/);
+            const processedTokens = [];
 
-        // 2. Use a look-ahead loop to combine phrasal verbs (KEEPING THIS LOGIC)
-        for (let i = 0; i < initialTokens.length; i++) {
-            const currentToken = initialTokens[i];
-            const nextToken = initialTokens[i + 2]; // Skip the space token in between
-
-            const cleanedCurrent = currentToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
-            const cleanedNext = nextToken ? nextToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '') : null;
-
-            if (cleanedNext && phrasalVerbParticles.has(cleanedNext) && cleanedCurrent.length > 1) {
-                processedTokens.push(currentToken + initialTokens[i + 1] + nextToken);
-                i += 2;
-            } else {
-                processedTokens.push(currentToken);
-            }
-        }
-        
-        const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
-        
-        // 3. Render using a more robust regex-based loop
-        processedTokens.forEach(token => {
-            // This regex finds:
-            // 1. Common abbreviations like "Mrs." or "Dr."
-            // 2. Words containing letters, numbers, spaces (for phrasal verbs), apostrophes, hyphens, or slashes.
-            // The 'g' flag is crucial for finding all matches within a token.
-            const wordRegex = /\b([A-Z][a-z]{1,3}\.|[a-zA-Z0-9\s'/-]+)\b/g;
-
-            let lastIndex = 0;
-            let match;
-
-            // Loop through all word-like matches found in the token
-            while ((match = wordRegex.exec(token)) !== null) {
-                // Append any preceding non-word text (e.g., punctuation, em-dashes)
-                if (match.index > lastIndex) {
-                    lineContainer.append('span').text(token.substring(lastIndex, match.index));
-                }
-
-                const wordPart = match[0];
-
-                // Check if the matched part is a valid, clickable term
-                if (wordPart.trim().length > 1) {
-                    lineContainer.append('span')
-                        .attr('class', 'interactive-word')
-                        .text(wordPart)
-                        .on('click', (event) => { event.stopPropagation(); onWordClick(wordPart); });
+            for (let i = 0; i < initialTokens.length; i++) {
+                const currentToken = initialTokens[i];
+                const nextToken = initialTokens[i + 2];
+                const cleanedCurrent = currentToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
+                const cleanedNext = nextToken ? nextToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '') : null;
+                if (cleanedNext && phrasalVerbParticles.has(cleanedNext) && cleanedCurrent.length > 1) {
+                    processedTokens.push(currentToken + initialTokens[i + 1] + nextToken);
+                    i += 2;
                 } else {
-                    // Not a clickable word (e.g., a single letter), render as plain text
-                    lineContainer.append('span').text(wordPart);
+                    processedTokens.push(currentToken);
                 }
-                
-                lastIndex = wordRegex.lastIndex;
             }
-
-            // Append any remaining text after the last match (e.g., trailing punctuation)
-            if (lastIndex < token.length) {
-                lineContainer.append('span').text(token.substring(lastIndex));
-            }
+            
+            const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
+            
+            processedTokens.forEach(token => {
+                const wordRegex = /\b([A-Z][a-z]{1,3}\.|[a-zA-Z0-9\s'/-]+)\b/g;
+                let lastIndex = 0;
+                let match;
+                while ((match = wordRegex.exec(token)) !== null) {
+                    if (match.index > lastIndex) {
+                        lineContainer.append('span').text(token.substring(lastIndex, match.index));
+                    }
+                    const wordPart = match[0];
+                    if (wordPart.trim().length > 1) {
+                        lineContainer.append('span')
+                            .attr('class', 'interactive-word')
+                            .text(wordPart)
+                            .on('click', (event) => { event.stopPropagation(); onWordClick(wordPart); });
+                    } else {
+                        lineContainer.append('span').text(wordPart);
+                    }
+                    lastIndex = wordRegex.lastIndex;
+                }
+                if (lastIndex < token.length) {
+                    lineContainer.append('span').text(token.substring(lastIndex));
+                }
+            });
         });
-    });
-}
+    }
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
@@ -1035,8 +1070,6 @@ nodeGroups.each(function(d) {
                         cluster.nodes.push(newNode);
                         cluster.links.push({ source: `central-${currentActiveCentral}`, target: newNodeId });
                         addedNodeCount++;
-                    } else {
-                        console.log(`Skipping duplicate node: "${newNodeData.text}"`);
                     }
                 });
                 if (addedNodeCount > 0) {
@@ -1074,77 +1107,68 @@ nodeGroups.each(function(d) {
         });
     }
 
-     async function startGame() {
-    renderLoading("Generating your challenge...");
-    try {
-        const response = await fetch('/.netlify/functions/wordsplainer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // Add the list of used words to the request body
-            body: JSON.stringify({ 
-                type: 'generateWordLadderChallenge',
-                previousWords: previousChallengeWords 
-            })
-        });
-        if (!response.ok) throw new Error("Could not generate a challenge.");
-        
-        const challenge = await response.json();
-        previousChallengeWords.push(challenge.startWord.toLowerCase(), challenge.endWord.toLowerCase());
-        
-        isGameMode = true;
-        gameData.startWord = challenge.startWord.toLowerCase();
-        gameData.targetWord = challenge.endWord.toLowerCase();
-        gameData.steps = 0;
-        
-        renderInitialPrompt();
-        await handleWordSubmitted(gameData.startWord, true);
+    async function startGame() {
+        renderLoading("Generating your challenge...");
+        try {
+            const response = await fetch('/.netlify/functions/wordsplainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    type: 'generateWordLadderChallenge',
+                    previousWords: previousChallengeWords 
+                })
+            });
+            if (!response.ok) throw new Error("Could not generate a challenge.");
+            
+            const challenge = await response.json();
+            previousChallengeWords.push(challenge.startWord.toLowerCase(), challenge.endWord.toLowerCase());
+            
+            isGameMode = true;
+            gameData.startWord = challenge.startWord.toLowerCase();
+            gameData.targetWord = challenge.endWord.toLowerCase();
+            gameData.steps = 0;
+            
+            renderInitialPrompt();
+            await handleWordSubmitted(gameData.startWord, true);
 
-        updateGameUI();
-        gameStatusUI.classList.add('visible');
+            updateGameUI();
+            gameStatusUI.classList.add('visible');
 
-    } catch (error) {
-        renderError("Failed to start game. Please try again.");
-        console.error("Error starting game:", error);
+        } catch (error) {
+            renderError("Failed to start game. Please try again.");
+            console.error("Error starting game:", error);
+        }
     }
-}
 
-function updateGameUI() {
-    startWordEl.textContent = gameData.startWord;
-    targetWordEl.textContent = gameData.targetWord;
-    stepCountEl.textContent = gameData.steps;
-}
+    function updateGameUI() {
+        startWordEl.textContent = gameData.startWord;
+        targetWordEl.textContent = gameData.targetWord;
+        stepCountEl.textContent = gameData.steps;
+    }
 
-function endGame() {
-    isGameMode = false;
-    gameStatusUI.classList.remove('visible');
-    // Optional: You can render the initial prompt again
-    // renderInitialPrompt();
-}
+    function endGame() {
+        isGameMode = false;
+        gameStatusUI.classList.remove('visible');
+    }
 
-function handleWin() {
-    // Set the message
-    gameOverMessage.textContent = `You reached "${gameData.targetWord}" in ${gameData.steps} steps!`;
-    
-    // Show the modal
-    gameOverModal.classList.add('visible');
-    
-    // Trigger confetti!
-    const myConfetti = confetti.create(confettiCanvas, {
-        resize: true,
-        useWorker: true
-    });
-    myConfetti({
-        particleCount: 150,
-        spread: 160,
-        origin: { y: 0.6 }
-    });
-    
-    // End the current game state
-    endGame();
-}
+    function handleWin() {
+        gameOverMessage.textContent = `You reached "${gameData.targetWord}" in ${gameData.steps} steps!`;
+        gameOverModal.classList.add('visible');
+        
+        const myConfetti = confetti.create(confettiCanvas, {
+            resize: true,
+            useWorker: true
+        });
+        myConfetti({
+            particleCount: 150,
+            spread: 160,
+            origin: { y: 0.6 }
+        });
+        
+        endGame();
+    }
 
-
-function handleLayoutToggle() {
+    function handleLayoutToggle() {
         currentLayout = (currentLayout === 'force') ? 'radial' : 'force';
         layoutToggleBtn.classList.toggle('active', currentLayout === 'radial');
 
@@ -1168,9 +1192,6 @@ function handleLayoutToggle() {
         simulation.alpha(1).restart();
     }
 
-// Add the event listener
-layoutToggleBtn.addEventListener('click', handleLayoutToggle);
-   
     function toggleTheme() {
         const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
         applyTheme(newTheme);
@@ -1262,142 +1283,6 @@ layoutToggleBtn.addEventListener('click', handleLayoutToggle);
         }
     }
 
-function getSubmissionCount() {
-    return parseInt(localStorage.getItem('wordsplainer_submission_count') || '0', 10);
-}
-function incrementSubmissionCount() {
-    const count = getSubmissionCount();
-    localStorage.setItem('wordsplainer_submission_count', count + 1);
-}
-
-function createTour(options = {}) {
-    const tour = new Shepherd.Tour({
-        // FIX: Attach the tour inside the full-screen element to solve the visibility bug.
-        container: document.querySelector('#app-wrapper'),
-        useModalOverlay: true,
-        defaultStepOptions: {
-            classes: 'wordsplainer-tour', // Use a custom class for styling
-            cancelIcon: {
-                enabled: true
-            },
-            buttons: [
-                {
-                    action() {
-                        return this.back();
-                    },
-                    classes: 'shepherd-button-secondary',
-                    text: 'Back',
-                },
-                {
-                    action() {
-                        return this.next();
-                    },
-                    text: 'Next',
-                },
-            ],
-            ...options // Allow overriding defaults
-        },
-    });
-    return tour;
-}
-
-
-function initMainOnboarding() {
-    if (localStorage.getItem('wordsplainer_main_tour_complete')) return;
-
-    const tour = createTour();
-
-    tour.addStep({
-        id: 'step1-views',
-        text: 'Switch views to discover different relationships, like synonyms or real-world context.',
-        attachTo: { element: '#controls-dock', on: 'top' },
-    });
-
-    tour.addStep({
-        id: 'step2-navigate',
-        // FIX: Target a more generic element that is guaranteed to exist.
-        text: 'Click any word in a bubble to make it the center of a new exploration. This is how you navigate!',
-        attachTo: { element: 'g.node:not(.central-node) .node-html-content', on: 'right' },
-        when: {
-            show: () => {
-                const node = document.querySelector('g.node:not(.central-node)');
-                if (!node) tour.cancel(); // Failsafe if no peripheral nodes exist
-            }
-        }
-    });
-
-    tour.addStep({
-        id: 'step3-example',
-        text: 'Click the colored circle to see the word used in a sentence.',
-        attachTo: { element: 'g.node:not(.central-node) circle', on: 'right' },
-         buttons: [{
-            action() { return this.complete(); },
-            text: 'Got it!'
-        }],
-    });
-    
-    tour.on('complete', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
-    tour.on('cancel', () => localStorage.setItem('wordsplainer_main_tour_complete', 'true'));
-
-    setTimeout(() => tour.start(), 1200);
-}
-
-// FIX: New tour for the settings toggles
-function initSettingsOnboarding() {
-    if (localStorage.getItem('wordsplainer_settings_tour_complete')) return;
-
-    const tour = createTour({
-         buttons: [{
-            action() { return this.complete(); },
-            text: 'Awesome!'
-        }]
-    });
-    
-    tour.addStep({
-        id: 'step-settings',
-        title: 'Customize Your Results',
-        text: 'Use these toggles to tailor the language style (e.g., academic), proficiency level, and target audience. The graph will update automatically!',
-        attachTo: { element: '#canvas-controls', on: 'left' },
-    });
-
-    tour.on('complete', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
-    tour.on('cancel', () => localStorage.setItem('wordsplainer_settings_tour_complete', 'true'));
-    
-    tour.start();
-}
-
-
-function initGameOnboarding() {
-    if (localStorage.getItem('wordsplainer_game_tour_complete')) {
-        startGame();
-        return;
-    }
-
-    const tour = createTour({
-        cancelIcon: { enabled: false }
-    });
-
-    tour.addStep({
-        title: 'Word Ladder Challenge!',
-        text: `<b>How to Play:</b>
-               <ul style="text-align: left; margin-top: 10px; padding-left: 20px;">
-                 <li>We give you a <b>START</b> word and a <b>TARGET</b> word.</li>
-                 <li>Your goal is to get from START to TARGET in the fewest steps.</li>
-                 <li>Explore the graph and click related words to find your path!</li>
-               </ul>`,
-        buttons: [{
-            text: "Let's Go!",
-            action() {
-                localStorage.setItem('wordsplainer_game_tour_complete', 'true');
-                this.complete();
-            }
-        }]
-    });
-    
-    tour.on('complete', startGame);
-    tour.start();
-}
-
     // --- Initialization ---
     renderInitialPrompt();
     controlsDock.addEventListener('click', handleDockClick);
@@ -1406,6 +1291,17 @@ function initGameOnboarding() {
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
     ageToggleBtn.addEventListener('click', handleAgeToggle);
     layoutToggleBtn.addEventListener('click', handleLayoutToggle);    
+    playGameBtn.addEventListener('click', initGameOnboarding);
+    endGameBtn.addEventListener('click', endGame);
+    playAgainBtn.addEventListener('click', () => {
+        gameOverModal.classList.remove('visible');
+        startGame();
+    });
+    gameOverModal.addEventListener('click', (event) => {
+        if (event.target === gameOverModal) {
+            gameOverModal.classList.remove('visible');
+        }
+    });
     window.addEventListener('resize', handleResize);
     document.addEventListener('keydown', (event) => { if (event.key === "Escape") languageModal.classList.remove('visible'); });
     modalCloseBtn.addEventListener('click', () => languageModal.classList.remove('visible'));
