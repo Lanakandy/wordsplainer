@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const graphGroup = svg.append("g");
     const iconGroup = svg.append("g").attr("class", "icon-layer");
 
-    playGameBtn.addEventListener('click', startGame);
+    playGameBtn.addEventListener('click', initGameOnboarding);
     endGameBtn.addEventListener('click', endGame);
     playAgainBtn.addEventListener('click', () => {
     gameOverModal.classList.remove('visible');
@@ -520,6 +520,7 @@ nodeGroups.each(function(d) {
     }
     
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
+    const isFirstTime = !localStorage.getItem('wordsplainer_main_tour_complete');
         const lowerWord = word.toLowerCase();
         
          if (isGameMode && isNewCentral) {
@@ -563,9 +564,12 @@ nodeGroups.each(function(d) {
         viewState = { offset: 0, hasMore: true };
         updateActiveButton();
         await generateGraphForView(currentView);
+        if (isFirstTime && isNewCentral) {
+        initMainOnboarding();
     }
-
-    function panToNode(target, scale = 1.2) {
+}
+    
+     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
             console.error("panToNode called with invalid target:", target);
             return;
@@ -1244,6 +1248,121 @@ layoutToggleBtn.addEventListener('click', handleLayoutToggle);
             d.fy = null;
         }
     }
+
+function initMainOnboarding() {
+    // Don't show if the user has already seen it
+    if (localStorage.getItem('wordsplainer_main_tour_complete')) {
+        return;
+    }
+
+    const tour = new Shepherd.Tour({
+        useModalOverlay: true,
+        defaultStepOptions: {
+            classes: 'shepherd-theme-arrows',
+            cancelIcon: {
+                enabled: true
+            },
+            buttons: [
+                {
+                    action() {
+                        return this.back();
+                    },
+                    classes: 'shepherd-button-secondary',
+                    text: 'Back',
+                },
+                {
+                    action() {
+                        return this.next();
+                    },
+                    text: 'Next',
+                },
+            ],
+        },
+    });
+
+    tour.addStep({
+        id: 'step1-views',
+        text: 'Switch views to discover different relationships, like synonyms or real-world context.',
+        attachTo: { element: '#controls-dock .category-btn[data-type="synonyms"]', on: 'bottom' },
+    });
+
+    tour.addStep({
+        id: 'step2-navigate',
+        text: 'Click any word to make it the center of a new exploration. This is how you navigate!',
+        attachTo: { element: '.node-derivatives .interactive-word', on: 'right' },
+        // We wait for the node to be drawn before attaching
+        when: {
+            show: () => {
+                const node = document.querySelector('.node-derivatives');
+                if (!node) tour.cancel(); // Failsafe if the node doesn't exist
+            }
+        }
+    });
+
+    tour.addStep({
+        id: 'step3-example',
+        text: 'Click the circle to see the word used in a sentence. Try it now!',
+        attachTo: { element: '.node-derivatives circle', on: 'right' },
+        buttons: [
+            {
+                action() {
+                    return this.complete();
+                },
+                text: 'Got it!',
+            },
+        ],
+    });
+
+    tour.on('complete', () => {
+        localStorage.setItem('wordsplainer_main_tour_complete', 'true');
+    });
+    
+    tour.on('cancel', () => {
+        localStorage.setItem('wordsplainer_main_tour_complete', 'true');
+    });
+
+    // A short delay to ensure the graph is rendered and settled
+    setTimeout(() => tour.start(), 1500);
+}
+
+function initGameOnboarding() {
+    // Don't show if the user has already seen it
+    if (localStorage.getItem('wordsplainer_game_tour_complete')) {
+        startGame(); // Just start the game if they know how to play
+        return;
+    }
+
+    const tour = new Shepherd.Tour({
+        useModalOverlay: true,
+        defaultStepOptions: {
+            classes: 'shepherd-theme-arrows',
+            cancelIcon: {
+              enabled: false
+            },
+        },
+    });
+
+    tour.addStep({
+        title: 'Word Ladder Challenge!',
+        text: `<b>How to Play:</b>
+               <ul style="text-align: left; margin-top: 10px;">
+                 <li>We give you a <b>START</b> word and a <b>TARGET</b> word.</li>
+                 <li>Your goal is to get from START to TARGET in the fewest steps.</li>
+                 <li>Explore the graph and click related words to find your path!</li>
+               </ul>`,
+        buttons: [{
+            text: "Let's Go!",
+            action() {
+                localStorage.setItem('wordsplainer_game_tour_complete', 'true');
+                this.complete();
+            }
+        }]
+    });
+    
+    tour.on('complete', startGame); // Start the game after the modal is closed
+    
+    tour.start();
+}
 
     // --- Initialization ---
     renderInitialPrompt();
