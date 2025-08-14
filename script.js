@@ -17,8 +17,8 @@ let gameData = {
 };
 
 const phrasalVerbParticles = new Set([
-    'about', 'across', 'after', 'along', 'around', 'away', 'back', 'by', 
-    'down', 'for', 'in', 'into', 'off', 'on', 'out', 'over', 
+    'about', 'across', 'after', 'along', 'around', 'away', 'back', 'by',
+    'down', 'for', 'in', 'into', 'off', 'on', 'out', 'over',
     'through', 'to', 'up', 'with'
 ]);
 
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const confettiCanvas = document.getElementById('confetti-canvas');
     const onboardingHelpBtn = document.getElementById('onboarding-help-btn');
 
-     const colorMap = {
+    const colorMap = {
         meaning: 'var(--meaning-color)',
         context: 'var(--context-color)',
         derivatives: 'var(--derivative-color)',
@@ -58,17 +58,15 @@ document.addEventListener('DOMContentLoaded', () => {
         translation: 'var(--translation-color)'
     };
 
-    startComprehensiveTour();
-
     if (registerToggleBtn) {
         registerToggleBtn.classList.add('needs-attention');
     }
 
     const radialForce = d3.forceRadial(d => {
-    if (d.isCentral) return 0;
-    if (d.type === 'example') return 280;
-    return 180;
-}).strength(0.8).x(graphContainer.getBoundingClientRect().width / 2).y(graphContainer.getBoundingClientRect().height / 2);
+        if (d.isCentral) return 0;
+        if (d.type === 'example') return 280;
+        return 180;
+    }).strength(0.8).x(graphContainer.getBoundingClientRect().width / 2).y(graphContainer.getBoundingClientRect().height / 2);
 
     const tooltip = document.getElementById('graph-tooltip');
     const svg = d3.select("#wordsplainer-graph-svg");
@@ -82,24 +80,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentActiveCentral = null;
     let currentView = 'meaning';
     let viewState = { offset: 0, hasMore: true };
-    let activeTour = null;
-    
-    // --- Onboarding Logic ---
-    function getSubmissionCount() {
-        return parseInt(localStorage.getItem('wordsplainer_submission_count') || '0', 10);
-    }
-    function incrementSubmissionCount() {
-        const count = getSubmissionCount();
-        localStorage.setItem('wordsplainer_submission_count', count + 1);
-    }
+    let activeTour = null; // FIXED: Variable declared before use.
 
+    // --- Onboarding Logic ---
     function createTour(options = {}) {
         if (activeTour && activeTour.isActive()) {
             activeTour.cancel();
         }
-    
+
         const tour = new Shepherd.Tour({
-            container: document.querySelector('#app-wrapper'), 
+            container: document.querySelector('#app-wrapper'),
             useModalOverlay: true,
             defaultStepOptions: {
                 classes: 'wordsplainer-tour',
@@ -124,60 +114,58 @@ document.addEventListener('DOMContentLoaded', () => {
         return tour;
     }
 
-function startComprehensiveTour(force = false) {
-    // Don't run if the user has already seen it, unless forced by the help button.
-    if (!force && localStorage.getItem('wordsplainer_comprehensive_tour_complete')) {
-        return;
+    function startComprehensiveTour(force = false) {
+        // Don't run if the user has already seen it, unless forced by the help button.
+        if (!force && localStorage.getItem('wordsplainer_comprehensive_tour_complete')) {
+            return;
+        }
+
+        const tour = createTour();
+
+        tour.addStep({
+            id: 'step1-welcome',
+            title: 'Welcome to Wordsplainer!',
+            text: 'This is an interactive map for words. To begin, click the central plus icon to add your first word.',
+            attachTo: { element: '.node.central-node', on: 'bottom' },
+        });
+
+        tour.addStep({
+            id: 'step2-views',
+            title: 'Change Your View',
+            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
+            attachTo: { element: '#controls-dock', on: 'top' },
+        });
+
+        tour.addStep({
+            id: 'step3-explore',
+            title: 'Navigate the Graph',
+            text: 'New words will appear in bubbles around the center. <b>Click any word in a bubble to make it the new center.</b> This is how you find connections!',
+            attachTo: { element: '#graph-container', on: 'top' }
+        });
+
+        tour.addStep({
+            id: 'step4-settings',
+            title: 'Customize Your Results',
+            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
+            attachTo: { element: '#canvas-controls', on: 'left' },
+            buttons: [
+                { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
+                { action() { this.complete(); }, text: 'Got it!' }
+            ]
+        });
+
+        tour.on('complete', () => {
+            localStorage.setItem('wordsplainer_comprehensive_tour_complete', 'true');
+        });
+
+        tour.start();
     }
 
-    const tour = createTour();
-
-    tour.addStep({
-        id: 'step1-welcome',
-        title: 'Welcome to Wordsplainer!',
-        text: 'This is an interactive map for words. To begin, click the central plus icon to add your first word.',
-        // This selector works whether the graph is empty or not.
-        attachTo: { element: '.node.central-node', on: 'bottom' },
-    });
-
-    tour.addStep({
-        id: 'step2-views',
-        title: 'Change Your View',
-        text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
-        attachTo: { element: '#controls-dock', on: 'top' },
-    });
-
-    tour.addStep({
-        id: 'step3-explore',
-        title: 'Navigate the Graph',
-        text: 'New words will appear in bubbles around the center. <b>Click any word in a bubble to make it the new center.</b> This is how you find connections!',
-        // Attaching to the whole graph container makes this a general, conceptual step.
-        attachTo: { element: '#graph-container', on: 'top' }
-    });
-
-    tour.addStep({
-        id: 'step4-settings',
-        title: 'Customize Your Results',
-        text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
-        attachTo: { element: '#canvas-controls', on: 'left' },
-        buttons: [
-            { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
-            { action() { this.complete(); }, text: 'Got it!' }
-        ]
-    });
-
-    tour.on('complete', () => {
-        localStorage.setItem('wordsplainer_comprehensive_tour_complete', 'true');
-    });
-
-    tour.start();
-}      
-
     function showHelpTour() {
-    startComprehensiveTour(true);
-}
+        startComprehensiveTour(true);
+    }
 
-      function initGameOnboarding() {
+    function initGameOnboarding() {
         if (localStorage.getItem('wordsplainer_game_tour_complete')) {
             startGame();
             return;
@@ -202,7 +190,7 @@ function startComprehensiveTour(force = false) {
         tour.on('complete', startGame);
         tour.start();
     }
-      
+
     // --- Helper Functions ---
     function getViewportCenter() {
         const { width, height } = graphContainer.getBoundingClientRect();
@@ -330,7 +318,7 @@ function startComprehensiveTour(force = false) {
             return `translate(-1000, -1000)`;
         });
     });
-    
+
     function updateGraph() {
         const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
         const visibleNodes = allNodes.filter(n => n.visible !== false);
@@ -400,11 +388,11 @@ function startComprehensiveTour(force = false) {
                     .attr("width", textWidth)
                     .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
                     .style("opacity", 0)
-                    .attr("height", 20); 
+                    .attr("height", 20);
 
                 const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
                 createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
-                
+
                 foreignObject.transition().duration(400).style("opacity", 1);
 
                 setTimeout(() => {
@@ -417,7 +405,7 @@ function startComprehensiveTour(force = false) {
                         foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
                         d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
                         d.height = Math.max(circleRadius * 2, textHeight);
-                        
+
                         if (simulation.alpha() < 0.1) {
                             simulation.alpha(0.1).restart();
                         }
@@ -450,7 +438,7 @@ function startComprehensiveTour(force = false) {
         graphGroup.selectAll('.central-node').raise();
         updateCentralNodeState();
     }
-    
+
     function renderInitialPrompt() {
         simulation.stop();
         centralNodes = [];
@@ -507,16 +495,16 @@ function startComprehensiveTour(force = false) {
         ageToggleBtn.classList.toggle('is-adult', currentAgeGroup === 'adults');
         refetchCurrentView();
     }
-    
+
     function handleMouseOver(event, d) {
         const selection = d3.select(event.currentTarget);
-          if (d.type !== 'add') {
+        if (d.type !== 'add') {
             selection.transition()
                 .duration(200)
                 .ease(d3.easeCircleOut)
                 .attr("transform", `translate(${d.x},${d.y}) scale(1.1)`);
         }
-    
+
         if (d.isCentral) {
             selection.select("circle")
                 .transition()
@@ -529,26 +517,26 @@ function startComprehensiveTour(force = false) {
                 .style("stroke", "var(--primary-coral)")
                 .style("stroke-width", "2px");
         }
-    
+
         let tooltipText = '';
         if (d.isCentral) {
             const cluster = graphClusters.get(d.clusterId);
             tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
         } else if (d.type === 'add') {
             const is_disabled = d3.select(event.currentTarget).classed('is-disabled');
-            tooltipText = is_disabled ? 
+            tooltipText = is_disabled ?
                 'No more items to load' :
                 `Load more ${graphClusters.get(d.clusterId)?.currentView || 'items'}`;
         } else if (d.text && !d.isCentral && d.type !== 'example' && d.type !== 'add') {
             tooltipText = `Click circle for an example\nClick text to explore`;
         }
-            
+
         if (tooltipText) {
             tooltip.textContent = tooltipText;
             tooltip.classList.add('visible');
             tooltip.style.transform = 'translateY(-10px)';
         }
-        
+
         svg.on('mousemove.tooltip', (e) => {
             tooltip.style.left = `${e.pageX + 15}px`;
             tooltip.style.top = `${e.pageY - 30}px`;
@@ -557,14 +545,14 @@ function startComprehensiveTour(force = false) {
 
     function handleMouseOut(event, d) {
         const selection = d3.select(event.currentTarget);
-        
+
         if (d.type !== 'add') {
             selection.transition()
                 .duration(200)
                 .ease(d3.easeCircleOut)
                 .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
         }
-        
+
         if (d.isCentral) {
             selection.select("circle")
                 .transition()
@@ -576,7 +564,7 @@ function startComprehensiveTour(force = false) {
                 .duration(200)
                 .style("stroke", "none");
         }
-        
+
         tooltip.classList.remove('visible');
         tooltip.style.transform = 'translateY(0)';
         svg.on('mousemove.tooltip', null);
@@ -585,7 +573,7 @@ function startComprehensiveTour(force = false) {
     function handleNodeClick(event, d) {
         if (event.defaultPrevented) return;
         event.stopPropagation();
-        
+
         const selection = d3.select(event.currentTarget);
         selection.transition()
             .duration(150)
@@ -595,7 +583,7 @@ function startComprehensiveTour(force = false) {
             .duration(150)
             .ease(d3.easeCircleOut)
             .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
-        
+
         const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
 
         if (exampleTypes.includes(d.type)) {
@@ -607,17 +595,12 @@ function startComprehensiveTour(force = false) {
                 return;
             }
             fetchMoreNodes();
-       }
+        }
     }
-    
+
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
         const lowerWord = word.toLowerCase();
-        const isFirstSubmission = getSubmissionCount() === 0;
-        if (isNewCentral) {
-           incrementSubmissionCount();
-        }
-        const currentSubmissionCount = getSubmissionCount();
-    
+
         if (isGameMode && isNewCentral) {
             gameData.steps++;
             updateGameUI();
@@ -626,64 +609,62 @@ function startComprehensiveTour(force = false) {
                 return;
             }
         }
-    
+
         if (isNewCentral) {
             if (centralNodes.some(c => c.word === lowerWord)) {
                 const existingNode = centralNodes.find(n => n.word === lowerWord);
-                if(existingNode) focusOnCentralNode(existingNode.clusterId);
+                if (existingNode) focusOnCentralNode(existingNode.clusterId);
                 return;
             }
-    
-            const centralNodeData = { 
-                word: lowerWord, id: `central-${lowerWord}`, 
+
+            const centralNodeData = {
+                word: lowerWord, id: `central-${lowerWord}`,
                 isCentral: true, type: 'central', clusterId: lowerWord,
                 visible: true
             };
-            
+
             centralNodes.push(centralNodeData);
-            graphClusters.set(lowerWord, { 
-                nodes: [centralNodeData], 
-                links: [], 
-                center: { x: 0, y: 0 }, 
-                currentView: 'meaning' 
+            graphClusters.set(lowerWord, {
+                nodes: [centralNodeData],
+                links: [],
+                center: { x: 0, y: 0 },
+                currentView: 'meaning'
             });
-    
+
             const newClusterCenter = repositionAllClusters();
-            
+
             if (newClusterCenter) {
                 panToNode(newClusterCenter, 1.2);
             }
         }
-    
+
         currentActiveCentral = lowerWord;
         currentView = 'meaning';
         viewState = { offset: 0, hasMore: true };
         updateActiveButton();
-    
+
         await generateGraphForView(currentView);
-        
-        }
-    
-     
+    }
+
     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
             console.error("panToNode called with invalid target:", target);
             return;
         }
-        
+
         const { width, height } = graphContainer.getBoundingClientRect();
-        
+
         const transform = d3.zoomIdentity
             .translate(width / 2, height / 2)
             .scale(scale)
             .translate(-target.x, -target.y);
-        
+
         svg.transition()
             .duration(1000)
             .ease(d3.easeCubicInOut)
             .call(zoomBehavior.transform, transform);
     }
-    
+
     function renderLoading(message) {
         const center = getViewportCenter();
         graphGroup.selectAll("*").remove();
@@ -760,7 +741,7 @@ function startComprehensiveTour(force = false) {
                     requestBody.translation = nodeData.text;
                     requestBody.language = nodeData.lang;
                 }
-                
+
                 const response = await fetch('/.netlify/functions/wordsplainer', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -797,7 +778,7 @@ function startComprehensiveTour(force = false) {
                 alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
             }
         }
-    }   
+    }
 
     async function generateGraphForView(view, options = {}) {
         if (!currentActiveCentral) return renderError('No word selected.');
@@ -886,7 +867,7 @@ function startComprehensiveTour(force = false) {
 
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript.trim();
-                const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
                 if (cleanedTranscript) {
                     overlayInput.value = cleanedTranscript;
                     handleWordSubmitted(cleanedTranscript, true);
@@ -920,7 +901,7 @@ function startComprehensiveTour(force = false) {
         overlayInput.addEventListener('keydown', handleKeyDown);
         overlayInput.addEventListener('blur', handleBlur);
     }
-          
+
     function handleDockClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
@@ -933,7 +914,7 @@ function startComprehensiveTour(force = false) {
             switch (button.id) {
                 case 'clear-btn':
                     previousChallengeWords = [];
-                    renderInitialPrompt(); 
+                    renderInitialPrompt();
                     break;
                 case 'save-btn': saveAsPng(); break;
                 case 'fullscreen-btn': toggleFullScreen(); break;
@@ -973,7 +954,7 @@ function startComprehensiveTour(force = false) {
 
         lines.forEach((line, lineIndex) => {
             if (lineIndex > 0 && !isSvg) d3Element.append("br");
-            
+
             const initialTokens = line.split(/(\s+)/);
             const processedTokens = [];
 
@@ -989,9 +970,9 @@ function startComprehensiveTour(force = false) {
                     processedTokens.push(currentToken);
                 }
             }
-            
+
             const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
-            
+
             processedTokens.forEach(token => {
                 const wordRegex = /\b([A-Z][a-z]{1,3}\.|[a-zA-Z0-9\s'/-]+)\b/g;
                 let lastIndex = 0;
@@ -1094,7 +1075,7 @@ function startComprehensiveTour(force = false) {
             updateCentralNodeState();
         }
     }
-    
+
     function updateCentralNodeState() {
         if (!currentActiveCentral) return;
         const centralNodeElement = graphGroup.selectAll('.central-node').filter(d => d.clusterId === currentActiveCentral);
@@ -1102,7 +1083,7 @@ function startComprehensiveTour(force = false) {
         const isPaginatedView = currentView !== 'meaning';
         centralNodeElement.classed('loadable', isPaginatedView && viewState.hasMore);
     }
-    
+
     function updateActiveButton() {
         document.querySelectorAll('.category-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.type === currentView);
@@ -1115,21 +1096,21 @@ function startComprehensiveTour(force = false) {
             const response = await fetch('/.netlify/functions/wordsplainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     type: 'generateWordLadderChallenge',
-                    previousWords: previousChallengeWords 
+                    previousWords: previousChallengeWords
                 })
             });
             if (!response.ok) throw new Error("Could not generate a challenge.");
-            
+
             const challenge = await response.json();
             previousChallengeWords.push(challenge.startWord.toLowerCase(), challenge.endWord.toLowerCase());
-            
+
             isGameMode = true;
             gameData.startWord = challenge.startWord.toLowerCase();
             gameData.targetWord = challenge.endWord.toLowerCase();
             gameData.steps = 0;
-            
+
             renderInitialPrompt();
             await handleWordSubmitted(gameData.startWord, true);
 
@@ -1156,7 +1137,7 @@ function startComprehensiveTour(force = false) {
     function handleWin() {
         gameOverMessage.textContent = `You reached "${gameData.targetWord}" in ${gameData.steps} steps!`;
         gameOverModal.classList.add('visible');
-        
+
         const myConfetti = confetti.create(confettiCanvas, {
             resize: true,
             useWorker: true
@@ -1166,7 +1147,7 @@ function startComprehensiveTour(force = false) {
             spread: 160,
             origin: { y: 0.6 }
         });
-        
+
         endGame();
     }
 
@@ -1203,7 +1184,7 @@ function startComprehensiveTour(force = false) {
         if (!document.fullscreenElement) document.getElementById('app-wrapper').requestFullscreen().catch(err => alert(`Error: ${err.message}`));
         else document.exitFullscreen();
     }
-    
+
     function saveAsPng() {
         if (centralNodes.length === 0) {
             alert("Nothing to save yet!");
@@ -1287,12 +1268,13 @@ function startComprehensiveTour(force = false) {
 
     // --- Initialization ---
     renderInitialPrompt();
+    startComprehensiveTour(); // Call the tour on page load
     controlsDock.addEventListener('click', handleDockClick);
     zoomControls.addEventListener('click', handleZoomControlsClick);
     registerToggleBtn.addEventListener('click', handleRegisterToggle);
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
     ageToggleBtn.addEventListener('click', handleAgeToggle);
-    layoutToggleBtn.addEventListener('click', handleLayoutToggle);    
+    layoutToggleBtn.addEventListener('click', handleLayoutToggle);
     playGameBtn.addEventListener('click', initGameOnboarding);
     onboardingHelpBtn.addEventListener('click', showHelpTour);
     endGameBtn.addEventListener('click', endGame);
