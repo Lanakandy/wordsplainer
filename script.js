@@ -16,7 +16,7 @@ let gameData = {
     steps: 0
 };
 
-const MAX_ACTIVE_CLUSTERS = 2;
+const MAX_ACTIVE_CLUSTERS = 3;
 const HISTORY_CLUSTER_ID = 'history-cluster';
 
 const phrasalVerbParticles = new Set([
@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step2-views',
             title: 'Change Your View',
-            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like combinations, forms, or real-world context.',
+            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
             attachTo: { element: '#controls-dock', on: 'top' },
         });
 
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Make it yours! Choose the register (conversational, academic, or business), set the difficulty level (higher or lower), and decide who it’s for (teens or adults).',
+            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
@@ -303,69 +303,68 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateGraph() {
-    const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
-    const visibleNodes = allNodes.filter(n => n.visible !== false);
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-    const visibleLinks = allLinks.filter(l => visibleNodeIds.has(l.source.id || l.source) && visibleNodeIds.has(l.target.id || l.target));
-    const { width, height } = graphContainer.getBoundingClientRect();
-    graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
+        const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
+        const visibleNodes = allNodes.filter(n => n.visible !== false);
+        const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+        const visibleLinks = allLinks.filter(l => visibleNodeIds.has(l.source.id || l.source) && visibleNodeIds.has(l.target.id || l.target));
+        const { width, height } = graphContainer.getBoundingClientRect();
+        graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
 
-    graphGroup.selectAll(".link").data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join(
-        enter => enter.append("line").attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`).style("opacity", 0).style("stroke-width", 0)
-            .transition().duration(800).delay((d, i) => i * 50).ease(d3.easeCircleOut).style("opacity", 1).style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1),
-        update => update.attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`),
-        exit => exit.transition().duration(400).ease(d3.easeCircleIn).style("opacity", 0).style("stroke-width", 0).remove()
-    );
-
-    const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id)
-        .join(
-            enter => enter.append("g")
-                .style("opacity", 0)
-                .attr("transform", d => {
-                    const cluster = graphClusters.get(d.clusterId);
-                    const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
-                    return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
-                })
-                .call(g => g.transition().duration(600)
-                    .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
-                    .ease(d3.easeBackOut.overshoot(1.2))
-                    .style("opacity", 1)
-                    .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
-                ),
-            update => update,
-            exit => exit.transition().duration(400).ease(d3.easeCircleIn)
-                .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
-                .style("opacity", 0)
-                .remove()
+        graphGroup.selectAll(".link").data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join(
+            enter => enter.append("line").attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`).style("opacity", 0).style("stroke-width", 0)
+                .transition().duration(800).delay((d, i) => i * 50).ease(d3.easeCircleOut).style("opacity", 1).style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1),
+            update => update.attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`),
+            exit => exit.transition().duration(400).ease(d3.easeCircleIn).style("opacity", 0).style("stroke-width", 0).remove()
         );
 
-    nodeGroups
-        .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
-        .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
-        .on("mouseover", handleMouseOver)
-        .on("mouseout", handleMouseOut)
-        .on("click", handleNodeClick);
+        const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id)
+            .join(
+                enter => enter.append("g")
+                    .style("opacity", 0)
+                    .attr("transform", d => {
+                        const cluster = graphClusters.get(d.clusterId);
+                        const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
+                        return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
+                    })
+                    .call(g => g.transition().duration(600)
+                        .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
+                        .ease(d3.easeBackOut.overshoot(1.2))
+                        .style("opacity", 1)
+                        .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
+                    ),
+                update => update,
+                exit => exit.transition().duration(400).ease(d3.easeCircleIn)
+                    .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
+                    .style("opacity", 0)
+                    .remove()
+            );
 
-    nodeGroups.each(function(d) {
-        const selection = d3.select(this);
-        selection.selectAll("circle, rect, foreignObject, text").remove();
+        nodeGroups
+            .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
+            .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut)
+            .on("click", handleNodeClick);
 
-        if (d.isCentral) {
-            const r = d.isHistoryMaster ? 60 : 45;
-            const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
-            const fill = d.isHistoryMaster ? "var(--text-secondary)" : "var(--primary-coral)";
-            selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
-            selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
-        } else if (d.type === 'add') {
-            selection.append("circle").attr("r", 20);
-            selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-        } else {
-            if (d.isHistory) {
-                selection.style("opacity", 0.7);
+        nodeGroups.each(function(d) {
+            const selection = d3.select(this);
+            selection.selectAll("circle, rect, foreignObject, text").remove();
+
+            if (d.isCentral) {
+                const r = d.isHistoryMaster ? 60 : 45;
+                const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
+                const fill = d.isHistoryMaster ? "var(--text-secondary)" : "var(--primary-coral)";
+                selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
+                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
+            } else if (d.type === 'history') {
                 selection.append("circle").attr("r", 25)
-                    .style("fill", colorMap[d.type] || 'var(--text-muted)');
-                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
+                    .style("fill", "var(--text-muted)");
+                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em")
+                    .style("fill", "var(--canvas-bg)");
                 selection.style("cursor", "pointer");
+            } else if (d.type === 'add') {
+                selection.append("circle").attr("r", 20);
+                selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
             } else {
                 const isExample = d.type === 'example';
                 if (!isExample) {
@@ -406,32 +405,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 50);
                 selection.style("cursor", "pointer");
             }
-        }
-    }); // Correctly closed here
+        });
 
-    const iconData = visibleNodes.filter(d => (d.isCentral && !d.isHistoryMaster) || d.type === 'example');
-    iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
-        enter => {
-            const iconWrapper = enter.append('g').attr('class', 'icon-wrapper').style('opacity', 0);
-            iconWrapper.filter(d => d.isCentral && !d.isHistoryMaster).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
-                .append('svg').attr('class', 'tts-icon').attr('width', 24).attr('height', 24).attr('viewBox', '0 0 16 16')
-                .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
-            iconWrapper.filter(d => d.type === 'example').append('g').attr('class', 'copy-icon-group').on('click', (event, d) => { copyToClipboard(d.text); })
-                .append('svg').attr('class', 'copy-icon').attr('width', 20).attr('height', 20).attr('viewBox', '0 0 16 16')
-                .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
-            return iconWrapper.transition().duration(600).delay(500).style('opacity', 1);
-        },
-        update => update,
-        exit => exit.transition().duration(400).style('opacity', 0).remove()
-    );
+        const iconData = visibleNodes.filter(d => (d.isCentral && !d.isHistoryMaster) || d.type === 'example');
+        iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
+            enter => {
+                const iconWrapper = enter.append('g').attr('class', 'icon-wrapper').style('opacity', 0);
+                iconWrapper.filter(d => d.isCentral && !d.isHistoryMaster).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
+                    .append('svg').attr('class', 'tts-icon').attr('width', 24).attr('height', 24).attr('viewBox', '0 0 16 16')
+                    .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
+                iconWrapper.filter(d => d.type === 'example').append('g').attr('class', 'copy-icon-group').on('click', (event, d) => { copyToClipboard(d.text); })
+                    .append('svg').attr('class', 'copy-icon').attr('width', 20).attr('height', 20).attr('viewBox', '0 0 16 16')
+                    .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
+                return iconWrapper.transition().duration(600).delay(500).style('opacity', 1);
+            },
+            update => update,
+            exit => exit.transition().duration(400).style('opacity', 0).remove()
+        );
 
-    graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? 'var(--accent-orange)' : d.target.type === 'example' ? 'var(--primary-coral)' : 'var(--text-secondary)').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : d.target.type === 'example' ? 1.5 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none").style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
-    simulation.nodes(visibleNodes);
-    simulation.force("link").links(visibleLinks);
-    simulation.alpha(1).restart();
-    graphGroup.selectAll('.central-node').raise();
-    updateCentralNodeState();
-}
+        graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? 'var(--accent-orange)' : d.target.type === 'example' ? 'var(--primary-coral)' : 'var(--text-secondary)').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : d.target.type === 'example' ? 1.5 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none").style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
+        simulation.nodes(visibleNodes);
+        simulation.force("link").links(visibleLinks);
+        simulation.alpha(1).restart();
+        graphGroup.selectAll('.central-node').raise();
+        updateCentralNodeState();
+    }
 
     function renderInitialPrompt() {
         simulation.stop();
@@ -640,14 +638,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     graphClusters.delete(oldestNodeToArchive.word);
                     
                     const historyNode = {
-                    ...oldestNodeToArchive,
-                    isCentral: false,
-                    isHistory: true,
-                    clusterId: HISTORY_CLUSTER_ID,
-                    fx: null,
-                    fy: null
-            };
-            historyCluster.nodes.push(historyNode);
+                        ...oldestNodeToArchive,
+                        isCentral: false,
+                        type: 'history',
+                        clusterId: HISTORY_CLUSTER_ID,
+                        fx: null,
+                        fy: null
+                    };
+                    historyCluster.nodes.push(historyNode);
                 }
             }
 
