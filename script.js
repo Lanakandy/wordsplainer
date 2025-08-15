@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step2-views',
             title: 'Change Your View',
-            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
+            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like forms, combinations, or real-world context.',
             attachTo: { element: '#controls-dock', on: 'top' },
         });
 
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
+            text: 'Make it yours! Choose the register (conversational, academic, or business), set the difficulty level (higher or lower), and decide who it’s for (teens or adults).',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
@@ -663,6 +663,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentView: 'meaning'
             });
 
+       const newestNode = repositionAllClusters();
+       if (newestNode) {                            
+            panToNode(newestNode, 1.1);             
+        }
+
             repositionAllClusters();
         }
 
@@ -675,23 +680,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function panToNode(target, scale = 1.2) {
-        if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
-            console.error("panToNode called with invalid target:", target);
-            return;
-        }
+    const targetX = target.x ?? target.fx; // Use fx as a fallback
+    const targetY = target.y ?? target.fy; // Use fy as a fallback
 
-        const { width, height } = graphContainer.getBoundingClientRect();
-
-        const transform = d3.zoomIdentity
-            .translate(width / 2, height / 2)
-            .scale(scale)
-            .translate(-target.x, -target.y);
-
-        svg.transition()
-            .duration(1000)
-            .ease(d3.easeCubicInOut)
-            .call(zoomBehavior.transform, transform);
+    if (typeof targetX !== 'number' || typeof targetY !== 'number') {
+        console.error("panToNode called with invalid target:", target);
+        return;
     }
+
+    const { width, height } = graphContainer.getBoundingClientRect();
+
+    const transform = d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale)
+        .translate(-targetX, -targetY);
+
+    svg.transition()
+        .duration(1000)
+        .ease(d3.easeCubicInOut)
+        .call(zoomBehavior.transform, transform);
+}
 
     function renderLoading(message) {
         const center = getViewportCenter();
@@ -1030,58 +1038,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
-        if (centralNodes.length === 0 && graphClusters.get(HISTORY_CLUSTER_ID).nodes.length === 0) return null;
-
-        const { width, height } = graphContainer.getBoundingClientRect();
-        const currentTransform = d3.zoomTransform(svg.node());
-        const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
-        const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
-
-        const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
-        if (historyCluster) {
-            const historyX = viewCenterX - ((centralNodes.length) * CLUSTER_SPACING / 2) - CLUSTER_SPACING;
-            historyCluster.center.x = historyX;
-            historyCluster.center.y = viewCenterY;
-
-            let master = historyCluster.nodes.find(n => n.isHistoryMaster);
-            if (!master) {
-                master = {
-                    id: HISTORY_CLUSTER_ID,
-                    word: 'History',
-                    isHistoryMaster: true,
-                    isCentral: true,
-                    clusterId: HISTORY_CLUSTER_ID,
-                    fx: historyX,
-                    fy: viewCenterY,
-                    visible: true,
-                    type: 'history_master'
-                };
-                historyCluster.nodes.unshift(master);
-            } else {
-                master.fx = historyX;
-                master.fy = viewCenterY;
-            }
-
-            historyCluster.links = historyCluster.nodes
-                .filter(n => !n.isHistoryMaster)
-                .map(n => ({ source: HISTORY_CLUSTER_ID, target: n.id, type: 'history_link' }));
-        }
-
-        centralNodes.forEach((node, i) => {
-            const cluster = graphClusters.get(node.clusterId);
-            if (cluster) {
-                const targetX = viewCenterX + ((i - (centralNodes.length - 1) / 2) * CLUSTER_SPACING);
-                const targetY = viewCenterY;
-                node.fx = targetX;
-                node.fy = targetY;
-                cluster.center.x = targetX;
-                cluster.center.y = targetY;
-            }
-        });
-
-        simulation.alpha(0.6).restart();
+    if (centralNodes.length === 0 && graphClusters.get(HISTORY_CLUSTER_ID).nodes.length <= 1) { // <= 1 to account for master node
         return null;
     }
+
+    const { width, height } = graphContainer.getBoundingClientRect();
+    const currentTransform = d3.zoomTransform(svg.node());
+    const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
+    const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
+
+    // --- 1. Position Active Clusters (newest is always at the center) ---
+    const lastNodeIndex = centralNodes.length - 1;
+    centralNodes.forEach((node, i) => {
+        const cluster = graphClusters.get(node.clusterId);
+        if (cluster) {
+            const offset = i - lastNodeIndex; // 0 for the newest, -1 for the next oldest, etc.
+            const targetX = viewCenterX + (offset * CLUSTER_SPACING);
+            const targetY = viewCenterY;
+            node.fx = targetX;
+            node.fy = targetY;
+            cluster.center.x = targetX;
+            cluster.center.y = targetY;
+        }
+    });
+
+    // --- 2. Position the History Cluster ---
+    const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
+    if (historyCluster) {
+        let historyX;
+        if (centralNodes.length > 0) {
+            // Position one step to the left of the oldest active cluster
+            const oldestNodeOffset = 0 - lastNodeIndex; // e.g., -2 if there are 3 active nodes
+            historyX = viewCenterX + (oldestNodeOffset - 1) * CLUSTER_SPACING;
+        } else {
+            // If no active nodes, center the history cluster
+            historyX = viewCenterX;
+        }
+        
+        historyCluster.center.x = historyX;
+        historyCluster.center.y = viewCenterY;
+
+        let master = historyCluster.nodes.find(n => n.isHistoryMaster);
+        if (!master) {
+            master = {
+                id: HISTORY_CLUSTER_ID, word: 'History', isHistoryMaster: true,
+                isCentral: true, clusterId: HISTORY_CLUSTER_ID, fx: historyX, fy: viewCenterY,
+                visible: true, type: 'history_master'
+            };
+            historyCluster.nodes.unshift(master);
+        } else {
+            master.fx = historyX;
+            master.fy = viewCenterY;
+        }
+
+        historyCluster.links = historyCluster.nodes
+            .filter(n => !n.isHistoryMaster)
+            .map(n => ({ source: HISTORY_CLUSTER_ID, target: n.id, type: 'history_link' }));
+    }
+
+    simulation.alpha(0.6).restart();
+    return centralNodes[lastNodeIndex]; // Return the newest node data for panning
+}
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
