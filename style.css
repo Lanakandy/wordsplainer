@@ -247,6 +247,12 @@ header h1 {
 .node.node-translation circle { fill: var(--translation-color); }
 
 /* --- 'Add More' Node --- */
+.node.node-history circle { 
+    fill: var(--text-muted); 
+}
+.node.node-history text { 
+    fill: var(--accent-light); /* Ensures text is light and readable on the grey background */
+}
 .node.node-add circle {
     /* Make it visible: transparent fill with a thicker, bright stroke */
     fill: transparent;

@@ -356,11 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fill = d.isHistoryMaster ? "var(--text-secondary)" : "var(--primary-coral)";
                 selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
                 selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
-            } else if (d.type === 'history') {
-                selection.append("circle").attr("r", 25)
-                    .style("fill", "var(--text-muted)");
-                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em")
-                    .style("fill", "var(--canvas-bg)");
+            }} else if (d.type === 'history') {
+                selection.append("circle").attr("r", 25);
+                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
                 selection.style("cursor", "pointer");
             } else if (d.type === 'add') {
                 selection.append("circle").attr("r", 20);
