@@ -58,7 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
         collocations: 'var(--collocation-color)',
         synonyms: 'var(--synonym-color)',
         opposites: 'var(--opposite-color)',
-        translation: 'var(--translation-color)'
+        translation: 'var(--translation-color)',
+        central: 'var(--primary-coral)'
     };
 
     if (registerToggleBtn) {
@@ -134,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step2-views',
             title: 'Change Your View',
-            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
+            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like combinations, synonyms, or real-world context.',
             attachTo: { element: '#controls-dock', on: 'top' },
         });
 
@@ -148,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
+            text: 'Make it yours! Choose the register (conversational, academic, or business), set the difficulty level (higher or lower), and decide who it’s for (teens or adults).',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
@@ -303,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateGraph() {
+        let pendingHeightCalculations = 0;
         const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
         const visibleNodes = allNodes.filter(n => n.visible !== false);
         const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
@@ -347,63 +349,71 @@ document.addEventListener('DOMContentLoaded', () => {
             .on("click", handleNodeClick);
 
         nodeGroups.each(function(d) {
-            const selection = d3.select(this);
-            selection.selectAll("circle, rect, foreignObject, text").remove();
+    const selection = d3.select(this);
+    selection.selectAll("circle, rect, foreignObject, text").remove();
 
-            if (d.isCentral) {
-                const r = d.isHistoryMaster ? 60 : 45;
-                const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
-                const fill = d.isHistoryMaster ? "var(--text-secondary)" : "var(--primary-coral)";
-                selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
-                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
-            } else if (d.type === 'history') {
-                selection.append("circle").attr("r", 25);
-                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
-                selection.style("cursor", "pointer");
-            } else if (d.type === 'add') {
-                selection.append("circle").attr("r", 20);
-                selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-            } else {
-                const isExample = d.type === 'example';
-                if (!isExample) {
-                    selection.append("circle").attr("r", 18)
-                        .attr("fill", colorMap[d.type] || 'var(--text-muted)');
-                }
-                const textWidth = isExample ? 220 : 200;
-                const PADDING = isExample ? 0 : 12;
-                const circleRadius = isExample ? 0 : 18;
+    if (d.isCentral) {
+        const r = d.isHistoryMaster ? 60 : 45;
+        const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
+        const fill = d.isHistoryMaster ? "var(--text-secondary)" : colorMap['central'];
+        selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
+        selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
+    } else if (d.type === 'add') {
+        selection.append("circle").attr("r", 20);
+        selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
+    } else {
+        if (d.isHistory) {
+            selection.style("opacity", 0.7);
+            selection.append("circle").attr("r", 25)
+                .style("fill", "var(--text-muted)"); // Consistent muted color
+            selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
+            selection.style("cursor", "pointer");
+        } else {
+            const isExample = d.type === 'example';
+            if (!isExample) {
+                selection.append("circle").attr("r", 18)
+                    .attr("fill", colorMap[d.type] || 'var(--text-muted)');
+            }
+            const textWidth = isExample ? 220 : 200;
+            const PADDING = isExample ? 0 : 12;
+            const circleRadius = isExample ? 0 : 18;
 
-                const foreignObject = selection.append("foreignObject")
-                    .attr("class", "node-html-wrapper")
-                    .attr("width", textWidth)
-                    .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
-                    .style("opacity", 0)
-                    .attr("height", 20);
+            const foreignObject = selection.append("foreignObject")
+                .attr("class", "node-html-wrapper")
+                .attr("width", textWidth)
+                .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
+                .style("opacity", 0)
+                .attr("height", 20);
 
-                const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
-                createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+            const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
+            createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
 
-                foreignObject.transition().duration(400).style("opacity", 1);
+            foreignObject.transition().duration(400).style("opacity", 1);
 
-                setTimeout(() => {
-                    if (div.node()) {
-                        let textHeight = div.node().scrollHeight;
-                        if (textHeight === 0) {
-                            console.warn(`Could not calculate height for node text: "${d.text.substring(0, 20)}...". Using fallback.`);
-                            textHeight = 20;
-                        }
-                        foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
-                        d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
-                        d.height = Math.max(circleRadius * 2, textHeight);
+            if (!d.height) { pendingHeightCalculations++; }
+            setTimeout(() => {
+                if (div.node()) {
+                    let textHeight = div.node().scrollHeight;
+                    if (textHeight === 0) {
+                        console.warn(`Could not calculate height for node text: "${d.text.substring(0, 20)}...". Using fallback.`);
+                        textHeight = 20;
+                    }
+                    foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+                    d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                    d.height = Math.max(circleRadius * 2, textHeight);
 
+                    pendingHeightCalculations--;
+                    if (pendingHeightCalculations === 0) {
                         if (simulation.alpha() < 0.1) {
                             simulation.alpha(0.1).restart();
                         }
                     }
-                }, 50);
-                selection.style("cursor", "pointer");
-            }
-        });
+                } // <-- THIS BRACE WAS MISSING
+            }, 50);
+            selection.style("cursor", "pointer");
+        }
+    }
+});
 
         const iconData = visibleNodes.filter(d => (d.isCentral && !d.isHistoryMaster) || d.type === 'example');
         iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
@@ -455,6 +465,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Handlers & Core Logic ---
+    
+    function recalculateAllNodeDimensions() {
+    graphGroup.selectAll('.node:not(.central-node):not(.node-add)')
+        .each(function(d) {
+            const nodeElement = d3.select(this);
+            const foreignObject = nodeElement.select('.node-html-wrapper');
+            const div = nodeElement.select('.node-html-content');
+            if (div.node() && foreignObject.node()) {
+                const isExample = d.type === 'example';
+                const textWidth = isExample ? 220 : 200;
+                const PADDING = isExample ? 0 : 12;
+                const circleRadius = isExample ? 0 : 18;
+                const textHeight = div.node().scrollHeight;
+
+                foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+                d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                d.height = Math.max(circleRadius * 2, textHeight);
+            }
+        });
+    console.log('Forced recalculation of all node dimensions.');
+}
+
     function refetchCurrentView() {
         if (currentActiveCentral) {
             console.log(`Settings changed. Re-fetching for '${currentActiveCentral}'.`);
@@ -522,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (d.isCentral && !d.isHistoryMaster) {
             const cluster = graphClusters.get(d.clusterId);
             tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
-        } else if (d.type === 'history') {
+        } else if (d.isHistory) {
              tooltipText = `Click to re-explore "${d.word}"`;
         } else if (d.type === 'add') {
             const is_disabled = d3.select(event.currentTarget).classed('is-disabled');
@@ -588,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
         
-        if (d.type === 'history') {
+        if (d.isHistory) {
             handleWordSubmitted(d.word, true);
         } else if (exampleTypes.includes(d.type)) {
             toggleExampleForNode(d);
@@ -638,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const historyNode = {
                         ...oldestNodeToArchive,
                         isCentral: false,
-                        type: 'history',
+                        isHistory: true,
                         clusterId: HISTORY_CLUSTER_ID,
                         fx: null,
                         fy: null
@@ -1217,6 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleLayoutToggle() {
+        recalculateAllNodeDimensions();
         currentLayout = (currentLayout === 'force') ? 'radial' : 'force';
         layoutToggleBtn.classList.toggle('active', currentLayout === 'radial');
 
