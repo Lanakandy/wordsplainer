@@ -551,80 +551,112 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNodeClick(event, d) {
-        if (event.defaultPrevented) return;
-        event.stopPropagation();
+    if (event.defaultPrevented) return;
+    event.stopPropagation();
 
-        const selection = d3.select(event.currentTarget);
-        selection.transition()
-            .duration(150)
-            .ease(d3.easeCircleOut)
-            .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
-            .transition()
-            .duration(150)
-            .ease(d3.easeCircleOut)
-            .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+    const selection = d3.select(event.currentTarget);
+    selection.transition()
+        .duration(150)
+        .ease(d3.easeCircleOut)
+        .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
+        .transition()
+        .duration(150)
+        .ease(d3.easeCircleOut)
+        .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
 
-        const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
-
-        if (exampleTypes.includes(d.type)) {
-            toggleExampleForNode(d);
-        } else if (d.isCentral) {
-            focusOnCentralNode(d.clusterId);
-        } else if (d.type === 'add') {
-            if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
-                return;
-            }
-            fetchMoreNodes();
+    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
+    
+    // Corrected Logic
+    if (d.type === 'history') {
+        handleWordSubmitted(d.word, true);
+    } else if (exampleTypes.includes(d.type)) {
+        toggleExampleForNode(d);
+    } else if (d.isCentral && !d.isHistoryMaster) {
+        focusOnCentralNode(d.clusterId);
+    } else if (d.type === 'add') {
+        if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
+            return;
         }
+        fetchMoreNodes();
     }
+}
 
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-        const lowerWord = word.toLowerCase();
+    const lowerWord = word.toLowerCase();
 
-        if (isGameMode && isNewCentral) {
-            gameData.steps++;
-            updateGameUI();
-            if (lowerWord === gameData.targetWord) {
-                handleWin();
-                return;
-            }
+    if (isGameMode && isNewCentral) {
+        gameData.steps++;
+        updateGameUI();
+        if (lowerWord === gameData.targetWord) {
+            handleWin();
+            return;
         }
-
-        if (isNewCentral) {
-            if (centralNodes.some(c => c.word === lowerWord)) {
-                const existingNode = centralNodes.find(n => n.word === lowerWord);
-                if (existingNode) focusOnCentralNode(existingNode.clusterId);
-                return;
-            }
-
-            const centralNodeData = {
-                word: lowerWord, id: `central-${lowerWord}`,
-                isCentral: true, type: 'central', clusterId: lowerWord,
-                visible: true
-            };
-
-            centralNodes.push(centralNodeData);
-            graphClusters.set(lowerWord, {
-                nodes: [centralNodeData],
-                links: [],
-                center: { x: 0, y: 0 },
-                currentView: 'meaning'
-            });
-
-            const newClusterCenter = repositionAllClusters();
-
-            if (newClusterCenter) {
-                panToNode(newClusterCenter, 1.2);
-            }
-        }
-
-        currentActiveCentral = lowerWord;
-        currentView = 'meaning';
-        viewState = { offset: 0, hasMore: true };
-        updateActiveButton();
-
-        await generateGraphForView(currentView);
     }
+
+    if (isNewCentral) {
+        // Step 1: Check if the node is already an active cluster. If so, focus it and STOP.
+        if (centralNodes.some(c => c.word === lowerWord)) {
+            console.log(`Node "${lowerWord}" is already active. Focusing.`);
+            focusOnCentralNode(lowerWord);
+            return; // This early return is the key fix.
+        }
+
+        // --- At this point, we know we are adding a new or promoted node ---
+
+        const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
+        const nodeInHistory = historyCluster.nodes.find(n => n.word === lowerWord);
+
+        // Step 2: If it's in history, remove it from there to prepare for promotion.
+        if (nodeInHistory) {
+            console.log(`Promoting "${lowerWord}" from history.`);
+            historyCluster.nodes = historyCluster.nodes.filter(n => n.word !== lowerWord);
+        }
+
+        // Step 3: Check if we need to make space for the new node.
+        if (centralNodes.length >= MAX_ACTIVE_CLUSTERS) {
+            const oldestNodeToArchive = centralNodes.shift(); // Get the oldest active central node
+            if (oldestNodeToArchive) {
+                console.log(`Max active clusters reached. Archiving "${oldestNodeToArchive.word}" to history.`);
+                graphClusters.delete(oldestNodeToArchive.word); // Remove the full cluster
+                
+                // Add its central node to the history cluster
+                const historyNode = {
+                    ...oldestNodeToArchive,
+                    isCentral: false,
+                    type: 'history',
+                    clusterId: HISTORY_CLUSTER_ID,
+                    fx: null,
+                    fy: null
+                };
+                historyCluster.nodes.push(historyNode);
+            }
+        }
+
+        // Step 4: Now, create the new active cluster.
+        const centralNodeData = {
+            word: lowerWord, id: `central-${lowerWord}`,
+            isCentral: true, type: 'central', clusterId: lowerWord,
+            visible: true
+        };
+
+        centralNodes.push(centralNodeData);
+        graphClusters.set(lowerWord, {
+            nodes: [centralNodeData],
+            links: [],
+            center: { x: 0, y: 0 },
+            currentView: 'meaning'
+        });
+
+        repositionAllClusters();
+    }
+
+    currentActiveCentral = lowerWord;
+    currentView = 'meaning';
+    viewState = { offset: 0, hasMore: true };
+    updateActiveButton();
+
+    await generateGraphForView(currentView);
+}
 
     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
