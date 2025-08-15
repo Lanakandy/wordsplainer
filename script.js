@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step2-views',
             title: 'Change Your View',
-            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
+            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like combinations, forms, or real-world context.',
             attachTo: { element: '#controls-dock', on: 'top' },
         });
 
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
+            text: 'Make it yours! Choose the register (conversational, academic, or business), set the difficulty level (higher or lower), and decide who it’s for (teens or adults).',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
