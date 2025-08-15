@@ -919,7 +919,6 @@ header h1 {
     color: var(--primary-coral);
     font-weight: 700;
     font-size: 1.3rem;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .shepherd-element.wordsplainer-tour .shepherd-cancel-icon {
@@ -958,7 +957,6 @@ header h1 {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    /* FIX: Remove default blue focus outline */
     outline: none;
     box-shadow: none;
 }
