@@ -16,6 +16,10 @@ let gameData = {
     steps: 0
 };
 
+// FIXED: Moved constants to the global script scope
+const MAX_ACTIVE_CLUSTERS = 3;
+const HISTORY_CLUSTER_ID = 'history-cluster';
+
 const phrasalVerbParticles = new Set([
     'about', 'across', 'after', 'along', 'around', 'away', 'back', 'by',
     'down', 'for', 'in', 'into', 'off', 'on', 'out', 'over',
@@ -289,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
         graphGroup.selectAll('.node').attr("transform", d => `translate(${d.x},${d.y})`);
         iconGroup.selectAll('.icon-wrapper').attr("transform", d => {
-            if (d.isCentral) return `translate(${d.x}, ${d.y + 45 + 15})`;
+            if (d.isCentral && !d.isHistoryMaster) return `translate(${d.x}, ${d.y + 45 + 15})`;
             if (d.type === 'example' && d.width && d.height) {
                 const x = d.x + (d.width / 2) - 10;
                 const y = d.y - (d.height / 2) + 10;
@@ -348,8 +352,14 @@ document.addEventListener('DOMContentLoaded', () => {
             selection.selectAll("circle, rect, foreignObject, text").remove();
 
             if (d.isCentral) {
-                selection.append("circle").attr("r", 45).style("filter", "drop-shadow(0 0 10px var(--primary-coral))");
-                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", "16px");
+                const r = d.isHistoryMaster ? 60 : 45;
+                const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
+                selection.append("circle").attr("r", r).style("filter", shadow);
+                selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
+            } else if (d.type === 'history') {
+                selection.append("circle").attr("r", 25);
+                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
+                selection.style("cursor", "pointer");
             } else if (d.type === 'add') {
                 selection.append("circle").attr("r", 20);
                 selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
@@ -395,11 +405,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        const iconData = visibleNodes.filter(d => d.isCentral || d.type === 'example');
+        const iconData = visibleNodes.filter(d => (d.isCentral && !d.isHistoryMaster) || d.type === 'example');
         iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
             enter => {
                 const iconWrapper = enter.append('g').attr('class', 'icon-wrapper').style('opacity', 0);
-                iconWrapper.filter(d => d.isCentral).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
+                iconWrapper.filter(d => d.isCentral && !d.isHistoryMaster).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
                     .append('svg').attr('class', 'tts-icon').attr('width', 24).attr('height', 24).attr('viewBox', '0 0 16 16')
                     .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
                 iconWrapper.filter(d => d.type === 'example').append('g').attr('class', 'copy-icon-group').on('click', (event, d) => { copyToClipboard(d.text); })
@@ -425,6 +435,15 @@ document.addEventListener('DOMContentLoaded', () => {
         graphClusters.clear();
         crossConnections = [];
         currentActiveCentral = null;
+
+        graphClusters.set(HISTORY_CLUSTER_ID, {
+            nodes: [],
+            links: [],
+            center: { x: 0, y: 0 },
+            isHistory: true,
+            currentView: 'history'
+        });
+
         graphGroup.selectAll("*").remove();
         iconGroup.selectAll("*").remove();
         const { width, height } = graphContainer.getBoundingClientRect();
@@ -432,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
         promptGroup.append("circle").attr("cx", width / 2).attr("cy", height / 2).attr("r", 40);
         promptGroup.append("text").attr("class", "sub-text").attr("x", width / 2).attr("y", height / 2).attr("dy", "0.1em").text("+");
         promptGroup.append("text").attr("class", "status-text").attr("x", width / 2).attr("y", height / 2 + 70).text("Add a word to explore");
+        repositionAllClusters();
     }
 
     // --- Event Handlers & Core Logic ---
@@ -485,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .attr("transform", `translate(${d.x},${d.y}) scale(1.1)`);
         }
 
-        if (d.isCentral) {
+        if (d.isCentral && !d.isHistoryMaster) {
             selection.select("circle")
                 .transition()
                 .duration(200)
@@ -499,9 +519,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let tooltipText = '';
-        if (d.isCentral) {
+        if (d.isCentral && !d.isHistoryMaster) {
             const cluster = graphClusters.get(d.clusterId);
             tooltipText = cluster ? `Exploring: ${cluster.currentView} • Click to focus` : '';
+        } else if (d.type === 'history') {
+             tooltipText = `Click to re-explore "${d.word}"`;
         } else if (d.type === 'add') {
             const is_disabled = d3.select(event.currentTarget).classed('is-disabled');
             tooltipText = is_disabled ?
@@ -533,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
         }
 
-        if (d.isCentral) {
+        if (d.isCentral && !d.isHistoryMaster) {
             selection.select("circle")
                 .transition()
                 .duration(200)
@@ -550,113 +572,107 @@ document.addEventListener('DOMContentLoaded', () => {
         svg.on('mousemove.tooltip', null);
     }
 
+    // FIXED: Added logic to handle clicks on history nodes
     function handleNodeClick(event, d) {
-    if (event.defaultPrevented) return;
-    event.stopPropagation();
+        if (event.defaultPrevented) return;
+        event.stopPropagation();
 
-    const selection = d3.select(event.currentTarget);
-    selection.transition()
-        .duration(150)
-        .ease(d3.easeCircleOut)
-        .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
-        .transition()
-        .duration(150)
-        .ease(d3.easeCircleOut)
-        .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
+        const selection = d3.select(event.currentTarget);
+        selection.transition()
+            .duration(150)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(0.9)`)
+            .transition()
+            .duration(150)
+            .ease(d3.easeCircleOut)
+            .attr("transform", `translate(${d.x},${d.y}) scale(1)`);
 
-    const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
-    
-    // Corrected Logic
-    if (d.type === 'history') {
-        handleWordSubmitted(d.word, true);
-    } else if (exampleTypes.includes(d.type)) {
-        toggleExampleForNode(d);
-    } else if (d.isCentral && !d.isHistoryMaster) {
-        focusOnCentralNode(d.clusterId);
-    } else if (d.type === 'add') {
-        if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
-            return;
+        const exampleTypes = ['synonyms', 'opposites', 'derivatives', 'collocations', 'idioms', 'context', 'meaning', 'translation'];
+        
+        if (d.type === 'history') {
+            handleWordSubmitted(d.word, true);
+        } else if (exampleTypes.includes(d.type)) {
+            toggleExampleForNode(d);
+        } else if (d.isCentral && !d.isHistoryMaster) {
+            focusOnCentralNode(d.clusterId);
+        } else if (d.type === 'add') {
+            if (d3.select(event.currentTarget).classed('is-loading') || d3.select(event.currentTarget).classed('is-disabled')) {
+                return;
+            }
+            fetchMoreNodes();
         }
-        fetchMoreNodes();
     }
-}
 
+    // FIXED: Re-applying the correct logic flow to prevent infinite graphs
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-    const lowerWord = word.toLowerCase();
+        const lowerWord = word.toLowerCase();
 
-    if (isGameMode && isNewCentral) {
-        gameData.steps++;
-        updateGameUI();
-        if (lowerWord === gameData.targetWord) {
-            handleWin();
-            return;
-        }
-    }
-
-    if (isNewCentral) {
-        // Step 1: Check if the node is already an active cluster. If so, focus it and STOP.
-        if (centralNodes.some(c => c.word === lowerWord)) {
-            console.log(`Node "${lowerWord}" is already active. Focusing.`);
-            focusOnCentralNode(lowerWord);
-            return; // This early return is the key fix.
-        }
-
-        // --- At this point, we know we are adding a new or promoted node ---
-
-        const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
-        const nodeInHistory = historyCluster.nodes.find(n => n.word === lowerWord);
-
-        // Step 2: If it's in history, remove it from there to prepare for promotion.
-        if (nodeInHistory) {
-            console.log(`Promoting "${lowerWord}" from history.`);
-            historyCluster.nodes = historyCluster.nodes.filter(n => n.word !== lowerWord);
-        }
-
-        // Step 3: Check if we need to make space for the new node.
-        if (centralNodes.length >= MAX_ACTIVE_CLUSTERS) {
-            const oldestNodeToArchive = centralNodes.shift(); // Get the oldest active central node
-            if (oldestNodeToArchive) {
-                console.log(`Max active clusters reached. Archiving "${oldestNodeToArchive.word}" to history.`);
-                graphClusters.delete(oldestNodeToArchive.word); // Remove the full cluster
-                
-                // Add its central node to the history cluster
-                const historyNode = {
-                    ...oldestNodeToArchive,
-                    isCentral: false,
-                    type: 'history',
-                    clusterId: HISTORY_CLUSTER_ID,
-                    fx: null,
-                    fy: null
-                };
-                historyCluster.nodes.push(historyNode);
+        if (isGameMode && isNewCentral) {
+            gameData.steps++;
+            updateGameUI();
+            if (lowerWord === gameData.targetWord) {
+                handleWin();
+                return;
             }
         }
 
-        // Step 4: Now, create the new active cluster.
-        const centralNodeData = {
-            word: lowerWord, id: `central-${lowerWord}`,
-            isCentral: true, type: 'central', clusterId: lowerWord,
-            visible: true
-        };
+        if (isNewCentral) {
+            if (centralNodes.some(c => c.word === lowerWord)) {
+                console.log(`Node "${lowerWord}" is already active. Focusing.`);
+                focusOnCentralNode(lowerWord);
+                return;
+            }
 
-        centralNodes.push(centralNodeData);
-        graphClusters.set(lowerWord, {
-            nodes: [centralNodeData],
-            links: [],
-            center: { x: 0, y: 0 },
-            currentView: 'meaning'
-        });
+            const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
+            const nodeInHistory = historyCluster.nodes.find(n => n.word === lowerWord);
 
-        repositionAllClusters();
+            if (nodeInHistory) {
+                console.log(`Promoting "${lowerWord}" from history.`);
+                historyCluster.nodes = historyCluster.nodes.filter(n => n.word !== lowerWord);
+            }
+
+            if (centralNodes.length >= MAX_ACTIVE_CLUSTERS) {
+                const oldestNodeToArchive = centralNodes.shift();
+                if (oldestNodeToArchive) {
+                    console.log(`Max active clusters reached. Archiving "${oldestNodeToArchive.word}" to history.`);
+                    graphClusters.delete(oldestNodeToArchive.word);
+                    
+                    const historyNode = {
+                        ...oldestNodeToArchive,
+                        isCentral: false,
+                        type: 'history',
+                        clusterId: HISTORY_CLUSTER_ID,
+                        fx: null,
+                        fy: null
+                    };
+                    historyCluster.nodes.push(historyNode);
+                }
+            }
+
+            const centralNodeData = {
+                word: lowerWord, id: `central-${lowerWord}`,
+                isCentral: true, type: 'central', clusterId: lowerWord,
+                visible: true
+            };
+
+            centralNodes.push(centralNodeData);
+            graphClusters.set(lowerWord, {
+                nodes: [centralNodeData],
+                links: [],
+                center: { x: 0, y: 0 },
+                currentView: 'meaning'
+            });
+
+            repositionAllClusters();
+        }
+
+        currentActiveCentral = lowerWord;
+        currentView = 'meaning';
+        viewState = { offset: 0, hasMore: true };
+        updateActiveButton();
+
+        await generateGraphForView(currentView);
     }
-
-    currentActiveCentral = lowerWord;
-    currentView = 'meaning';
-    viewState = { offset: 0, hasMore: true };
-    updateActiveButton();
-
-    await generateGraphForView(currentView);
-}
 
     function panToNode(target, scale = 1.2) {
         if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
@@ -712,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
         crossConnections = [];
         const allPeripheralNodes = [];
         graphClusters.forEach(cluster => {
+            if (cluster.isHistory) return;
             allPeripheralNodes.push(...cluster.nodes.filter(n => !n.isCentral && n.text));
         });
         for (let i = 0; i < allPeripheralNodes.length; i++) {
@@ -1013,37 +1030,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
-        if (centralNodes.length === 0) return null;
+        if (centralNodes.length === 0 && graphClusters.get(HISTORY_CLUSTER_ID).nodes.length === 0) return null;
+
         const { width, height } = graphContainer.getBoundingClientRect();
         const currentTransform = d3.zoomTransform(svg.node());
         const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
         const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
-        const lastNodeIndex = centralNodes.length - 1;
-        let lastNodeCenter = null;
+
+        const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
+        if (historyCluster) {
+            const historyX = viewCenterX - ((centralNodes.length) * CLUSTER_SPACING / 2) - CLUSTER_SPACING;
+            historyCluster.center.x = historyX;
+            historyCluster.center.y = viewCenterY;
+
+            let master = historyCluster.nodes.find(n => n.isHistoryMaster);
+            if (!master) {
+                master = {
+                    id: HISTORY_CLUSTER_ID,
+                    word: 'History',
+                    isHistoryMaster: true,
+                    isCentral: true,
+                    clusterId: HISTORY_CLUSTER_ID,
+                    fx: historyX,
+                    fy: viewCenterY,
+                    visible: true,
+                    type: 'history_master'
+                };
+                historyCluster.nodes.unshift(master);
+            } else {
+                master.fx = historyX;
+                master.fy = viewCenterY;
+            }
+
+            historyCluster.links = historyCluster.nodes
+                .filter(n => !n.isHistoryMaster)
+                .map(n => ({ source: HISTORY_CLUSTER_ID, target: n.id, type: 'history_link' }));
+        }
+
         centralNodes.forEach((node, i) => {
             const cluster = graphClusters.get(node.clusterId);
             if (cluster) {
-                const targetX = viewCenterX - ((lastNodeIndex - i) * CLUSTER_SPACING);
+                const targetX = viewCenterX + ((i - (centralNodes.length - 1) / 2) * CLUSTER_SPACING);
                 const targetY = viewCenterY;
                 node.fx = targetX;
                 node.fy = targetY;
                 cluster.center.x = targetX;
                 cluster.center.y = targetY;
-                if (i === lastNodeIndex) lastNodeCenter = { x: targetX, y: targetY };
             }
         });
-        simulation.alpha(0.5).restart();
-        return lastNodeCenter;
+
+        simulation.alpha(0.6).restart();
+        return null;
     }
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
         svg.attr("width", width).attr("height", height);
-        if (centralNodes.length > 0) {
-            repositionAllClusters();
-        } else {
-            renderInitialPrompt();
-        }
+        repositionAllClusters();
     }
 
     async function fetchMoreNodes() {
@@ -1124,6 +1167,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gameData.steps = 0;
 
             renderInitialPrompt();
+
             await handleWordSubmitted(gameData.startWord, true);
 
             updateGameUI();
@@ -1287,7 +1331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     proficiencyToggleBtn.addEventListener('click', handleProficiencyToggle);
     ageToggleBtn.addEventListener('click', handleAgeToggle);
     layoutToggleBtn.addEventListener('click', handleLayoutToggle);
-    playGameBtn.addEventListener('click', startGame); // FIXED
+    playGameBtn.addEventListener('click', startGame);
     onboardingHelpBtn.addEventListener('click', showHelpTour);
     endGameBtn.addEventListener('click', endGame);
     playAgainBtn.addEventListener('click', () => {
