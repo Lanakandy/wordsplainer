@@ -16,7 +16,7 @@ let gameData = {
     steps: 0
 };
 
-const MAX_ACTIVE_CLUSTERS = 3;
+const MAX_ACTIVE_CLUSTERS = 2;
 const HISTORY_CLUSTER_ID = 'history-cluster';
 
 const phrasalVerbParticles = new Set([
