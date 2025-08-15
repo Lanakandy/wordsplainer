@@ -16,8 +16,7 @@ let gameData = {
     steps: 0
 };
 
-// FIXED: Moved constants to the global script scope
-const MAX_ACTIVE_CLUSTERS = 3;
+const MAX_ACTIVE_CLUSTERS = 2;
 const HISTORY_CLUSTER_ID = 'history-cluster';
 
 const phrasalVerbParticles = new Set([
@@ -135,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step2-views',
             title: 'Change Your View',
-            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like forms, combinations, or real-world context.',
+            text: 'Once a word is on the graph, use these buttons to explore its different relationships, like synonyms, idioms, or real-world context.',
             attachTo: { element: '#controls-dock', on: 'top' },
         });
 
@@ -149,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tour.addStep({
             id: 'step4-settings',
             title: 'Customize Your Results',
-            text: 'Make it yours! Choose the register (conversational, academic, or business), set the difficulty level (higher or lower), and decide who it’s for (teens or adults).',
+            text: 'Fine-tune the results with these toggles. You can change the language style (conversational, academic), proficiency level, and target audience.',
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
@@ -354,11 +353,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (d.isCentral) {
                 const r = d.isHistoryMaster ? 60 : 45;
                 const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
-                selection.append("circle").attr("r", r).style("filter", shadow);
+                const fill = d.isHistoryMaster ? "var(--text-secondary)" : "var(--primary-coral)";
+                selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
                 selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
             } else if (d.type === 'history') {
-                selection.append("circle").attr("r", 25);
-                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
+                selection.append("circle").attr("r", 25)
+                    .style("fill", "var(--text-muted)");
+                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em")
+                    .style("fill", "var(--canvas-bg)");
                 selection.style("cursor", "pointer");
             } else if (d.type === 'add') {
                 selection.append("circle").attr("r", 20);
@@ -572,7 +574,6 @@ document.addEventListener('DOMContentLoaded', () => {
         svg.on('mousemove.tooltip', null);
     }
 
-    // FIXED: Added logic to handle clicks on history nodes
     function handleNodeClick(event, d) {
         if (event.defaultPrevented) return;
         event.stopPropagation();
@@ -603,7 +604,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // FIXED: Re-applying the correct logic flow to prevent infinite graphs
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
         const lowerWord = word.toLowerCase();
 
@@ -663,12 +663,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentView: 'meaning'
             });
 
-       const newestNode = repositionAllClusters();
-       if (newestNode) {                            
-            panToNode(newestNode, 1.1);             
-        }
-
-            repositionAllClusters();
+            const newestNode = repositionAllClusters();
+            if (newestNode) {
+                panToNode(newestNode, 1.1);
+            }
         }
 
         currentActiveCentral = lowerWord;
@@ -680,26 +678,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function panToNode(target, scale = 1.2) {
-    const targetX = target.x ?? target.fx; // Use fx as a fallback
-    const targetY = target.y ?? target.fy; // Use fy as a fallback
+        const targetX = target.x ?? target.fx;
+        const targetY = target.y ?? target.fy;
 
-    if (typeof targetX !== 'number' || typeof targetY !== 'number') {
-        console.error("panToNode called with invalid target:", target);
-        return;
+        if (typeof targetX !== 'number' || typeof targetY !== 'number') {
+            console.error("panToNode called with invalid target:", target);
+            return;
+        }
+
+        const { width, height } = graphContainer.getBoundingClientRect();
+
+        const transform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(scale)
+            .translate(-targetX, -targetY);
+
+        svg.transition()
+            .duration(1000)
+            .ease(d3.easeCubicInOut)
+            .call(zoomBehavior.transform, transform);
     }
-
-    const { width, height } = graphContainer.getBoundingClientRect();
-
-    const transform = d3.zoomIdentity
-        .translate(width / 2, height / 2)
-        .scale(scale)
-        .translate(-targetX, -targetY);
-
-    svg.transition()
-        .duration(1000)
-        .ease(d3.easeCubicInOut)
-        .call(zoomBehavior.transform, transform);
-}
 
     function renderLoading(message) {
         const center = getViewportCenter();
@@ -1038,67 +1036,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
-    if (centralNodes.length === 0 && graphClusters.get(HISTORY_CLUSTER_ID).nodes.length <= 1) { // <= 1 to account for master node
-        return null;
+        if (centralNodes.length === 0 && graphClusters.get(HISTORY_CLUSTER_ID).nodes.length <= 1) {
+            return null;
+        }
+
+        const { width, height } = graphContainer.getBoundingClientRect();
+        const currentTransform = d3.zoomTransform(svg.node());
+        const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
+        const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
+
+        const lastNodeIndex = centralNodes.length - 1;
+        centralNodes.forEach((node, i) => {
+            const cluster = graphClusters.get(node.clusterId);
+            if (cluster) {
+                const offset = i - lastNodeIndex;
+                const targetX = viewCenterX + (offset * CLUSTER_SPACING);
+                const targetY = viewCenterY;
+                node.fx = targetX;
+                node.fy = targetY;
+                cluster.center.x = targetX;
+                cluster.center.y = targetY;
+            }
+        });
+
+        const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
+        if (historyCluster) {
+            let historyX;
+            if (centralNodes.length > 0) {
+                const oldestNodeOffset = 0 - lastNodeIndex;
+                historyX = viewCenterX + (oldestNodeOffset - 1) * CLUSTER_SPACING;
+            } else {
+                historyX = viewCenterX;
+            }
+            
+            historyCluster.center.x = historyX;
+            historyCluster.center.y = viewCenterY;
+
+            let master = historyCluster.nodes.find(n => n.isHistoryMaster);
+            if (!master) {
+                master = {
+                    id: HISTORY_CLUSTER_ID, word: 'History', isHistoryMaster: true,
+                    isCentral: true, clusterId: HISTORY_CLUSTER_ID, fx: historyX, fy: viewCenterY,
+                    visible: true, type: 'history_master'
+                };
+                historyCluster.nodes.unshift(master);
+            } else {
+                master.fx = historyX;
+                master.fy = viewCenterY;
+            }
+
+            historyCluster.links = historyCluster.nodes
+                .filter(n => !n.isHistoryMaster)
+                .map(n => ({ source: HISTORY_CLUSTER_ID, target: n.id, type: 'history_link' }));
+        }
+
+        simulation.alpha(0.6).restart();
+        return centralNodes[lastNodeIndex];
     }
-
-    const { width, height } = graphContainer.getBoundingClientRect();
-    const currentTransform = d3.zoomTransform(svg.node());
-    const viewCenterX = (width / 2 - currentTransform.x) / currentTransform.k;
-    const viewCenterY = (height / 2 - currentTransform.y) / currentTransform.k;
-
-    // --- 1. Position Active Clusters (newest is always at the center) ---
-    const lastNodeIndex = centralNodes.length - 1;
-    centralNodes.forEach((node, i) => {
-        const cluster = graphClusters.get(node.clusterId);
-        if (cluster) {
-            const offset = i - lastNodeIndex; // 0 for the newest, -1 for the next oldest, etc.
-            const targetX = viewCenterX + (offset * CLUSTER_SPACING);
-            const targetY = viewCenterY;
-            node.fx = targetX;
-            node.fy = targetY;
-            cluster.center.x = targetX;
-            cluster.center.y = targetY;
-        }
-    });
-
-    // --- 2. Position the History Cluster ---
-    const historyCluster = graphClusters.get(HISTORY_CLUSTER_ID);
-    if (historyCluster) {
-        let historyX;
-        if (centralNodes.length > 0) {
-            // Position one step to the left of the oldest active cluster
-            const oldestNodeOffset = 0 - lastNodeIndex; // e.g., -2 if there are 3 active nodes
-            historyX = viewCenterX + (oldestNodeOffset - 1) * CLUSTER_SPACING;
-        } else {
-            // If no active nodes, center the history cluster
-            historyX = viewCenterX;
-        }
-        
-        historyCluster.center.x = historyX;
-        historyCluster.center.y = viewCenterY;
-
-        let master = historyCluster.nodes.find(n => n.isHistoryMaster);
-        if (!master) {
-            master = {
-                id: HISTORY_CLUSTER_ID, word: 'History', isHistoryMaster: true,
-                isCentral: true, clusterId: HISTORY_CLUSTER_ID, fx: historyX, fy: viewCenterY,
-                visible: true, type: 'history_master'
-            };
-            historyCluster.nodes.unshift(master);
-        } else {
-            master.fx = historyX;
-            master.fy = viewCenterY;
-        }
-
-        historyCluster.links = historyCluster.nodes
-            .filter(n => !n.isHistoryMaster)
-            .map(n => ({ source: HISTORY_CLUSTER_ID, target: n.id, type: 'history_link' }));
-    }
-
-    simulation.alpha(0.6).restart();
-    return centralNodes[lastNodeIndex]; // Return the newest node data for panning
-}
 
     function handleResize() {
         const { width, height } = graphContainer.getBoundingClientRect();
