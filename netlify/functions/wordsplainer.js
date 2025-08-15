@@ -144,7 +144,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "meta-llama/llama-3.3-70b-instruct:free",
+        "meta-llama/llama-3.2-3b-instruct",
         "tngtech/deepseek-r1t-chimera:free",        
         "openai/gpt-oss-20b:free",
         "google/gemini-2.0-flash-exp:free",
