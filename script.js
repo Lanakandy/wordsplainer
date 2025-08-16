@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tour.addStep({
             id: 'step1-welcome',
-            title: 'Welcome to Wordsplorer!',
+            title: 'Welcome to Wordsplainer!',
             text: 'This is an interactive map for words. To begin, click the central plus icon to add your first word.',
             attachTo: { element: '.node.central-node', on: 'bottom' },
         });
