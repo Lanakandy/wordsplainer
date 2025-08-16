@@ -49,6 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const playAgainBtn = document.getElementById('play-again-btn');
     const confettiCanvas = document.getElementById('confetti-canvas');
     const onboardingHelpBtn = document.getElementById('onboarding-help-btn');
+    const clickSound = new Audio('assets/click.wav'); 
+    clickSound.volume = 0.5; // Adjust volume as needed (0.0 to 1.0)
+
+    function playClickSound() {
+        // Rewind to the start in case it's played again quickly
+        clickSound.currentTime = 0; 
+        clickSound.play().catch(error => {
+            console.error("Error playing click sound:", error);
+        });
+    }
 
     const colorMap = {
         meaning: 'var(--meaning-color)',
@@ -788,7 +798,22 @@ document.addEventListener('DOMContentLoaded', () => {
             cluster.links = cluster.links.filter(l => (l.target.id || l.target) !== existingExample.id);
             updateGraph();
         } else {
+            // --- START of MODIFICATIONS ---
+
+            const nodeElement = graphGroup.selectAll('.node').filter(d => d.id === nodeData.id);
+
+            // 1. Prevent re-clicks if already loading
+            if (nodeElement.classed('is-loading-example')) {
+                console.log('Already fetching an example for this node.');
+                return;
+            }
+
+            // 2. Add loading state and play sound for immediate feedback
+            nodeElement.classed('is-loading-example', true);
+            playClickSound();
+
             try {
+                // --- (This is your existing API call logic) ---
                 const requestBody = {
                     type: 'generateExample',
                     word: nodeData.text,
@@ -841,6 +866,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error("Error getting example:", error);
                 alert(`Sorry, we couldn't generate an example. Reason: ${error.message}`);
+            } finally {
+                nodeElement.classed('is-loading-example', false);
             }
         }
     }

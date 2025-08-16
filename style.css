@@ -312,6 +312,12 @@ header h1 {
     fill: var(--text-muted);
 }
 
+.node.is-loading-example {
+  opacity: 0.5;
+  cursor: wait;
+  pointer-events: none;
+}
+
 /* --- ENHANCED: Text Node Container Styles --- */
 .node .node-html-wrapper {
     overflow: visible;
