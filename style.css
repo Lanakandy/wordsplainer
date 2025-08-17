@@ -878,47 +878,6 @@ header h1 {
     z-index: -1;
 }
 
-/* --- Responsive Design --- */
-@media (max-width: 768px) {
-    #app-wrapper { padding: 10px; gap: 15px; }
-    .title-container { padding: 12px 20px; }
-    header h1 { font-size: 1.8rem; }
-    .header-logo { height: 35px; margin-right: 15px; }
-    #controls-dock { flex-direction: column; gap: 15px; padding: 15px; }
-    .category-buttons { flex-wrap: wrap; justify-content: center; }
-    .category-btn { min-width: 80px; padding: 10px 6px; }
-    .utility-btn { width: 70px; height: 70px; }
-}
-
-/* --- Responsive Adjustments --- */
-
-/* For tablets and smaller devices */
-@media (max-width: 768px) {
-    .node-html-wrapper {
-        width: 180px; /* A bit smaller */
-    }
-    .node-html-content {
-        font-size: 13px;
-    }
-}
-
-/* For mobile phones */
-@media (max-width: 480px) {
-    .node-html-wrapper {
-        width: 120px; /* Much smaller for phone screens */
-    }
-    .node-html-content {
-        font-size: 12px;
-    }
-    /* Make the central node smaller on mobile */
-    .node.central-node circle {
-        r: 35px !important;
-    }
-    .node.central-node.is-history-master circle {
-        r: 50px !important;
-    }
-}
-
 .shepherd-modal-overlay {
     background: rgba(26, 37, 47, 0.7); /* var(--primary-dark) with transparency */
     backdrop-filter: blur(5px);
@@ -1018,4 +977,66 @@ header h1 {
 .shepherd-element.wordsplainer-tour .shepherd-button.shepherd-button-secondary:hover {
     background: rgba(255, 255, 255, 0.2);
     color: var(--accent-white);
+}
+
+/* --- ENHANCED RESPONSIVE DESIGN --- */
+
+/* For Tablets and Small Desktops (e.g., up to 1200px) */
+@media (max-width: 1200px) {
+    /* Allow the controls dock to wrap its contents into multiple lines */
+    #controls-dock {
+        flex-wrap: wrap;
+        justify-content: center; /* Center the buttons when they wrap */
+        row-gap: 20px; /* Add space between the wrapped rows */
+    }
+}
+
+
+/* For Mobile Devices (e.g., up to 768px) */
+@media (max-width: 768px) {
+    #app-wrapper { 
+        padding: 10px; 
+        gap: 10px; /* Reduced gap for smaller screens */
+    }
+    .title-container { 
+        padding: 10px 15px; 
+        border-radius: 16px;
+    }
+    header h1 { font-size: 1.5rem; }
+    .header-logo { height: 30px; margin-right: 12px; }
+
+    /* --- THE MOBILE DOCK FIX: HORIZONTAL SCROLLING --- */
+    #controls-dock {
+        /* 1. Revert to a single row and enable horizontal scrolling */
+        flex-direction: row;
+        flex-wrap: nowrap; /* CRITICAL: Prevent wrapping */
+        overflow-x: auto;  /* CRITICAL: Enable horizontal scroll */
+        
+        /* 2. Improve the visual alignment and padding */
+        justify-content: flex-start; /* Align buttons to the start */
+        padding: 15px;
+
+        /* 3. Improve the scrolling experience (optional but recommended) */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        scroll-snap-type: x mandatory; /* Makes scrolling "snap" to buttons */
+    }
+
+    /* 4. Ensure button groups don't shrink */
+    .category-buttons, .utility-buttons {
+        flex-shrink: 0;
+    }
+
+    /* 5. Add snap alignment to individual buttons for a better feel */
+    .category-btn, .utility-btn {
+        scroll-snap-align: start;
+    }
+
+    /* 6. Hide the ugly scrollbar for a cleaner look */
+    #controls-dock::-webkit-scrollbar {
+        display: none;
+    }
+    #controls-dock {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
 }
