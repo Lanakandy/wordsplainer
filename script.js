@@ -327,9 +327,26 @@ const simulation = d3.forceSimulation()
     svg.call(zoomBehavior);
 
     simulation.on("tick", () => {
-        graphGroup.selectAll('.link').attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-        graphGroup.selectAll('.node').attr("transform", d => `translate(${d.x},${d.y})`);
+        // Defensive coding to prevent errors if source/target on a link are not yet defined
+        graphGroup.selectAll('.link')
+            .attr("x1", d => d.source ? d.source.x : 0)
+            .attr("y1", d => d.source ? d.source.y : 0)
+            .attr("x2", d => d.target ? d.target.x : 0)
+            .attr("y2", d => d.target ? d.target.y : 0);
+
+        // Defensive coding for nodes that might not have x/y assigned yet
+        graphGroup.selectAll('.node').attr("transform", d => {
+            if (!d || d.x === undefined || d.y === undefined) {
+                return null; // Don't set transform if position is not calculated
+            }
+            return `translate(${d.x},${d.y})`;
+        });
+        
         iconGroup.selectAll('.icon-wrapper').attr("transform", d => {
+            // Check if data and coordinates are valid before transforming
+            if (!d || d.x === undefined || d.y === undefined) {
+                return `translate(-1000, -1000)`;
+            }
             if (d.isCentral && !d.isHistoryMaster) return `translate(${d.x}, ${d.y + 45 + 15})`;
             if (d.type === 'example' && d.width && d.height) {
                 const x = d.x + (d.width / 2) - 10;
