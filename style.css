@@ -320,13 +320,14 @@ header h1 {
 
 /* --- ENHANCED: Text Node Container Styles --- */
 .node .node-html-wrapper {
-    overflow: visible;
+      width: 220px;
+      overflow: visible;
 }
 
 /* Base style for the <div> inside the wrapper. TRANSPARENT by default. */
 .node .node-html-content {
     color: var(--canvas-text-color);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     height: 100%;
     box-sizing: border-box;
@@ -887,6 +888,35 @@ header h1 {
     .category-buttons { flex-wrap: wrap; justify-content: center; }
     .category-btn { min-width: 80px; padding: 10px 6px; }
     .utility-btn { width: 70px; height: 70px; }
+}
+
+/* --- Responsive Adjustments --- */
+
+/* For tablets and smaller devices */
+@media (max-width: 768px) {
+    .node-html-wrapper {
+        width: 180px; /* A bit smaller */
+    }
+    .node-html-content {
+        font-size: 13px;
+    }
+}
+
+/* For mobile phones */
+@media (max-width: 480px) {
+    .node-html-wrapper {
+        width: 120px; /* Much smaller for phone screens */
+    }
+    .node-html-content {
+        font-size: 12px;
+    }
+    /* Make the central node smaller on mobile */
+    .node.central-node circle {
+        r: 35px !important;
+    }
+    .node.central-node.is-history-master circle {
+        r: 50px !important;
+    }
 }
 
 .shepherd-modal-overlay {

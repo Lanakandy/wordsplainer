@@ -96,7 +96,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let viewState = { offset: 0, hasMore: true };
     let activeTour = null;
 
-    // --- Onboarding Logic ---
+    
+    function debounce(func, wait, immediate) {
+    let timeout;
+    return function() {
+        const context = this, args = arguments;
+        const later = function() {
+            timeout = null;
+            if (!immediate) func.apply(context, args);
+        };
+        const callNow = immediate && !timeout;
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+        if (callNow) func.apply(context, args);
+    };
+};
+
+// --- Onboarding Logic ---
     function createTour(options = {}) {
         if (activeTour && activeTour.isActive()) {
             activeTour.cancel();
@@ -281,17 +297,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getCollisionRadius(d) {
-        if (d.isCentral) return 60;
-        if (d.width && d.height) return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 15;
-        if (d.type === 'add') return 25;
-        return 45;
-    }
+    const isMobile = window.innerWidth < 480;
+    if (d.isCentral) return isMobile ? 45 : 60;
+    if (d.width && d.height) return Math.sqrt(d.width * d.width + d.height * d.height) / 2 + (isMobile ? 8 : 15);
+    if (d.type === 'add') return isMobile ? 20 : 25;
+    return isMobile ? 35 : 45;
+}
 
-    const simulation = d3.forceSimulation()
-        .force("link", d3.forceLink().id(d => d.id).distance(d => d.target.type === 'example' ? 100 : 150).strength(0.7))
-        .force("charge", d3.forceManyBody().strength(d => d.isCentral ? -1500 : -400).distanceMax(500))
-        .force("collision", d3.forceCollide().radius(getCollisionRadius).strength(0.9))
-        .force("cluster", forceCluster());
+const simulation = d3.forceSimulation()
+    .force("link", d3.forceLink().id(d => d.id)
+        .distance(d => {
+            const isMobile = window.innerWidth < 480;
+            return isMobile ? (d.target.type === 'example' ? 70 : 100) : (d.target.type === 'example' ? 100 : 150);
+        })
+        .strength(0.7))
+    .force("charge", d3.forceManyBody()
+        .strength(d => {
+            const isMobile = window.innerWidth < 480;
+            return d.isCentral ? (isMobile ? -1000 : -1500) : (isMobile ? -250 : -400);
+        })
+        .distanceMax(window.innerWidth < 480 ? 300 : 500))
+    .force("collision", d3.forceCollide().radius(getCollisionRadius).strength(0.9))
+    .force("cluster", forceCluster());
 
     const zoomBehavior = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {
         graphGroup.attr("transform", event.transform);
@@ -314,140 +341,143 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateGraph() {
-        let pendingHeightCalculations = 0;
-        const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
-        const visibleNodes = allNodes.filter(n => n.visible !== false);
-        const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-        const visibleLinks = allLinks.filter(l => visibleNodeIds.has(l.source.id || l.source) && visibleNodeIds.has(l.target.id || l.target));
-        const { width, height } = graphContainer.getBoundingClientRect();
-        graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
+    let pendingHeightCalculations = 0;
+    const { nodes: allNodes, links: allLinks } = getConsolidatedGraphData();
+    const visibleNodes = allNodes.filter(n => n.visible !== false);
+    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+    const visibleLinks = allLinks.filter(l => visibleNodeIds.has(l.source.id || l.source) && visibleNodeIds.has(l.target.id || l.target));
+    const { width, height } = graphContainer.getBoundingClientRect();
+    graphGroup.selectAll(".status-text, .prompt-plus, .loading-spinner").remove();
 
-        graphGroup.selectAll(".link").data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join(
-            enter => enter.append("line").attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`).style("opacity", 0).style("stroke-width", 0)
-                .transition().duration(800).delay((d, i) => i * 50).ease(d3.easeCircleOut).style("opacity", 1).style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1),
-            update => update.attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`),
-            exit => exit.transition().duration(400).ease(d3.easeCircleIn).style("opacity", 0).style("stroke-width", 0).remove()
+    graphGroup.selectAll(".link").data(visibleLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join(
+        enter => enter.append("line").attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`).style("opacity", 0).style("stroke-width", 0)
+            .transition().duration(800).delay((d, i) => i * 50).ease(d3.easeCircleOut).style("opacity", 1).style("stroke-width", d => d.type === 'cross-cluster' ? 2 : 1),
+        update => update.attr("class", d => `link ${d.target.type === 'example' ? 'link-example' : ''}`),
+        exit => exit.transition().duration(400).ease(d3.easeCircleIn).style("opacity", 0).style("stroke-width", 0).remove()
+    );
+
+    const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id)
+        .join(
+            enter => enter.append("g")
+                .style("opacity", 0)
+                .attr("transform", d => {
+                    const cluster = graphClusters.get(d.clusterId);
+                    const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
+                    return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
+                })
+                .call(g => g.transition().duration(600)
+                    .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
+                    .ease(d3.easeBackOut.overshoot(1.2))
+                    .style("opacity", 1)
+                    .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
+                ),
+            update => update,
+            exit => exit.transition().duration(400).ease(d3.easeCircleIn)
+                .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
+                .style("opacity", 0)
+                .remove()
         );
 
-        const nodeGroups = graphGroup.selectAll(".node").data(visibleNodes, d => d.id)
-            .join(
-                enter => enter.append("g")
-                    .style("opacity", 0)
-                    .attr("transform", d => {
-                        const cluster = graphClusters.get(d.clusterId);
-                        const startPos = cluster ? cluster.center : { x: width / 2, y: height / 2 };
-                        return `translate(${startPos.x},${startPos.y}) scale(0.1)`;
-                    })
-                    .call(g => g.transition().duration(600)
-                        .delay((d, i) => (d.isCentral ? 0 : d.type === 'add' ? visibleNodes.length * 30 : i * 80))
-                        .ease(d3.easeBackOut.overshoot(1.2))
-                        .style("opacity", 1)
-                        .attr("transform", d => `translate(${d.x || 0},${d.y || 0}) scale(1)`)
-                    ),
-                update => update,
-                exit => exit.transition().duration(400).ease(d3.easeCircleIn)
-                    .attr("transform", d => `translate(${d.x},${d.y}) scale(0)`)
-                    .style("opacity", 0)
-                    .remove()
-            );
+    nodeGroups
+        .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
+        .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
+        .on("mouseover", handleMouseOver)
+        .on("mouseout", handleMouseOut)
+        .on("click", handleNodeClick);
 
-        nodeGroups
-            .attr("class", d => `node ${d.isCentral ? `central-node ${d.clusterId === currentActiveCentral ? 'active-central' : ''}` : `node-${d.type}`}`)
-            .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended).filter(event => !event.target.classList.contains('interactive-word')))
-            .on("mouseover", handleMouseOver)
-            .on("mouseout", handleMouseOut)
-            .on("click", handleNodeClick);
+    nodeGroups.each(function(d) {
+        const selection = d3.select(this);
+        selection.selectAll("circle, rect, foreignObject, text").remove();
 
-        nodeGroups.each(function(d) {
-    const selection = d3.select(this);
-    selection.selectAll("circle, rect, foreignObject, text").remove();
-
-    if (d.isCentral) {
-        const r = d.isHistoryMaster ? 60 : 45;
-        const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
-        const fill = d.isHistoryMaster ? "var(--text-secondary)" : colorMap['central'];
-        selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
-        selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
-    } else if (d.type === 'add') {
-        selection.append("circle").attr("r", 20);
-        selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
-    } else {
-        if (d.isHistory) {
-            selection.style("opacity", 0.7);
-            selection.append("circle").attr("r", 25)
-                .style("fill", "var(--text-muted)"); // Consistent muted color
-            selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
-            selection.style("cursor", "pointer");
+        if (d.isCentral) {
+            const r = d.isHistoryMaster ? 60 : 45;
+            const shadow = d.isHistoryMaster ? "drop-shadow(0 0 10px var(--text-muted))" : "drop-shadow(0 0 10px var(--primary-coral))";
+            const fill = d.isHistoryMaster ? "var(--text-secondary)" : colorMap['central'];
+            selection.append("circle").attr("r", r).style("filter", shadow).style("fill", fill);
+            selection.append("text").attr("class", "node-text").text(d.word || d.id).attr("dy", "0.3em").style("font-weight", "bold").style("font-size", d.isHistoryMaster ? "18px" : "16px");
+        } else if (d.type === 'add') {
+            selection.append("circle").attr("r", 20);
+            selection.append("text").text('+').style("font-size", "24px").style("font-weight", "300").style("fill", "var(--primary-coral)");
         } else {
-            const isExample = d.type === 'example';
-            if (!isExample) {
-                selection.append("circle").attr("r", 18)
-                    .attr("fill", colorMap[d.type] || 'var(--text-muted)');
-            }
-            const textWidth = isExample ? 220 : 200;
-            const PADDING = isExample ? 0 : 12;
-            const circleRadius = isExample ? 0 : 18;
+            if (d.isHistory) {
+                selection.style("opacity", 0.7);
+                selection.append("circle").attr("r", 25)
+                    .style("fill", "var(--text-muted)"); // Consistent muted color
+                selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
+                selection.style("cursor", "pointer");
+            } else {
+                const isExample = d.type === 'example';
+                if (!isExample) {
+                    selection.append("circle").attr("r", 18)
+                        .attr("fill", colorMap[d.type] || 'var(--text-muted)');
+                }
+                const PADDING = isExample ? 0 : 12;
+                const circleRadius = isExample ? 0 : 18;
 
-            const foreignObject = selection.append("foreignObject")
-                .attr("class", "node-html-wrapper")
-                .attr("width", textWidth)
-                .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING)
-                .style("opacity", 0)
-                .attr("height", 20);
+                const foreignObject = selection.append("foreignObject")
+                    .attr("class", "node-html-wrapper")
+                    // Note: 'x' attribute is now set inside setTimeout after width is known
+                    .style("opacity", 0)
+                    .attr("height", 20); // Start with a default height
 
-            const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
-            createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
+                const div = foreignObject.append("xhtml:div").attr("class", "node-html-content");
+                createInteractiveText(div, d.text, (word) => handleWordSubmitted(word, true, d));
 
-            foreignObject.transition().duration(400).style("opacity", 1);
+                foreignObject.transition().duration(400).style("opacity", 1);
 
-            if (!d.height) { pendingHeightCalculations++; }
-            setTimeout(() => {
-                if (div.node()) {
-                    let textHeight = div.node().scrollHeight;
-                    if (textHeight === 0) {
-                        console.warn(`Could not calculate height for node text: "${d.text.substring(0, 20)}...". Using fallback.`);
-                        textHeight = 20;
-                    }
-                    foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
-                    d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
-                    d.height = Math.max(circleRadius * 2, textHeight);
+                if (!d.height) { pendingHeightCalculations++; }
+                setTimeout(() => {
+                    if (div.node() && foreignObject.node()) {
+                        // --- START OF CRITICAL FIX ---
+                        const textHeight = div.node().scrollHeight;
+                        // Read the width from the CSS-driven element size
+                        const textWidth = foreignObject.node().getBoundingClientRect().width / d3.zoomTransform(svg.node()).k;
+                        
+                        foreignObject
+                            .attr("height", textHeight)
+                            .attr("y", isExample ? -textHeight / 2 : -textHeight / 2)
+                            .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING); // Set x now
 
-                    pendingHeightCalculations--;
-                    if (pendingHeightCalculations === 0) {
-                        if (simulation.alpha() < 0.1) {
-                            simulation.alpha(0.1).restart();
+                        d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
+                        d.height = Math.max(circleRadius * 2, textHeight);
+                        // --- END OF CRITICAL FIX ---
+
+                        pendingHeightCalculations--;
+                        if (pendingHeightCalculations === 0) {
+                            if (simulation.alpha() < 0.1) {
+                                simulation.alpha(0.1).restart();
+                            }
                         }
                     }
-                } // <-- THIS BRACE WAS MISSING
-            }, 50);
-            selection.style("cursor", "pointer");
+                }, 50);
+                selection.style("cursor", "pointer");
+            }
         }
-    }
-});
+    });
 
-        const iconData = visibleNodes.filter(d => (d.isCentral && !d.isHistoryMaster) || d.type === 'example');
-        iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
-            enter => {
-                const iconWrapper = enter.append('g').attr('class', 'icon-wrapper').style('opacity', 0);
-                iconWrapper.filter(d => d.isCentral && !d.isHistoryMaster).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
-                    .append('svg').attr('class', 'tts-icon').attr('width', 24).attr('height', 24).attr('viewBox', '0 0 16 16')
-                    .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
-                iconWrapper.filter(d => d.type === 'example').append('g').attr('class', 'copy-icon-group').on('click', (event, d) => { copyToClipboard(d.text); })
-                    .append('svg').attr('class', 'copy-icon').attr('width', 20).attr('height', 20).attr('viewBox', '0 0 16 16')
-                    .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
-                return iconWrapper.transition().duration(600).delay(500).style('opacity', 1);
-            },
-            update => update,
-            exit => exit.transition().duration(400).style('opacity', 0).remove()
-        );
+    const iconData = visibleNodes.filter(d => (d.isCentral && !d.isHistoryMaster) || d.type === 'example');
+    iconGroup.selectAll('.icon-wrapper').data(iconData, d => d.id).join(
+        enter => {
+            const iconWrapper = enter.append('g').attr('class', 'icon-wrapper').style('opacity', 0);
+            iconWrapper.filter(d => d.isCentral && !d.isHistoryMaster).append('g').attr('class', 'tts-icon-group').on('click', (event, d) => { speak(d.word); })
+                .append('svg').attr('class', 'tts-icon').attr('width', 24).attr('height', 24).attr('viewBox', '0 0 16 16')
+                .html(`<title>Read aloud</title><path d="M9 4a.5.5 0 0 0-.812-.39L5.825 5.5H3.5A.5.5 0 0 0 3 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 9 12zM6.312 6.39 8 5.04v5.92L6.312 9.61A.5.5 0 0 0 6 9.5H4v-3h2a.5.5 0 0 0 .312-.11M12.025 8a4.5 4.5 0 0 1-1.318 3.182L10 10.475A3.5 3.5 0 0 0 11.025 8 3.5 3.5 0 0 0 10 5.525l.707-.707A4.5 4.5 0 0 1 12.025 8"/>`);
+            iconWrapper.filter(d => d.type === 'example').append('g').attr('class', 'copy-icon-group').on('click', (event, d) => { copyToClipboard(d.text); })
+                .append('svg').attr('class', 'copy-icon').attr('width', 20).attr('height', 20).attr('viewBox', '0 0 16 16')
+                .html(`<title>Copy example</title><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>`);
+            return iconWrapper.transition().duration(600).delay(500).style('opacity', 1);
+        },
+        update => update,
+        exit => exit.transition().duration(400).style('opacity', 0).remove()
+    );
 
-        graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? 'var(--accent-orange)' : d.target.type === 'example' ? 'var(--primary-coral)' : 'var(--text-secondary)').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : d.target.type === 'example' ? 1.5 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none").style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
-        simulation.nodes(visibleNodes);
-        simulation.force("link").links(visibleLinks);
-        simulation.alpha(1).restart();
-        graphGroup.selectAll('.central-node').raise();
-        updateCentralNodeState();
-    }
+    graphGroup.selectAll(".link").style("stroke", d => d.type === 'cross-cluster' ? 'var(--accent-orange)' : d.target.type === 'example' ? 'var(--primary-coral)' : 'var(--text-secondary)').style("stroke-width", d => d.type === 'cross-cluster' ? 2 : d.target.type === 'example' ? 1.5 : 1).style("stroke-dasharray", d => d.type === 'cross-cluster' ? "8,4" : "none").style("opacity", d => d.target.type === 'example' ? 0.8 : 0.6);
+    simulation.nodes(visibleNodes);
+    simulation.force("link").links(visibleLinks);
+    simulation.alpha(1).restart();
+    graphGroup.selectAll('.central-node').raise();
+    updateCentralNodeState();
+}
 
     function renderInitialPrompt() {
         simulation.stop();
@@ -482,19 +512,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const nodeElement = d3.select(this);
             const foreignObject = nodeElement.select('.node-html-wrapper');
             const div = nodeElement.select('.node-html-content');
+
             if (div.node() && foreignObject.node()) {
                 const isExample = d.type === 'example';
-                const textWidth = isExample ? 220 : 200;
+                // Read the width from the element itself, which is set by CSS!
+                const textWidth = foreignObject.node().getBoundingClientRect().width / d3.zoomTransform(svg.node()).k;
                 const PADDING = isExample ? 0 : 12;
                 const circleRadius = isExample ? 0 : 18;
                 const textHeight = div.node().scrollHeight;
 
-                foreignObject.attr("height", textHeight).attr("y", isExample ? -textHeight / 2 : -textHeight / 2);
+                foreignObject
+                    .attr("height", textHeight)
+                    .attr("y", isExample ? -textHeight / 2 : -textHeight / 2)
+                    .attr("x", isExample ? -textWidth / 2 : circleRadius + PADDING); // Set x here
+
                 d.width = isExample ? textWidth : circleRadius * 2 + PADDING + textWidth;
                 d.height = Math.max(circleRadius * 2, textHeight);
             }
         });
-    console.log('Forced recalculation of all node dimensions.');
+    console.log('Forced recalculation of all node dimensions based on CSS.');
 }
 
     function refetchCurrentView() {
@@ -1151,11 +1187,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return centralNodes[lastNodeIndex];
     }
 
-    function handleResize() {
+    const handleResize = debounce(function() {
+        console.log('Handling resize...');
         const { width, height } = graphContainer.getBoundingClientRect();
+        const isMobile = width < 480;
+
+        // 1. Update SVG dimensions
         svg.attr("width", width).attr("height", height);
+
+        // 2. Update the simulation's forces
+        radialForce.x(width / 2).y(height / 2);
+
+        // Update link distance
+        simulation.force("link").distance(d => {
+            return isMobile ? (d.target.type === 'example' ? 70 : 100) : (d.target.type === 'example' ? 100 : 150);
+        });
+
+        // Update charge strength
+        simulation.force("charge").strength(d => {
+            return d.isCentral ? (isMobile ? -1000 : -1500) : (isMobile ? -250 : -400);
+        }).distanceMax(isMobile ? 300 : 500);
+        
+        // 3. Recalculate node dimensions as they are dependent on CSS media queries
+        recalculateAllNodeDimensions(); 
+        
+        // 4. Reposition clusters to fit the new viewport
         repositionAllClusters();
-    }
+
+        // 5. Give the simulation a "nudge" to adapt to the new layout
+        simulation.alpha(0.3).restart();
+
+    }, 250); 
 
     async function fetchMoreNodes() {
         const cluster = graphClusters.get(currentActiveCentral);
