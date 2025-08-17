@@ -423,6 +423,12 @@ const simulation = d3.forceSimulation()
                 selection.append("text").attr("class", "node-text").text(d.word).attr("dy", "0.3em");
                 selection.style("cursor", "pointer");
             } else {
+                // --- START OF FIX ---
+                // Explicitly reset opacity to 1 for all active nodes.
+                // This prevents reused 'history' nodes from staying faded.
+                selection.style("opacity", 1);
+                // --- END OF FIX ---
+
                 const isExample = d.type === 'example';
                 if (!isExample) {
                     selection.append("circle").attr("r", 18)
