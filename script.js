@@ -179,16 +179,30 @@ document.addEventListener('DOMContentLoaded', () => {
             attachTo: { element: '#canvas-controls', on: 'left' },
         });
 
-        tour.addStep({
-            id: 'step5-game',
-            title: 'Word Path Challenge',
-            text: 'Ready for a game? Try to find a path from a <b>START</b> word to a <b>TARGET</b> word in the fewest steps!',
-            attachTo: { element: '#play-game-btn', on: 'top' },
-            buttons: [
-                { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
-                { action() { this.complete(); }, text: 'Got it!' }
-            ]
-        });
+        const isMobile = window.innerWidth < 768; // Common breakpoint for mobile
+
+const gameStepOptions = {
+    id: 'step5-game',
+    title: 'Word Path Challenge',
+    text: 'Ready for a game? Try to find a path from a <b>START</b> word to a <b>TARGET</b> word in the fewest steps!',
+    scrollTo: true, // Ensures the element is in view
+    buttons: [
+        { action() { return this.back(); }, classes: 'shepherd-button-secondary', text: 'Back' },
+        { action() { this.complete(); }, text: 'Got it!' }
+    ]
+};
+
+if (isMobile) {
+    // On mobile, the #play-game-btn is likely at the bottom of the screen,
+    // so attaching 'on: top' would push the popover off-screen.
+    // We attach to the whole dock instead, which is a safer target.
+    gameStepOptions.attachTo = { element: '#controls-dock', on: 'top' };
+} else {
+    // Keep the original, more specific attachment for desktop.
+    gameStepOptions.attachTo = { element: '#play-game-btn', on: 'top' };
+}
+
+tour.addStep(gameStepOptions);
 
         tour.on('complete', () => {
             localStorage.setItem('wordsplainer_comprehensive_tour_complete', 'true');
