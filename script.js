@@ -5,7 +5,7 @@ function applyTheme(theme) {
 
 // --- State Management ---
 let currentRegister = 'conversational';
-let currentProficiency = 'high';
+let currentProficiency = 'low';
 let currentAgeGroup = 'adults';
 let currentLayout = 'force';
 let isGameMode = false;
