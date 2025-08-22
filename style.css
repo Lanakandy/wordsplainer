@@ -63,6 +63,24 @@
     opacity: 1; visibility: visible; pointer-events: auto;
 }
 
+/* --- Input Field Error Styling --- */
+.overlay-input-field.error {
+  border-color: #e74c3c; /* A clear, friendly red */
+  animation: shake 0.5s ease-in-out;
+}
+
+.overlay-input-field.error::placeholder {
+  color: #e74c3c;
+  opacity: 0.7;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+  40%, 60% { transform: translate3d(3px, 0, 0); }
+}
+
 /* FIX: Add styles for the new wrapper */
 .input-wrapper {
     position: relative;

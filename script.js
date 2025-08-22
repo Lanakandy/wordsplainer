@@ -1020,69 +1020,87 @@ const simulation = d3.forceSimulation()
     }
 
     function promptForInitialWord() {
-        const inputOverlay = document.getElementById('input-overlay');
-        const overlayInput = document.getElementById('overlay-input');
-        const voiceInputBtn = document.getElementById('voice-input-btn');
+    const inputOverlay = document.getElementById('input-overlay');
+    const overlayInput = document.getElementById('overlay-input');
+    const voiceInputBtn = document.getElementById('voice-input-btn');
 
-        overlayInput.placeholder = "Type a word or use the mic...";
-        inputOverlay.classList.add('visible');
-        overlayInput.focus();
-        overlayInput.value = '';
+    // --- A single function to process and validate any input ---
+    const processInput = (inputValue) => {
+        const value = inputValue.trim();
+        if (!value) return; // Ignore empty input
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition;
+        const words = value.split(/\s+/); // Split by spaces
 
-        if (SpeechRecognition) {
-            voiceInputBtn.style.display = 'flex';
-            recognition = new SpeechRecognition();
-            recognition.continuous = false;
-            recognition.lang = 'en-US';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
+        if (words.length > 4) {
+            // --- Input is too long, show an error ---
+            const originalPlaceholder = overlayInput.placeholder;
+            overlayInput.value = ''; // Clear the invalid input
+            overlayInput.placeholder = "Too long! Please use 4 words max.";
+            overlayInput.classList.add('error');
 
-            voiceInputBtn.onclick = () => {
-                recognition.start();
-            };
-
-            recognition.onstart = () => voiceInputBtn.classList.add('listening');
-            recognition.onend = () => voiceInputBtn.classList.remove('listening');
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript.trim();
-                const cleanedTranscript = transcript.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
-                if (cleanedTranscript) {
-                    overlayInput.value = cleanedTranscript;
-                    handleWordSubmitted(cleanedTranscript, true);
-                    closeOverlay();
-                }
-            };
-            recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+            // Revert the error message after a short delay
+            setTimeout(() => {
+                overlayInput.placeholder = originalPlaceholder;
+                overlayInput.classList.remove('error');
+            }, 2500);
         } else {
-            voiceInputBtn.style.display = 'none';
-            overlayInput.placeholder = "Type a word and press Enter...";
+            // --- Input is valid, submit it ---
+            handleWordSubmitted(value, true);
+            closeOverlay();
         }
+    };
 
-        const closeOverlay = () => {
-            inputOverlay.classList.remove('visible');
-            overlayInput.removeEventListener('keydown', handleKeyDown);
-            overlayInput.removeEventListener('blur', handleBlur);
-            if (recognition) recognition.stop();
+    overlayInput.placeholder = "Type a word or phrase...";
+    inputOverlay.classList.add('visible');
+    overlayInput.focus();
+    overlayInput.value = '';
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitRecognition;
+    let recognition;
+
+    if (SpeechRecognition) {
+        voiceInputBtn.style.display = 'flex';
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        voiceInputBtn.onclick = () => recognition.start();
+        voiceInputBtn.classList.remove('listening');
+        recognition.onstart = () => voiceInputBtn.classList.add('listening');
+        recognition.onend = () => voiceInputBtn.classList.remove('listening');
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript.trim();
+            overlayInput.value = transcript; // Show user what was heard
+            processInput(transcript); // Validate the voice input
         };
-
-        const handleKeyDown = (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                const value = overlayInput.value.trim();
-                if (value) handleWordSubmitted(value, true);
-                closeOverlay();
-            }
-        };
-
-        const handleBlur = () => closeOverlay();
-
-        overlayInput.addEventListener('keydown', handleKeyDown);
-        overlayInput.addEventListener('blur', handleBlur);
+        recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+    } else {
+        voiceInputBtn.style.display = 'none';
+        overlayInput.placeholder = "Type a word or phrase (max 4 words)...";
     }
+
+    const closeOverlay = () => {
+        inputOverlay.classList.remove('visible');
+        overlayInput.removeEventListener('keydown', handleKeyDown);
+        overlayInput.removeEventListener('blur', handleBlur);
+        if (recognition) recognition.stop();
+    };
+
+    const handleKeyDown = (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            processInput(overlayInput.value); // Validate keyboard input
+        }
+    };
+
+    const handleBlur = () => closeOverlay();
+
+    overlayInput.addEventListener('keydown', handleKeyDown);
+    overlayInput.addEventListener('blur', handleBlur);
+}
 
     function handleDockClick(event) {
         const button = event.target.closest('button');
