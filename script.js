@@ -25,6 +25,23 @@ const phrasalVerbParticles = new Set([
     'through', 'to', 'up', 'with'
 ]);
 
+const commonVerbs = new Set([
+    'be', 'have', 'do', 'say', 'go', 'get', 'make', 'know', 'think', 'take',
+    'see', 'come', 'want', 'look', 'use', 'find', 'give', 'tell', 'work',
+    'call', 'try', 'ask', 'need', 'feel', 'become', 'leave', 'put', 'mean',
+    'keep', 'let', 'begin', 'seem', 'help', 'talk', 'turn', 'start', 'show',
+    'hear', 'play', 'run', 'move', 'like', 'live', 'believe', 'hold', 'bring',
+    'happen', 'write', 'provide', 'sit', 'stand', 'lose', 'pay', 'meet',
+    'include', 'continue', 'set', 'learn', 'change', 'lead', 'understand',
+    'watch', 'follow', 'stop', 'create', 'speak', 'read', 'allow', 'add',
+    'spend', 'grow', 'open', 'walk', 'win', 'offer', 'remember', 'love',
+    'consider', 'appear', 'buy', 'wait', 'serve', 'die', 'send', 'expect',
+    'build', 'stay', 'fall', 'cut', 'reach', 'kill', 'remain', 'suggest',
+    'raise', 'pass', 'sell', 'require', 'report', 'decide', 'pull', 'break',
+    'carry', 'drive', 'explain', 'hope', 'develop', 'view', 'visit', 'cover',
+    'join', 'act', 'face', 'invite', 'challenge', 'argue', 'compete'
+]);
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Refs ---
     const languageModal = document.getElementById('language-modal');
@@ -1113,56 +1130,80 @@ const simulation = d3.forceSimulation()
     }
 
     function createInteractiveText(d3Element, text, onWordClick) {
-        const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
-        d3Element.html("");
-        const lines = text.split('\n');
+    const isSvg = d3Element.node().tagName.toLowerCase() === 'text';
+    d3Element.html("");
+    const lines = text.split('\n');
 
-        lines.forEach((line, lineIndex) => {
-            if (lineIndex > 0 && !isSvg) d3Element.append("br");
+    lines.forEach((line, lineIndex) => {
+        if (lineIndex > 0 && !isSvg) d3Element.append("br");
 
-            const initialTokens = line.split(/(\s+)/);
-            const processedTokens = [];
+        const initialTokens = line.split(/(\s+)/); // Split and keep spaces
+        const processedTokens = [];
 
-            for (let i = 0; i < initialTokens.length; i++) {
-                const currentToken = initialTokens[i];
-                const nextToken = initialTokens[i + 2];
-                const cleanedCurrent = currentToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
-                const cleanedNext = nextToken ? nextToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '') : null;
-                if (cleanedNext && phrasalVerbParticles.has(cleanedNext) && cleanedCurrent.length > 1) {
-                    processedTokens.push(currentToken + initialTokens[i + 1] + nextToken);
-                    i += 2;
-                } else {
-                    processedTokens.push(currentToken);
-                }
+        // New, smarter helper function to check if a word is likely a verb
+        const isVerb = (word, precedingWord) => {
+            const cleanedWord = word.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
+            if (commonVerbs.has(cleanedWord)) {
+                return true;
             }
+            const cleanedPreceding = precedingWord ? precedingWord.trim().toLowerCase() : '';
+            if (cleanedPreceding === 'to') {
+                return true; // Catches infinitive forms like "to invite"
+            }
+            return false;
+        };
 
-            const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
+        for (let i = 0; i < initialTokens.length; i++) {
+            const currentToken = initialTokens[i];
 
-            processedTokens.forEach(token => {
-                const wordRegex = /\b([A-Z][a-z]{1,3}\.|[a-zA-Z0-9\s'/-]+)\b/g;
-                let lastIndex = 0;
-                let match;
-                while ((match = wordRegex.exec(token)) !== null) {
-                    if (match.index > lastIndex) {
-                        lineContainer.append('span').text(token.substring(lastIndex, match.index));
-                    }
-                    const wordPart = match[0];
-                    if (wordPart.trim().length > 1) {
-                        lineContainer.append('span')
-                            .attr('class', 'interactive-word')
-                            .text(wordPart)
-                            .on('click', (event) => { event.stopPropagation(); onWordClick(wordPart); });
-                    } else {
-                        lineContainer.append('span').text(wordPart);
-                    }
-                    lastIndex = wordRegex.lastIndex;
-                }
-                if (lastIndex < token.length) {
-                    lineContainer.append('span').text(token.substring(lastIndex));
-                }
-            });
+            // Don't process spaces
+            if (i % 2 === 1) {
+                processedTokens.push(currentToken);
+                continue;
+            }
+            
+            // Look ahead to the next word (token after the next space)
+            const nextToken = (i + 2 < initialTokens.length) ? initialTokens[i + 2] : null;
+            const cleanedNext = nextToken ? nextToken.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '') : null;
+            
+            // Check the previous token to help identify infinitives
+            const previousToken = (i > 1) ? initialTokens[i - 2] : null;
+
+            // The core logic change: Only combine if the current word is a verb AND the next is a particle
+            if (nextToken && phrasalVerbParticles.has(cleanedNext) && isVerb(currentToken, previousToken)) {
+                // It's a phrasal verb, so combine them
+                const combined = currentToken + initialTokens[i + 1] + nextToken;
+                processedTokens.push(combined);
+                i += 2; // Crucially, skip the next space and particle we just processed
+            } else {
+                processedTokens.push(currentToken);
+            }
+        }
+
+        const lineContainer = isSvg ? d3Element.append('tspan').attr('x', 0).attr('dy', lineIndex === 0 ? '0.3em' : '1.4em') : d3Element;
+
+        processedTokens.forEach(token => {
+            // This part remains the same, but now operates on smarter tokens
+            if (token.trim() === '') {
+                lineContainer.append('span').text(token);
+                return;
+            }
+            
+            const isCombinedPhrase = token.includes(' ');
+            const cleanedToken = token.trim().toLowerCase().replace(/[.,!?;:"/()\[\]]+/g, '');
+            
+            // Make the token clickable if it's long enough or a combined phrasal verb
+            if (cleanedToken.length > 1 || isCombinedPhrase) {
+                lineContainer.append('span')
+                    .attr('class', 'interactive-word')
+                    .text(token)
+                    .on('click', (event) => { event.stopPropagation(); onWordClick(token); });
+            } else {
+                lineContainer.append('span').text(token);
+            }
         });
-    }
+    });
+}
 
     const CLUSTER_SPACING = 700;
     function repositionAllClusters() {
