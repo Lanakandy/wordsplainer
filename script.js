@@ -39,7 +39,7 @@ const commonVerbs = new Set([
     'build', 'stay', 'fall', 'cut', 'reach', 'kill', 'remain', 'suggest',
     'raise', 'pass', 'sell', 'require', 'report', 'decide', 'pull', 'break',
     'carry', 'drive', 'explain', 'hope', 'develop', 'view', 'visit', 'cover',
-    'join', 'act', 'face', 'invite', 'challenge', 'argue', 'compete'
+    'join', 'act', 'face', 'invite', 'challenge', 'argue', 'compete', 'hang'
 ]);
 
 document.addEventListener('DOMContentLoaded', () => {
