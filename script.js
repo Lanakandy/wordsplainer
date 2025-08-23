@@ -735,7 +735,7 @@ const simulation = d3.forceSimulation()
     }
 
     async function handleWordSubmitted(word, isNewCentral = true, sourceNode = null) {
-        const lowerWord = word.toLowerCase();
+        const lowerWord = word.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "");
 
         if (isGameMode && isNewCentral) {
             gameData.steps++;
